@@ -28,8 +28,6 @@ RUN composer install --optimize-autoloader --no-interaction --no-progress --no-d
 RUN npm install
 RUN npm run build
 
-# Clear and cache configurations
-RUN php artisan optimize:clear \
-    && php artisan config:cache \
-    && php artisan route:cache \
-    && php artisan view:cache
+# Note: We do not run php artisan config:cache here because environment variables 
+# are only injected at runtime by Render, causing artisan to crash during build.
+
