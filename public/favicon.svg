@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+    <style>
+        @import url('https://fonts.bunny.net/css?family=inter:700');
+        .tc-text {
+            font-family: 'Inter', system-ui, sans-serif;
+            font-weight: 700;
+            font-size: 70px;
+            letter-spacing: -0.05em;
+            fill: #0f172a;
+        }
+        @media (prefers-color-scheme: dark) {
+            .tc-text {
+                fill: #ffffff;
+            }
+        }
+    </style>
+    <text x="47" y="74" text-anchor="middle" class="tc-text">tc</text>
+</svg>

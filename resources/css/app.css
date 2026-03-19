@@ -1,0 +1,564 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Design tokens ──────────────────────────────────────────────────────── */
+:root {
+    /* Structural */
+    --tc-bg: 248 250 252;
+    /* slate-50  */
+    --tc-surface: 255 255 255;
+    /* white     */
+    --tc-border: 226 232 240;
+    /* slate-200 */
+
+    /* Text */
+    --tc-text: 15 23 42;
+    /* slate-900 */
+    --tc-muted: 100 116 139;
+    /* slate-500 */
+
+    /* Brand (orange) */
+    --tc-primary: 249 115 22;
+    /* orange-500 */
+    --tc-primary-hover: 234 88 12;
+    /* orange-600 */
+    --tc-primary-fg: 255 255 255;
+
+    /* Semantic — success */
+    --tc-success: 16 185 129;
+    /* emerald-500 */
+    --tc-success-light: 236 253 245;
+    /* emerald-50  */
+    --tc-success-fg: 6 95 70;
+    /* emerald-900 */
+
+    /* Semantic — warning */
+    --tc-warning: 245 158 11;
+    /* amber-500  */
+    --tc-warning-light: 255 251 235;
+    /* amber-50   */
+    --tc-warning-fg: 120 53 15;
+    /* amber-900  */
+
+    /* Semantic — danger */
+    --tc-danger: 239 68 68;
+    /* red-500    */
+    --tc-danger-light: 254 242 242;
+    /* red-50     */
+    --tc-danger-fg: 153 27 27;
+    /* red-800    */
+
+    /* Semantic — info */
+    --tc-info: 59 130 246;
+    /* blue-500   */
+    --tc-info-light: 239 246 255;
+    /* blue-50    */
+    --tc-info-fg: 30 64 175;
+    /* blue-800   */
+}
+
+/* ─── Base resets ────────────────────────────────────────────────────────── */
+@layer base {
+
+    *,
+    *::before,
+    *::after {
+        box-sizing: border-box;
+    }
+
+    html {
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+        background-color: rgb(var(--tc-bg));
+        color: rgb(var(--tc-text));
+    }
+
+    /* Global focus ring — never invisible */
+    *:focus-visible {
+        outline: 2px solid rgb(var(--tc-primary));
+        outline-offset: 2px;
+        border-radius: 4px;
+    }
+
+    /* Smooth sidebar drawer transition */
+    .sidebar-drawer {
+        transition: transform 0.22s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+}
+
+/* ─── Typography scale ───────────────────────────────────────────────────── */
+@layer components {
+    .tc-h1 {
+        @apply text-2xl font-semibold tracking-tight;
+    }
+
+    .tc-h2 {
+        @apply text-xl font-semibold tracking-tight;
+    }
+
+    .tc-h3 {
+        @apply text-base font-semibold;
+    }
+
+    .tc-body {
+        @apply text-sm leading-relaxed;
+    }
+
+    .tc-small {
+        @apply text-xs text-slate-500;
+    }
+
+    /* Page header rhythm */
+    .tc-page-header {
+        @apply mb-6;
+    }
+
+    .tc-page-header h1 {
+        @apply text-xl sm:text-2xl font-semibold tracking-tight;
+    }
+
+    .tc-page-header p {
+        @apply text-sm leading-relaxed text-slate-500 mt-1;
+    }
+}
+
+/* ─── Component styles (plain CSS — no nested @apply) ────────────────────── */
+
+/* Buttons — base */
+.tc-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    transition: all 0.15s ease-in-out;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+}
+
+.tc-btn:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+.tc-btn:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+/* Primary button */
+.tc-btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    transition: all 0.15s ease-in-out;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    background: linear-gradient(to bottom, #ea580c, #c2410c);
+    color: #fff;
+    box-shadow: 0 1px 3px 0 rgba(234, 88, 12, 0.35), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+}
+
+.tc-btn-primary:hover {
+    background: linear-gradient(to bottom, #f97316, #ea580c);
+    box-shadow: 0 2px 8px 0 rgba(234, 88, 12, 0.35);
+}
+
+.tc-btn-primary:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+.tc-btn-primary:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Danger button */
+.tc-btn-danger {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    transition: all 0.15s ease-in-out;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    background: linear-gradient(to bottom, #ef4444, #dc2626);
+    color: #fff;
+    box-shadow: 0 1px 3px 0 rgba(239, 68, 68, 0.35), 0 1px 2px -1px rgba(0, 0, 0, 0.05);
+}
+
+.tc-btn-danger:hover {
+    background: linear-gradient(to bottom, #f87171, #ef4444);
+    box-shadow: 0 2px 8px 0 rgba(239, 68, 68, 0.35);
+}
+
+.tc-btn-danger:active:not(:disabled) {
+    transform: scale(0.97);
+}
+
+.tc-btn-danger:disabled {
+    opacity: 0.5;
+    pointer-events: none;
+}
+
+/* Ghost button */
+.tc-btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    transition: all 0.15s ease-in-out;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    background: transparent;
+    color: #475569;
+}
+
+.tc-btn-ghost:hover {
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+/* Secondary button */
+.tc-btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    padding: 0.5rem 1rem;
+    border-radius: 0.75rem;
+    transition: all 0.15s ease-in-out;
+    cursor: pointer;
+    text-decoration: none;
+    background: #fff;
+    color: #334155;
+    border: 1px solid #e2e8f0;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+}
+
+.tc-btn-secondary:hover {
+    background: #f8fafc;
+    border-color: #cbd5e1;
+}
+
+/* Inputs */
+.tc-input {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid #cbd5e1;
+    background: #fff;
+    padding: 0.5rem 0.75rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: #0f172a;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+    transition: all 0.15s ease-in-out;
+    outline: none;
+}
+
+.tc-input::placeholder {
+    color: #94a3b8;
+}
+
+.tc-input:focus {
+    border-color: #f97316;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+.tc-input:disabled {
+    background: #f8fafc;
+    color: #94a3b8;
+}
+
+select.tc-input {
+    appearance: none;
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' fill='none' viewBox='0 0 20 20'%3e%3cpath stroke='%236b7280' stroke-linecap='round' stroke-linejoin='round' stroke-width='1.5' d='M6 8l4 4 4-4'/%3e%3c/svg%3e");
+    background-position: right 0.5rem center;
+    background-repeat: no-repeat;
+    background-size: 1.5em 1.5em;
+    padding-right: 2.5rem;
+}
+
+/* Dark input (for auth pages with Three.js bg) */
+.tc-input-dark {
+    width: 100%;
+    border-radius: 0.75rem;
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.06);
+    padding: 0.625rem 0.875rem;
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+    color: #fff;
+    transition: all 0.15s ease-in-out;
+    outline: none;
+}
+
+.tc-input-dark::placeholder {
+    color: #64748b;
+}
+
+.tc-input-dark:focus {
+    border-color: #f97316;
+    background: rgba(255, 255, 255, 0.08);
+    box-shadow: 0 0 0 3px rgba(234, 88, 12, 0.2);
+}
+
+/* Cards */
+.tc-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / .06), 0 1px 2px -1px rgb(0 0 0 / .06);
+    transition: all 0.2s ease-in-out;
+}
+
+.tc-card-hover {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    box-shadow: 0 1px 3px 0 rgb(0 0 0 / .06), 0 1px 2px -1px rgb(0 0 0 / .06);
+    transition: all 0.2s ease-in-out;
+}
+
+.tc-card-hover:hover {
+    box-shadow: 0 4px 16px -2px rgb(0 0 0 / .10);
+    border-color: rgba(203, 213, 225, 0.8);
+}
+
+/* ─── Landing page premium styles ──────────────────────────────────────── */
+
+/* Animated gradient text */
+.tc-gradient-text {
+    background: linear-gradient(135deg, #f97316 0%, #ea580c 30%, #fb923c 60%, #f97316 100%);
+    background-size: 200% 200%;
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: gradient-shift 4s ease-in-out infinite;
+}
+
+@keyframes gradient-shift {
+
+    0%,
+    100% {
+        background-position: 0% 50%;
+    }
+
+    50% {
+        background-position: 100% 50%;
+    }
+}
+
+/* Glow CTA button */
+.tc-btn-glow {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 600;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    padding: 0.875rem 2rem;
+    border-radius: 0.75rem;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    background: linear-gradient(135deg, #ea580c, #f97316);
+    color: #fff;
+    box-shadow: 0 0 20px rgba(234, 88, 12, 0.4), 0 0 60px rgba(234, 88, 12, 0.15);
+}
+
+.tc-btn-glow:hover {
+    background: linear-gradient(135deg, #f97316, #ea580c);
+    box-shadow: 0 0 30px rgba(234, 88, 12, 0.5), 0 0 80px rgba(234, 88, 12, 0.2);
+    transform: translateY(-1px);
+}
+
+.tc-btn-glow:active {
+    transform: translateY(0);
+}
+
+/* Glass button */
+.tc-btn-glass {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    font-weight: 500;
+    font-size: 1rem;
+    line-height: 1.5rem;
+    padding: 0.875rem 2rem;
+    border-radius: 0.75rem;
+    transition: all 0.2s ease-in-out;
+    cursor: pointer;
+    text-decoration: none;
+    background: rgba(255, 255, 255, 0.06);
+    color: #cbd5e1;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(8px);
+}
+
+.tc-btn-glass:hover {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    transform: translateY(-1px);
+}
+
+/* Dark feature card */
+.tc-card-dark {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 1rem;
+    padding: 1.25rem;
+    transition: all 0.3s ease-in-out;
+}
+
+@media (min-width: 640px) {
+    .tc-card-dark {
+        padding: 2rem;
+    }
+}
+
+.tc-card-dark:hover {
+    background: rgba(255, 255, 255, 0.06);
+    border-color: rgba(234, 88, 12, 0.3);
+    box-shadow: 0 0 30px rgba(234, 88, 12, 0.08);
+    transform: translateY(-2px);
+}
+
+/* Pulse animation for status dot */
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.4;
+    }
+}
+
+/* ─── Loading spinner ────────────────────────────────────────────────────── */
+.tc-spinner {
+    display: inline-block;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: spin 0.6s linear infinite;
+}
+
+.tc-spinner-dark {
+    border-color: rgba(234, 88, 12, 0.2);
+    border-top-color: #ea580c;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ─── Assistant card ─────────────────────────────────────────────────────── */
+.tc-assistant-card {
+    background: #fff;
+    border: 1px solid #e2e8f0;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    transition: all 0.25s ease-in-out;
+    position: relative;
+    overflow: hidden;
+}
+
+.tc-assistant-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #ea580c, #f97316, #ea580c);
+    opacity: 0;
+    transition: opacity 0.25s ease-in-out;
+}
+
+.tc-assistant-card:hover {
+    border-color: rgba(234, 88, 12, 0.3);
+    box-shadow: 0 4px 20px -4px rgba(234, 88, 12, 0.15);
+    transform: translateY(-2px);
+}
+
+.tc-assistant-card:hover::before {
+    opacity: 1;
+}
+
+/* Status badge */
+.tc-badge-synced {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    background: #ecfdf5;
+    color: #065f46;
+}
+
+.tc-badge-pending {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.tc-badge-inactive {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.125rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.6875rem;
+    font-weight: 600;
+    background: #f1f5f9;
+    color: #475569;
+}
