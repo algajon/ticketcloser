@@ -81,6 +81,12 @@ class Workspace extends Model
         return $this->hasMany(WorkspaceMembership::class);
     }
 
+    public function users(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'workspace_memberships')
+                    ->withPivot('role');
+    }
+
     public function cases(): HasMany
     {
         return $this->hasMany(SupportCase::class);

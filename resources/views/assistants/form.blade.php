@@ -55,6 +55,14 @@
                             <p class="text-xs text-slate-400">A friendly name to identify this assistant in your dashboard.
                             </p>
                         </div>
+                        
+                        <div class="space-y-1.5">
+                            <label for="fallback_phone" class="block text-sm font-medium text-slate-700">Live Human Handoff (Transfer Phone Number)</label>
+                            <input id="fallback_phone" type="text" name="fallback_phone" value="{{ old('fallback_phone', $config->fallback_phone ?? '') }}"
+                                class="tc-input" placeholder="+12345678900" />
+                            <p class="text-xs text-slate-400">Optional. The AI will transfer the call to this number if the caller strictly demands a human. Must be E.164 format.
+                            </p>
+                        </div>
                     </div>
                 </div>
 

@@ -104,8 +104,11 @@
                         @endif
 
                         @if($phone)
-                            <div class="flex items-center gap-2 text-slate-600">
+                            <div class="flex flex-col gap-1 text-slate-600">
                                 <span class="font-mono text-xs">{{ $phone->e164 ?? 'Not provisioned' }}</span>
+                                @if($phone->forwarding_number)
+                                    <span class="text-xs text-slate-500">Forwarding from: <span class="font-mono">{{ $phone->forwarding_number }}</span></span>
+                                @endif
                             </div>
                         @else
                             <div class="flex items-center gap-2 text-slate-400">

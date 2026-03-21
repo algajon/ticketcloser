@@ -91,7 +91,14 @@ class RegisteredUserController extends Controller
             'priority_rules' => ['not urgent' => 'low', 'urgent' => 'high'],
         ]);
 
-        event(new Registered($user));
+        // Generate 6-digit OTP
+        $otp = sprintf('%06d', mt_rand(100000, 999999));
+        $user->otp_code = $otp;
+        $user->otp_expires_at = now()->addMinutes(15);
+        $user->save();
+
+        // Send OTP
+        \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\OtpVerificationMail($otp));
 
         Auth::login($user);
 

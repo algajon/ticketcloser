@@ -142,6 +142,11 @@ class VapiProvisioningService
             }
         }
 
+        if (array_key_exists('forwarding_number', $input)) {
+            $record->forwarding_number = $input['forwarding_number'];
+            $record->save();
+        }
+
         return $record->fresh();
     }
 
@@ -243,6 +248,10 @@ class VapiProvisioningService
         $systemPrompt = $config->system_prompt ?: ($presetData['systemPrompt'] ?? $this->defaultPromptTemplate());
         $systemPrompt = str_replace('{{company_name}}', $workspace->name, $systemPrompt);
 
+        // Inject the current date so the LLM understands relative dates like "tomorrow"
+        $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference when scheduling meetings or calculating relative times.]";
+        $systemPrompt .= $dateContext;
+
         // IMPORTANT: toolIds must live inside the 'model' object per Vapi API spec.
         // Placing it at the top level causes Vapi to reject the assistant creation.
         $model = [
@@ -258,6 +267,20 @@ class VapiProvisioningService
         }
         if ($bookingToolId) {
             $model['toolIds'][] = $bookingToolId;
+        }
+
+        if (!empty($config->fallback_phone)) {
+             $model['tools'][] = [
+                 'type' => 'transferCall',
+                 'destinations' => [
+                     [
+                         'type' => 'number',
+                         'number' => preg_replace('/[^0-9+]/', '', $config->fallback_phone),
+                     ]
+                 ]
+             ];
+             // Append to system prompt to instruct the AI to use it
+             $model['messages'][0]['content'] .= "\n\n[SYSTEM NOTE: YOUR MOST IMPORTANT EMERGENCY RULE! If the user becomes exceptionally frustrated, aggressively demands a human/manager, or reports a high-severity emergency, you MUST immediately execute the transferCall tool to route them to the live escalation team. Do not attempt to resolve the issue yourself in these scenarios.]";
         }
 
         $payload = [

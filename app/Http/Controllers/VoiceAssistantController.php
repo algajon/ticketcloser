@@ -39,6 +39,7 @@ class VoiceAssistantController extends Controller
             'intake_params' => ['nullable', 'array'],
             'preset_key' => ['nullable', 'string', 'exists:assistant_presets,key'],
             'override_params' => ['nullable', 'array'],
+            'fallback_phone' => ['nullable', 'string', 'max:20'],
         ]);
 
         try {
@@ -102,6 +103,7 @@ class VoiceAssistantController extends Controller
         $data = $request->validate([
             'area_code' => ['nullable', 'string', 'max:10'],
             'assistant_id' => ['nullable', 'integer'],
+            'forwarding_number' => ['nullable', 'string', 'max:20'],
         ]);
 
         try {

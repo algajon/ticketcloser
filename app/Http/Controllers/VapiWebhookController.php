@@ -32,7 +32,7 @@ class VapiWebhookController extends Controller
         if ($type === 'assistant-request') {
             $phoneNumberId = data_get($payload, 'message.call.phoneNumberId');
             if ($phoneNumberId) {
-                $workspacePhone = \App\Models\WorkspacePhoneNumber::with(['workspace', 'assistantConfig'])
+                $workspacePhone = \App\Models\WorkspacePhoneNumber::with(['workspace', 'assistant'])
                     ->where('vapi_phone_number_id', $phoneNumberId)
                     ->first();
 
@@ -59,16 +59,97 @@ class VapiWebhookController extends Controller
                         }
                     }
                     // Return the assigned assistant for this phone number
-                    if ($workspacePhone->assistantConfig && $workspacePhone->assistantConfig->vapi_assistant_id) {
-                        return response()->json([
-                            'assistantId' => $workspacePhone->assistantConfig->vapi_assistant_id,
-                        ], 200);
+                    if ($workspacePhone->assistant && $workspacePhone->assistant->vapi_assistant_id) {
+                        $assistantId = $workspacePhone->assistant->vapi_assistant_id;
+                        $customerNumber = data_get($payload, 'message.call.customer.number');
+                        $overrides = [];
+
+                        // The Brain: Prospecting Context Injection
+                        if ($customerNumber) {
+                            $phoneSearch = ltrim(preg_replace('/\D+/', '', $customerNumber), '1+');
+                            if (strlen($phoneSearch) > 5) {
+                                $contact = \App\Models\Contact::where('workspace_id', $workspace->id)
+                                    ->where('phone_e164', 'like', "%{$phoneSearch}%")
+                                    ->with(['cases' => function ($q) {
+                                        $q->orderBy('created_at', 'desc')->take(3);
+                                    }])
+                                    ->first();
+
+                                $memory = "[SYSTEM NOTE: IMPORTANT CALLER CONTEXT - The caller's phone number is {$customerNumber}. YOU ALREADY KNOW THEIR PHONE NUMBER AND MUST NEVER ASK THEM TO PROVIDE IT OR SPELL IT OUT. ONLY confirm it is the best number to reach them if necessary. ";
+                                
+                                if ($contact) {
+                                    if ($contact->name) {
+                                        $memory .= "They are a known returning caller named {$contact->name}. ";
+                                        if ($contact->property_code || $contact->unit) {
+                                            $memory .= "Their property on file is {$contact->property_code}" . ($contact->unit ? " Unit {$contact->unit}" : "") . ". ";
+                                        }
+                                    } else {
+                                        $memory .= "They are a returning caller. ";
+                                    }
+
+                                    if ($contact->cases && $contact->cases->count() > 0) {
+                                        $memory .= "Their recent support cases are: ";
+                                        foreach ($contact->cases as $c) {
+                                            $memory .= "Case #{$c->case_number} ('{$c->title}', status: {$c->status}). ";
+                                        }
+                                        $memory .= "Please greet them warmly" . ($contact->name ? " by their name" : "") . " and briefly ask if they are calling about their recent case or if it's something new.";
+                                    } else {
+                                        $memory .= "Please greet them warmly" . ($contact->name ? " by their name" : "") . " as a returning client.";
+                                    }
+                                } else {
+                                    $memory .= "They are a first-time caller. Greet them warmly and ask how you can help them today.";
+                                }
+                                $memory .= "]\n\n";
+
+                                // Build the system prompt to override the default model messages
+                                $basePrompt = $workspacePhone->assistant->system_prompt ?? 'You are a helpful customer support assistant for ' . $workspace->name . '.';
+                                $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference.]";
+                                $systemPrompt = $memory . $basePrompt . $dateContext;
+
+                                $overrides = [
+                                    'model' => [
+                                        'messages' => [
+                                            ['role' => 'system', 'content' => $systemPrompt]
+                                        ]
+                                    ]
+                                ];
+                            }
+                        }
+
+                        $responsePayload = ['assistantId' => $assistantId];
+                        if (!empty($overrides)) {
+                            $responsePayload['assistantOverrides'] = $overrides;
+                        }
+
+                        return response()->json($responsePayload, 200);
                     }
                 }
             }
 
             // Fallback
             $assistantId = config('services.vapi.default_assistant_id');
+
+            if (!$assistantId) {
+                return response()->json([
+                    'assistant' => [
+                        'firstMessage' => "I'm sorry, this phone number is not currently configured. Please contact the administrator.",
+                        'model' => [
+                            'provider' => 'openai',
+                            'model' => 'gpt-3.5-turbo',
+                            'messages' => [
+                                [
+                                    'role' => 'system',
+                                    'content' => 'You are a placeholder assistant. Tell the user their phone number is not configured and hang up.'
+                                ]
+                            ]
+                        ],
+                        'voice' => [
+                            'provider' => '11labs',
+                            'voiceId' => 'bIHbv24MWmeRgasZH58o',
+                        ]
+                    ]
+                ], 200);
+            }
 
             return response()->json([
                 'assistantId' => $assistantId,
@@ -207,6 +288,18 @@ class VapiWebhookController extends Controller
                             }
                         }
 
+                        // Send Notification to Workspace Users
+                        try {
+                            if ($workspace->users && $workspace->users->count() > 0) {
+                                \Illuminate\Support\Facades\Notification::send(
+                                    $workspace->users,
+                                    new \App\Notifications\NewSupportCaseNotification($case)
+                                );
+                            }
+                        } catch (\Throwable $e) {
+                            Log::error('VAPI_NOTIFICATION_FAILED', ['error' => $e->getMessage()]);
+                        }
+
                         // ✅ Vapi requires result to be a STRING
                         $results[] = [
                             'toolCallId' => $toolCallId,
@@ -331,104 +424,7 @@ class VapiWebhookController extends Controller
             [$workspace, $authError] = $this->resolveWorkspaceFromHeaders($request);
 
             if ($workspace) {
-                // Determine Vapi call ID
-                $vapiCallId = data_get($payload, 'message.call.id');
-
-                if ($vapiCallId) {
-                    $callBlock = data_get($payload, 'message.call', []);
-                    $duration = data_get($callBlock, 'durationSeconds') ?? data_get($payload, 'message.durationSeconds');
-                    $cost = data_get($callBlock, 'cost') ?? data_get($payload, 'message.cost');
-
-                    try {
-                        \App\Models\CallEvent::updateOrCreate(
-                            ['vapi_call_id' => $vapiCallId],
-                            [
-                                'workspace_id' => $workspace->id,
-                                'duration_seconds' => $duration,
-                                'cost' => $cost,
-                                'meta' => $callBlock ?: data_get($payload, 'message', []),
-                            ]
-                        );
-
-                        // Find case associated with this call
-                        $case = \App\Models\SupportCase::where('workspace_id', $workspace->id)
-                            ->where('external_call_id', $vapiCallId)
-                            ->first();
-
-                        // 1) Billing - Usage Event
-                        if ($duration > 0) {
-                            $existingUsage = \App\Models\UsageEvent::where('workspace_id', $workspace->id)
-                                ->where('event_type', 'call')
-                                ->where('metadata->vapi_call_id', $vapiCallId)
-                                ->exists();
-
-                            if (!$existingUsage) {
-                                $minutes = (int) ceil($duration / 60);
-                                \App\Models\UsageEvent::create([
-                                    'workspace_id' => $workspace->id,
-                                    'support_case_id' => $case?->id,
-                                    'minutes' => $minutes,
-                                    'event_type' => 'call',
-                                    'occurred_at' => now(),
-                                    'metadata' => ['vapi_call_id' => $vapiCallId],
-                                ]);
-                            }
-                        }
-
-                        // 2) Billing - Deduct Credits
-                        if ($cost > 0) {
-                            $costInCents = (int) round($cost * 100);
-                            if ($costInCents > 0) {
-                                \Illuminate\Support\Facades\DB::transaction(function () use ($workspace, $vapiCallId, $costInCents) {
-                                    $lockedWorkspace = \App\Models\Workspace::lockForUpdate()->find($workspace->id);
-                                    
-                                    $existingCreditDeduction = \App\Models\CreditLedger::where('workspace_id', $lockedWorkspace->id)
-                                        ->where('type', 'call_deduction')
-                                        ->where('meta->vapi_call_id', $vapiCallId)
-                                        ->exists();
-
-                                    if (!$existingCreditDeduction) {
-                                        \App\Models\CreditLedger::create([
-                                            'workspace_id' => $lockedWorkspace->id,
-                                            'type' => 'call_deduction',
-                                            'amount' => -$costInCents,
-                                            'meta' => ['vapi_call_id' => $vapiCallId],
-                                        ]);
-                                        $lockedWorkspace->decrement('credits_balance', $costInCents);
-                                    }
-                                });
-                            }
-                        }
-
-                        // 3) Update case title and description
-                        $summary = data_get($payload, 'message.analysis.summary');
-                        if ($case && $summary) {
-                            $changed = false;
-                            
-                            // Replace missing or generic description
-                            if (empty($case->description) || trim($case->description) === 'New case, no description') {
-                                $case->description = $summary;
-                                $changed = true;
-                            }
-                            
-                            // Replace missing or generic title
-                            if (empty($case->title) || $case->title === 'New ticket' || stripos($case->title, 'New ticket') === 0 || $case->title === 'New case' || stripos($case->title, 'New case') === 0) {
-                                $case->title = substr($summary, 0, 80) . (strlen($summary) > 80 ? '...' : '');
-                                $changed = true;
-                            }
-                            
-                            if ($changed) {
-                                $case->save();
-                            }
-                        }
-
-                    } catch (\Throwable $e) {
-                        Log::error('VAPI_END_CALL_REPORT_ERROR', [
-                            'callId' => $vapiCallId,
-                            'error' => $e->getMessage()
-                        ]);
-                    }
-                }
+                \App\Jobs\ProcessEndCallReport::dispatch($workspace, $payload);
             }
             return response()->json(['ok' => true], 200);
         }

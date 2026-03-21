@@ -145,10 +145,28 @@ class CalendarController extends Controller
                 ->where('provider', 'calendly')
                 ->first();
             $baseLink = $conn?->calendly_scheduling_link ?? '';
-            $url = $baseLink
-                ? $baseLink . '?embed_type=PopupWidget'
-                . '&event_start_time=' . ($startsAt?->toIso8601String() ?? '')
-                : $baseLink;
+            
+            if ($baseLink) {
+                $case = $suggestedEvent->supportCase;
+                $contact = $case?->contact;
+                
+                $name = urlencode(trim(($contact?->name ?? '')));
+                $email = urlencode(trim(($case?->requester_email ?? $contact?->email ?? '')));
+                
+                $params = [];
+                if ($name) $params['name'] = $name;
+                if ($email) $params['email'] = $email;
+                if ($startsAt) {
+                    $params['month'] = $startsAt->format('Y-m');
+                    $params['date'] = $startsAt->format('Y-m-d');
+                }
+                
+                $queryString = urldecode(http_build_query($params));
+                $separator = str_contains($baseLink, '?') ? '&' : '?';
+                $url = $baseLink . $separator . $queryString;
+            } else {
+                $url = null;
+            }
         } elseif ($provider === 'google') {
             $url = $this->createGoogleEvent($suggestedEvent, $startsAt, $endsAt);
         }

@@ -127,6 +127,35 @@
             </div>
 
             <div class="tc-card p-6">
+                <h2 class="tc-h3 mb-3">Meetings</h2>
+                <div class="space-y-3">
+                    @forelse($case->calendarEvents as $event)
+                        <div class="rounded-xl border border-slate-200 p-3 bg-slate-50">
+                            <p class="text-sm font-semibold text-slate-800">Confirmed Meeting</p>
+                            <p class="text-xs font-medium text-slate-500 mt-1 uppercase tracking-wider">{{ \Carbon\Carbon::parse($event->starts_at)->format('M j, Y \a\t g:i A') }}</p>
+                            @if($event->url)
+                                <a href="{{ $event->url }}" target="_blank" class="text-xs text-blue-600 hover:text-blue-700 hover:underline mt-2 inline-block font-medium">View Link &rarr;</a>
+                            @endif
+                        </div>
+                    @empty
+                    @endforelse
+
+                    @forelse($case->suggestedEvents->where('status', 'pending') as $suggested)
+                        <div class="rounded-xl border border-warning-200 p-3 bg-warning-50">
+                            <p class="text-sm font-semibold text-warning-800">Suggested Meeting</p>
+                            <p class="text-xs font-medium text-warning-700 mt-1 uppercase tracking-wider">{{ \Carbon\Carbon::parse($suggested->starts_at)->format('M j, Y \a\t g:i A') }}</p>
+                            <a href="{{ route('app.calendar.index') }}" class="text-xs text-warning-700 hover:text-warning-900 hover:underline mt-2 inline-block font-medium">Review in Calendar &rarr;</a>
+                        </div>
+                    @empty
+                    @endforelse
+
+                    @if($case->calendarEvents->isEmpty() && $case->suggestedEvents->where('status', 'pending')->isEmpty())
+                        <p class="text-sm text-slate-500">No meetings scheduled.</p>
+                    @endif
+                </div>
+            </div>
+
+            <div class="tc-card p-6">
                 <h2 class="tc-h3 mb-3">Requester</h2>
                 <div class="space-y-3">
                     <div>

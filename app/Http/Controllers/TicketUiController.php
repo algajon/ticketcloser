@@ -51,7 +51,7 @@ class TicketUiController extends Controller
 
         abort_if($case->workspace_id !== $workspace->id, 404);
 
-        $case->load(['events' => fn($q) => $q->latest(), 'comments' => fn($q) => $q->latest()]);
+        $case->load(['events' => fn($q) => $q->latest(), 'comments' => fn($q) => $q->latest(), 'suggestedEvents', 'calendarEvents']);
 
         return view('tickets.show', compact('workspace', 'case'));
     }

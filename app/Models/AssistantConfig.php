@@ -17,6 +17,7 @@ class AssistantConfig extends Model
         'vapi_booking_tool_id',
         'vapi_assistant_id',
         'is_active',
+        'fallback_phone',
         'intake_params',
         'preset_key',
         'override_params',

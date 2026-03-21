@@ -37,7 +37,7 @@ Route::get('/', function () {
 | App (authenticated)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'subscribed'])->prefix('app')->name('app.')->group(function () {
+Route::middleware(['auth', 'verified', 'subscribed'])->prefix('app')->name('app.')->group(function () {
 
     /*
     |--------------------------------------------------------------------------
@@ -142,6 +142,9 @@ Route::middleware(['auth', 'subscribed'])->prefix('app')->name('app.')->group(fu
     // Queues, Contacts, Call logs
     Route::get('/workspaces/{workspace:slug}/queues', [\App\Http\Controllers\QueuesController::class, 'index'])->name('queues.index');
     Route::get('/workspaces/{workspace:slug}/contacts', [\App\Http\Controllers\ContactsController::class, 'index'])->name('contacts.index');
+    Route::get('/workspaces/{workspace:slug}/contacts/{contact}/edit', [\App\Http\Controllers\ContactsController::class, 'edit'])->name('contacts.edit');
+    Route::patch('/workspaces/{workspace:slug}/contacts/{contact}', [\App\Http\Controllers\ContactsController::class, 'update'])->name('contacts.update');
+    Route::delete('/workspaces/{workspace:slug}/contacts/{contact}', [\App\Http\Controllers\ContactsController::class, 'destroy'])->name('contacts.destroy');
     Route::get('/workspaces/{workspace:slug}/calls', [\App\Http\Controllers\CallEventsController::class, 'index'])->name('calls.index');
 
     /*

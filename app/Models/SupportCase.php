@@ -139,4 +139,9 @@ class SupportCase extends Model
     {
         return $this->hasMany(\App\Models\CalendarEvent::class, 'case_id');
     }
+
+    public function contact(): BelongsTo
+    {
+        return $this->belongsTo(Contact::class);
+    }
 }

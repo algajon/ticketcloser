@@ -1,0 +1,101 @@
+[
+    {
+        "id": 1,
+        "workspace_id": 3,
+        "e164": "+12168995453",
+        "forwarding_number": null,
+        "vapi_phone_number_id": "1b1dbc54-97f4-4d2c-bd16-1649bace32e6",
+        "is_active": true,
+        "created_at": "2026-03-21T22:35:42.000000Z",
+        "updated_at": "2026-03-21T22:35:44.000000Z",
+        "assistant_id": 1,
+        "assistant": {
+            "id": 1,
+            "workspace_id": 3,
+            "name": "Support Bot",
+            "system_prompt": "You are a friendly support agent for a laptop company. Book a meeting for the client to bring their laptop to the main service shop.",
+            "intake_params": null,
+            "fallback_phone": null,
+            "voice_provider": "vapi",
+            "voice_id": "Elliot",
+            "vapi_tool_id": "ce7b2afb-c5c9-4767-be7b-456149c28345",
+            "vapi_booking_tool_id": "969c4c0d-b490-46d2-8708-1d1eb8c688c9",
+            "vapi_assistant_id": "5d76bafc-1996-46c1-a9d4-100ff423a90d",
+            "is_active": true,
+            "preset_key": null,
+            "override_params": {
+                "waitSeconds": "0.5",
+                "numWords": "2",
+                "backoffSeconds": "1"
+            },
+            "created_at": "2026-03-21T22:35:24.000000Z",
+            "updated_at": "2026-03-21T22:35:27.000000Z"
+        }
+    },
+    {
+        "id": 2,
+        "workspace_id": 3,
+        "e164": "+12168995174",
+        "forwarding_number": null,
+        "vapi_phone_number_id": "110c5c9d-25b6-4335-8fc4-7017c2ca51fe",
+        "is_active": true,
+        "created_at": "2026-03-21T22:45:18.000000Z",
+        "updated_at": "2026-03-21T22:45:48.000000Z",
+        "assistant_id": 2,
+        "assistant": {
+            "id": 2,
+            "workspace_id": 3,
+            "name": "la candela",
+            "system_prompt": "You are a friendly support agent for a laptop company. Book a meeting for the client to bring their laptop to the main service shop.",
+            "intake_params": null,
+            "fallback_phone": null,
+            "voice_provider": "vapi",
+            "voice_id": "Elliot",
+            "vapi_tool_id": "6568bdf3-bd88-40bd-aefc-60aaf070dbd0",
+            "vapi_booking_tool_id": "2053454f-53fb-4b08-9bcf-fdc002e1eb32",
+            "vapi_assistant_id": "98e9f9c7-d510-4031-b5b0-06bf1ac7f95d",
+            "is_active": true,
+            "preset_key": null,
+            "override_params": {
+                "waitSeconds": "0.5",
+                "numWords": "2",
+                "backoffSeconds": "1"
+            },
+            "created_at": "2026-03-21T22:45:00.000000Z",
+            "updated_at": "2026-03-21T22:45:03.000000Z"
+        }
+    },
+    {
+        "id": 3,
+        "workspace_id": 3,
+        "e164": "+12168995376",
+        "forwarding_number": null,
+        "vapi_phone_number_id": "65650355-d42b-4b56-ab14-df23a48833b5",
+        "is_active": true,
+        "created_at": "2026-03-21T22:54:05.000000Z",
+        "updated_at": "2026-03-21T22:54:07.000000Z",
+        "assistant_id": 3,
+        "assistant": {
+            "id": 3,
+            "workspace_id": 3,
+            "name": "New Assistant",
+            "system_prompt": "You are a friendly support agent for a laptop company. Book a meeting for the client to bring their laptop to the main service shop.",
+            "intake_params": null,
+            "fallback_phone": null,
+            "voice_provider": "vapi",
+            "voice_id": "Elliot",
+            "vapi_tool_id": "763f3374-f826-48a7-a37b-076ee4281ffe",
+            "vapi_booking_tool_id": "975f322d-ca64-4995-8e02-56476f6d07f0",
+            "vapi_assistant_id": "86ff56fe-9eeb-425c-ad84-1f92c7a93523",
+            "is_active": true,
+            "preset_key": null,
+            "override_params": {
+                "waitSeconds": "0.5",
+                "numWords": "2",
+                "backoffSeconds": "1"
+            },
+            "created_at": "2026-03-21T22:53:52.000000Z",
+            "updated_at": "2026-03-21T22:53:55.000000Z"
+        }
+    }
+]

@@ -83,7 +83,23 @@
                     <p class="text-xs text-danger" role="alert">{{ $errors->first('area_code') }}</p>@endif
                 </div>
 
-                <button type="submit" class="tc-btn-primary w-full"
+                <div class="space-y-1.5 pt-4 border-t border-slate-100">
+                    <label for="forwarding_number" class="block text-sm font-medium text-slate-800">Use your own phone number (Call Forwarding)</label>
+                    <div class="text-xs text-muted">Enter your existing phone number (e.g. +1 555-0199) and we'll show you forwarding instructions.</div>
+                    <input id="forwarding_number" name="forwarding_number" placeholder="e.g. +1 555-0199" value="{{ old('forwarding_number', $phone?->forwarding_number) }}" class="tc-input mt-2"
+                        @if(!$config?->vapi_assistant_id) disabled @endif />
+                    @if($errors->first('forwarding_number'))
+                    <p class="text-xs text-danger" role="alert">{{ $errors->first('forwarding_number') }}</p>@endif
+
+                    @if($phone?->e164 && preg_match('/^\+?\d{10,}$/', $phone?->e164))
+                    <div class="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-xl text-sm text-slate-800">
+                        <strong class="block mb-1 text-slate-900">To use your own number:</strong> 
+                        Set up unconditional call forwarding with your current carrier (e.g. Verizon, AT&T) to route all calls to your new AI Assistant Number: <span class="font-mono font-semibold">{{ $phone->e164 }}</span>
+                    </div>
+                    @endif
+                </div>
+
+                <button type="submit" class="tc-btn-primary w-full mt-4"
                     x-bind:disabled="loading || {{ $config?->vapi_assistant_id ? 'false' : 'true' }}">
                     <span
                         x-text="loading ? 'Provisioning…' : '{{ $phone?->vapi_phone_number_id ? 'Sync configuration' : 'Provision number' }}'">{{ $phone?->vapi_phone_number_id ? 'Sync configuration' : 'Provision number' }}</span>
