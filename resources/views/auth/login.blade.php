@@ -6,7 +6,7 @@
         <p class="text-[14px] text-slate-400 mt-2">Sign in to your account to continue</p>
     </div>
 
-    <form method="POST" action="{{ route('login') }}" class="space-y-4">
+    <form method="POST" action="{{ route('login') }}" class="space-y-4 backdrop-blur-md">
         @csrf
 
         <div class="space-y-1.5 text-left">

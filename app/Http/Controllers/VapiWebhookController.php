@@ -108,6 +108,8 @@ class VapiWebhookController extends Controller
 
                                 $overrides = [
                                     'model' => [
+                                        'provider' => 'openai',
+                                        'model' => 'gpt-4o-mini',
                                         'messages' => [
                                             ['role' => 'system', 'content' => $systemPrompt]
                                         ]
