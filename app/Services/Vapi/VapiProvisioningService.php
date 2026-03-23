@@ -123,6 +123,7 @@ class VapiProvisioningService
                 $pn = $this->vapi->updatePhoneNumber($record->vapi_phone_number_id, [
                     'name' => $workspace->name . ' Support',
                     'serverUrl' => config('services.vapi.webhook_url'),
+                    'assistantId' => $assistantConfig->vapi_assistant_id,
                 ]);
                 $record->e164 = $pn['number'] ?? $pn['sipUri'] ?? $record->e164;
                 $record->assistant_id = $assistantConfig->id;
@@ -161,6 +162,7 @@ class VapiProvisioningService
             'provider' => 'vapi',
             'name' => $workspace->name . ' Support',
             'serverUrl' => config('services.vapi.webhook_url'),
+            'assistantId' => $assistantConfig->vapi_assistant_id,
         ];
 
         if ($areaCode && strlen($areaCode) === 3) {

@@ -1,0 +1,503 @@
+﻿
+storage\logs\laravel.log:15
+596:[2026-03-19 16:29:47] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+597:[2026-03-19 16:29:48] 
+local.INFO: VAPI_IN {"type"
+:"status-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+598:[2026-03-19 16:29:52] 
+local.INFO: VAPI_IN {"type"
+:"end-of-call-report","path
+":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+599:[2026-03-19 17:13:02] 
+local.INFO: VAPI_IN {"type"
+:"status-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+600:[2026-03-19 17:13:03] 
+local.INFO: VAPI_IN {"type"
+:"assistant.started","path"
+:"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+601:[2026-03-19 17:13:04] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+602:[2026-03-19 17:13:05] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+603:[2026-03-19 17:13:07] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+604:[2026-03-19 17:13:08] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+605:[2026-03-19 17:13:10] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+606:[2026-03-19 17:13:11] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+607:[2026-03-19 17:13:12] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+608:[2026-03-19 17:13:13] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+609:[2026-03-19 17:13:15] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+610:[2026-03-19 17:13:16] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+611:[2026-03-19 17:13:18] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+612:[2026-03-19 17:13:18] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+613:[2026-03-19 17:13:19] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+614:[2026-03-19 17:13:21] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+615:[2026-03-19 17:13:22] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+616:[2026-03-19 17:13:23] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+617:[2026-03-19 17:13:27] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+618:[2026-03-19 17:13:29] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+619:[2026-03-19 17:13:31] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+620:[2026-03-19 17:13:35] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+621:[2026-03-19 17:13:37] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+622:[2026-03-19 17:13:38] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+623:[2026-03-19 17:13:39] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+624:[2026-03-19 17:13:43] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+625:[2026-03-19 17:13:46] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+626:[2026-03-19 17:13:49] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+627:[2026-03-19 17:13:53] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+628:[2026-03-19 17:13:54] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+629:[2026-03-19 17:13:57] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+630:[2026-03-19 17:13:58] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+631:[2026-03-19 17:13:58] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+632:[2026-03-19 17:14:00] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+633:[2026-03-19 17:14:01] 
+local.INFO: VAPI_IN {"type"
+:"tool-calls","path":"api/w
+ebhooks/vapi"} 
+storage\logs\laravel.log:15
+634:[2026-03-19 17:14:04] 
+local.INFO: VAPI_OUT {"tool
+CallsCount":1,"resultsCount
+":1} 
+storage\logs\laravel.log:15
+635:[2026-03-19 17:14:05] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+636:[2026-03-19 17:14:06] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+637:[2026-03-19 17:14:07] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+638:[2026-03-19 17:14:09] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+639:[2026-03-19 17:14:11] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+640:[2026-03-19 17:14:13] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+641:[2026-03-19 17:14:16] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+642:[2026-03-19 17:14:17] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+643:[2026-03-19 17:14:18] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+644:[2026-03-19 17:14:18] 
+local.INFO: VAPI_IN {"type"
+:"tool-calls","path":"api/w
+ebhooks/vapi"} 
+storage\logs\laravel.log:15
+645:[2026-03-19 17:14:18] 
+local.INFO: VAPI_OUT {"tool
+CallsCount":1,"resultsCount
+":1} 
+storage\logs\laravel.log:15
+646:[2026-03-19 17:14:19] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+647:[2026-03-19 17:14:20] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+648:[2026-03-19 17:14:22] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+649:[2026-03-19 17:14:23] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+650:[2026-03-19 17:14:24] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+651:[2026-03-19 17:14:26] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+652:[2026-03-19 17:14:31] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+653:[2026-03-19 17:14:32] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+654:[2026-03-19 17:14:32] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+655:[2026-03-19 17:14:33] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+656:[2026-03-19 17:14:36] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+657:[2026-03-19 17:14:38] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+658:[2026-03-19 17:14:41] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+659:[2026-03-19 17:14:42] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+660:[2026-03-19 17:14:45] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+661:[2026-03-19 17:14:47] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+662:[2026-03-19 17:14:48] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+663:[2026-03-19 17:14:50] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+664:[2026-03-19 17:14:52] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+665:[2026-03-19 17:14:53] 
+local.INFO: VAPI_IN {"type"
+:"status-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+666:[2026-03-19 17:14:54] 
+local.INFO: VAPI_IN {"type"
+:"end-of-call-report","path
+":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+668:[2026-03-19 17:22:11] 
+local.INFO: VAPI_IN {"type"
+:"status-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+669:[2026-03-19 17:22:12] 
+local.INFO: VAPI_IN {"type"
+:"assistant.started","path"
+:"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+670:[2026-03-19 17:22:12] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+671:[2026-03-19 17:22:14] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+672:[2026-03-19 17:22:16] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+673:[2026-03-19 17:22:19] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+674:[2026-03-19 17:22:21] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+675:[2026-03-19 17:22:23] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+676:[2026-03-19 17:22:24] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+677:[2026-03-19 17:22:25] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+678:[2026-03-19 17:22:27] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+679:[2026-03-19 17:22:29] 
+local.INFO: VAPI_IN {"type"
+:"user-interrupted","path":
+"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+680:[2026-03-19 17:22:31] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+681:[2026-03-19 17:22:32] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+682:[2026-03-19 17:22:33] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+683:[2026-03-19 17:22:33] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+684:[2026-03-19 17:22:35] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+685:[2026-03-19 17:22:37] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+686:[2026-03-19 17:22:47] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+687:[2026-03-19 17:22:53] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+688:[2026-03-19 17:22:55] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+689:[2026-03-19 17:22:56] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+690:[2026-03-19 17:23:05] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+691:[2026-03-19 17:23:07] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+692:[2026-03-19 17:23:10] 
+local.INFO: VAPI_IN {"type"
+:"speech-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+693:[2026-03-19 17:23:12] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+694:[2026-03-19 17:23:13] 
+local.INFO: VAPI_IN {"type"
+:"conversation-update","pat
+h":"api/webhooks/vapi"} 
+storage\logs\laravel.log:15
+695:[2026-03-19 17:23:14] 
+local.INFO: VAPI_IN {"type"
+:"status-update","path":"ap
+i/webhooks/vapi"} 
+storage\logs\laravel.log:15
+696:[2026-03-19 17:23:18] 
+local.INFO: VAPI_IN {"type"
+:"end-of-call-report","path
+":"api/webhooks/vapi"} 
+
+

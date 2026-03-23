@@ -160,6 +160,7 @@ class VapiWebhookController extends Controller
 
         // --- Tool calls ---
         if ($type === 'tool-calls') {
+            Log::info('VAPI_TOOL_CALLS_PAYLOAD', ['payload' => $payload]);
             // ✅ Robust tool call extraction (covers toolCallList, toolCalls, toolWithToolCallList)
             $toolCalls = $this->extractToolCalls($payload);
 
@@ -169,11 +170,12 @@ class VapiWebhookController extends Controller
             $results = [];
 
             foreach ($toolCalls as $call) {
-                $toolCallId = $call['id'] ?? null;
+                $toolCallId = $call['id'] ?? $call['toolCallId'] ?? null;
 
                 // Vapi tool call shape: { id, type:"function", function:{ name, arguments } }
                 $fn = $call['function'] ?? [];
                 $name = $fn['name'] ?? $call['name'] ?? null;
+                $nameLower = strtolower($name);
 
                 $argsRaw = $fn['arguments'] ?? $call['arguments'] ?? '{}';
                 $args = $this->decodeArguments($argsRaw);
@@ -186,14 +188,13 @@ class VapiWebhookController extends Controller
                 if (!$workspace) {
                     $results[] = [
                         'toolCallId' => $toolCallId,
-                        'name' => $name,
                         'result' => json_encode(['error' => $authError ?? 'Unauthorized']),
                     ];
                     continue;
                 }
 
                 try {
-                    if ($name === 'createCase' || $name === 'createMaintenanceTicket' || $name === 'createMortgageLead') {
+                    if ($nameLower === 'createcase' || $nameLower === 'createmaintenanceticket' || $nameLower === 'createmortgagelead') {
                         // IMPORTANT: Assign properties directly to avoid mass-assignment issues
                         $case = new SupportCase();
                         $case->workspace_id = $workspace->id;
@@ -305,13 +306,12 @@ class VapiWebhookController extends Controller
                         // ✅ Vapi requires result to be a STRING
                         $results[] = [
                             'toolCallId' => $toolCallId,
-                            'name' => $name,
                             'result' => json_encode([
                                 'caseNumber' => $case->case_number,
                                 'id' => $case->id,
                             ]),
                         ];
-                    } elseif ($name === 'bookMeeting') {
+                    } elseif ($nameLower === 'bookmeeting') {
                         $caseIdParam = $args['caseId'] ?? '';
                         $case = SupportCase::where('workspace_id', $workspace->id)
                             ->where(function ($q) use ($caseIdParam) {
@@ -323,7 +323,6 @@ class VapiWebhookController extends Controller
                         if (!$case) {
                             $results[] = [
                                 'toolCallId' => $toolCallId,
-                                'name' => $name,
                                 'result' => json_encode(['error' => 'Case not found']),
                             ];
                             continue;
@@ -385,13 +384,11 @@ class VapiWebhookController extends Controller
 
                         $results[] = [
                             'toolCallId' => $toolCallId,
-                            'name' => $name,
                             'result' => json_encode(['success' => true, 'message' => $msg]),
                         ];
                     } else {
                         $results[] = [
                             'toolCallId' => $toolCallId,
-                            'name' => $name,
                             'result' => json_encode(['error' => "Unknown tool: {$name}"]),
                         ];
                     }
@@ -405,7 +402,6 @@ class VapiWebhookController extends Controller
                     // Still return a result so Vapi doesn’t produce "No result returned"
                     $results[] = [
                         'toolCallId' => $toolCallId,
-                        'name' => $name,
                         'result' => json_encode(['error' => 'Ticket creation failed']),
                     ];
                 }
