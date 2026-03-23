@@ -161,6 +161,7 @@ class VapiWebhookController extends Controller
         // --- Tool calls ---
         if ($type === 'tool-calls') {
             Log::info('VAPI_TOOL_CALLS_PAYLOAD', ['payload' => $payload]);
+            try {
             // ✅ Robust tool call extraction (covers toolCallList, toolCalls, toolWithToolCallList)
             $toolCalls = $this->extractToolCalls($payload);
 
@@ -421,6 +422,16 @@ class VapiWebhookController extends Controller
             return response()->json([
                 'results' => $results,
             ], 200);
+            } catch (\Throwable $topE) {
+                Log::error('VAPI_FATAL', ['error' => $topE->getMessage(), 'file' => $topE->getFile(), 'line' => $topE->getLine(), 'trace' => $topE->getTraceAsString()]);
+                return response()->json([
+                    'results' => [[
+                        'toolCallId' => 'debug',
+                        'name' => 'debug',
+                        'result' => 'ERROR: ' . $topE->getMessage() . ' in ' . basename($topE->getFile()) . ':' . $topE->getLine(),
+                    ]]
+                ], 200);
+            }
         }
 
         if ($type === 'end-of-call-report') {
