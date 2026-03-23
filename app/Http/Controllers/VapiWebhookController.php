@@ -12,6 +12,33 @@ class VapiWebhookController extends Controller
 {
     public function handle(Request $request)
     {
+        try {
+            return $this->handleInner($request);
+        } catch (\Throwable $e) {
+            Log::error('VAPI_WEBHOOK_FATAL', [
+                'error'   => $e->getMessage(),
+                'file'    => $e->getFile(),
+                'line'    => $e->getLine(),
+                'trace'   => $e->getTraceAsString(),
+            ]);
+
+            // Try to extract the first toolCallId so Vapi gets a result back
+            $payload = $request->input('message', []);
+            $toolCalls = $this->extractToolCallsSafe($request->all());
+            if (count($toolCalls)) {
+                $results = array_map(fn($c) => [
+                    'toolCallId' => $c['id'] ?? $c['toolCallId'] ?? 'unknown',
+                    'result' => json_encode(['error' => 'Server error: ' . $e->getMessage()]),
+                ], $toolCalls);
+                return response()->json(['results' => $results], 200);
+            }
+
+            return response()->json(['ok' => true, 'error' => $e->getMessage()], 200);
+        }
+    }
+
+    private function handleInner(Request $request)
+    {
         $payload = $request->all();
 
         // 1) Verify Webhook Signature
@@ -429,6 +456,15 @@ class VapiWebhookController extends Controller
 
         // Anything else: acknowledge
         return response()->json(['ok' => true], 200);
+    }
+
+    /**
+     * Safe alias for extractToolCalls — used in the global fatal-error handler
+     * where the payload may be incomplete.
+     */
+    private function extractToolCallsSafe(array $payload): array
+    {
+        return $this->extractToolCalls($payload);
     }
 
     /**
