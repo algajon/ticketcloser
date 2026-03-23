@@ -295,10 +295,10 @@ class VapiWebhookController extends Controller
                         // Send Notification to Workspace Users
                         try {
                             if ($workspace->users && $workspace->users->count() > 0) {
-                                \Illuminate\Support\Facades\Notification::send(
-                                    $workspace->users,
-                                    new \App\Notifications\NewSupportCaseNotification($case)
-                                );
+                                // \Illuminate\Support\Facades\Notification::send(
+                                //     $workspace->users,
+                                //     new \App\Notifications\NewSupportCaseNotification($case)
+                                // );
                             }
                         } catch (\Throwable $e) {
                             Log::error('VAPI_NOTIFICATION_FAILED', ['error' => $e->getMessage()]);
