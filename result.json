@@ -1,0 +1,9 @@
+{
+    "results":  [
+                    {
+                        "toolCallId":  "debug",
+                        "name":  "debug",
+                        "result":  "ERROR: Database file at path [/var/www/html/database/database.sqlite] does not exist. Ensure this is an absolute path to the database. (Connection: sqlite, Database: /var/www/html/database/database.sqlite, SQL: select * from \"workspaces\" where \"slug\" = legitemail-co limit 1) in Connection.php:838"
+                    }
+                ]
+}

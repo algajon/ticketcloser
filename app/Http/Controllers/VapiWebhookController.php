@@ -106,15 +106,37 @@ class VapiWebhookController extends Controller
                                 $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference.]";
                                 $systemPrompt = $memory . $basePrompt . $dateContext;
 
-                                $overrides = [
-                                    'model' => [
-                                        'provider' => 'openai',
-                                        'model' => 'gpt-4o-mini',
-                                        'messages' => [
-                                            ['role' => 'system', 'content' => $systemPrompt]
-                                        ]
-                                    ]
+                                // Build toolIds array so Vapi doesn't strip tools when we override the model
+                                $toolIds = array_filter([
+                                    $workspacePhone->assistant->vapi_tool_id ?? null,
+                                    $workspacePhone->assistant->vapi_booking_tool_id ?? null,
+                                ]);
+
+                                $modelOverride = [
+                                    'provider' => 'openai',
+                                    'model' => 'gpt-4o-mini',
+                                    'messages' => [
+                                        ['role' => 'system', 'content' => $systemPrompt]
+                                    ],
                                 ];
+
+                                if (!empty($toolIds)) {
+                                    $modelOverride['toolIds'] = array_values($toolIds);
+                                }
+
+                                // Preserve the inline transferCall tool if a fallback phone is configured
+                                $fallbackPhone = $workspacePhone->assistant->fallback_phone ?? null;
+                                if ($fallbackPhone) {
+                                    $modelOverride['tools'][] = [
+                                        'type' => 'transferCall',
+                                        'destinations' => [[
+                                            'type' => 'number',
+                                            'number' => preg_replace('/[^0-9+]/', '', $fallbackPhone),
+                                        ]],
+                                    ];
+                                }
+
+                                $overrides = ['model' => $modelOverride];
                             }
                         }
 
