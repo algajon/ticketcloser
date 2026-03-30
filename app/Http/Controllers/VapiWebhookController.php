@@ -2,8 +2,9 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\SupportCase;
 use App\Models\Workspace;
+use App\Services\Meetings\MeetingBookingService;
+use App\Services\Tickets\TicketCreationService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -61,7 +62,7 @@ class VapiWebhookController extends Controller
                     // Return the assigned assistant for this phone number
                     if ($workspacePhone->assistant && $workspacePhone->assistant->vapi_assistant_id) {
                         $assistantId = $workspacePhone->assistant->vapi_assistant_id;
-                        $customerNumber = data_get($payload, 'message.call.customer.number');
+                        $customerNumber = $this->resolveCustomerNumber($payload);
                         $overrides = [];
 
                         // The Brain: Prospecting Context Injection
@@ -102,7 +103,16 @@ class VapiWebhookController extends Controller
                                 $memory .= "]\n\n";
 
                                 // Build the system prompt to override the default model messages
-                                $basePrompt = $workspacePhone->assistant->system_prompt ?? 'You are a helpful customer support assistant for ' . $workspace->name . '.';
+                                $basePrompt = $workspacePhone->assistant->system_prompt;
+                                if (empty($basePrompt) && $workspacePhone->assistant->preset) {
+                                    $basePrompt = $workspacePhone->assistant->preset->vapi_payload_json['systemPrompt'] ?? '';
+                                    if ($basePrompt) {
+                                        $basePrompt = str_replace('{{company_name}}', $workspace->name, $basePrompt);
+                                    }
+                                }
+                                if (empty($basePrompt)) {
+                                    $basePrompt = 'You are a helpful customer support assistant for ' . $workspace->name . '.';
+                                }
                                 $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference.]";
                                 $systemPrompt = $memory . $basePrompt . $dateContext;
 
@@ -140,12 +150,14 @@ class VapiWebhookController extends Controller
                             }
                         }
 
-                        $responsePayload = ['assistantId' => $assistantId];
-                        if (!empty($overrides)) {
-                            $responsePayload['assistantOverrides'] = $overrides;
-                        }
+                                $responsePayload = ['assistantId' => $assistantId];
+                                if (!empty($overrides)) {
+                                    $responsePayload['assistantOverrides'] = $overrides;
+                                }
 
-                        return response()->json($responsePayload, 200);
+                                Log::info('VAPI_ASSISTANT_OVERRIDES', ['payload' => $responsePayload]);
+
+                                return response()->json($responsePayload, 200);
                     }
                 }
             }
@@ -209,111 +221,26 @@ class VapiWebhookController extends Controller
 
                 // If auth/workspace failed, still return a tool result so Vapi doesn't show "No result returned"
                 if (!$workspace) {
-                    $results[] = [
-                        'toolCallId' => $toolCallId,
-                        'name' => $name,
-                        'result' => json_encode(['error' => $authError ?? 'Unauthorized']),
-                    ];
+                    $results[] = $this->errorToolResult($toolCallId, $name, $authError ?? 'Unauthorized');
                     continue;
                 }
 
                 try {
                     if ($nameLower === 'createcase' || $nameLower === 'createmaintenanceticket' || $nameLower === 'createmortgagelead') {
-                        // IMPORTANT: Assign properties directly to avoid mass-assignment issues
-                        $case = new SupportCase();
-                        $case->workspace_id = $workspace->id;
-                        $case->case_number = 'TC-' . strtoupper(Str::random(8));
-                        $case->title = $args['title'] ?? 'New ticket';
-                        $case->description = $args['description'] ?? '';
-                        $case->category = $args['category'] ?? 'general';
-                        $case->priority = $args['priority'] ?? 'normal';
-                        $case->status = 'new';
-                        $case->requester_phone = $args['requesterPhone'] ?? null;
-                        $case->requester_email = $args['requesterEmail'] ?? null;
-
-                        // Prefer explicitly passed externalCallId, otherwise use Vapi call id
-                        $case->external_call_id = $args['externalCallId'] ?? data_get($payload, 'message.call.id');
-
-                        $case->source = $args['source'] ?? 'voice';
-
-                        // Queue resolution: accept explicit queue name in args, or fallback to 'support'
-                        $queueName = $args['queue'] ?? null;
-                        if ($queueName) {
-                            $queue = \App\Models\Queue::where('workspace_id', $workspace->id)->where('name', $queueName)->first();
-                            if ($queue)
-                                $case->queue_id = $queue->id;
-                        }
-
-                        // Store structured payload if provided
-                        if (isset($args['structuredPayload']) && is_array($args['structuredPayload'])) {
-                            $case->structured_payload = $args['structuredPayload'];
-                        }
-
-                        // Lookup assistant config by vapi_assistant_id
-                        $vapiAssistantId = data_get($payload, 'message.call.assistantId');
-                        if ($vapiAssistantId) {
-                            $assistantConfig = \App\Models\AssistantConfig::where('workspace_id', $workspace->id)
-                                ->where('vapi_assistant_id', $vapiAssistantId)
-                                ->first();
-                            if ($assistantConfig) {
-                                $case->assistant_config_id = $assistantConfig->id;
-                            }
-                        }
-
-                        // Save case first so we have an ID
-                        $case->save();
-
-                        // Link or create contact by phone
-                        if ($case->requester_phone) {
-                            $phone = preg_replace('/\D+/', '', $case->requester_phone);
-                            $match = \App\Models\Contact::where('workspace_id', $workspace->id)
-                                ->where('phone_e164', 'like', "%{$phone}%")
-                                ->first();
-                            if (!$match) {
-                                $match = \App\Models\Contact::create([
-                                    'workspace_id' => $workspace->id,
-                                    'phone_e164' => $case->requester_phone,
-                                    'name' => $args['requesterName'] ?? null,
-                                    'email' => $case->requester_email ?? null,
-                                ]);
-                            }
-                            if ($match) {
-                                $case->contact_id = $match->id;
-                                $case->save();
-                            }
-                        }
-
-                        // If Vapi provided call-level transcript or recording in payload, attach
-                        $callBlock = data_get($payload, 'message.call');
-                        if (is_array($callBlock)) {
-                            if (isset($callBlock['transcript'])) {
-                                $case->transcript = is_string($callBlock['transcript']) ? $callBlock['transcript'] : json_encode($callBlock['transcript']);
-                            }
-                            if (isset($callBlock['recordingUrl'])) {
-                                $case->recording_url = $callBlock['recordingUrl'];
-                            }
-                            if ($case->transcript || $case->recording_url) {
-                                $case->save();
-                            }
-
-                            // Create a call_event record for audit
-                            try {
-                                \App\Models\CallEvent::create([
-                                    'workspace_id' => $workspace->id,
-                                    'queue_id' => $case->queue_id,
-                                    'vapi_call_id' => data_get($payload, 'message.call.id'),
-                                    'from_number' => data_get($callBlock, 'from'),
-                                    'to_number' => data_get($callBlock, 'to'),
-                                    'duration_seconds' => data_get($callBlock, 'durationSeconds'),
-                                    'cost' => data_get($callBlock, 'cost'),
-                                    'transcript' => $case->transcript,
-                                    'recording_url' => $case->recording_url,
-                                    'meta' => $callBlock,
-                                ]);
-                            } catch (\Throwable) {
-                                // ignore failure to record call event
-                            }
-                        }
+                        $callBlock = data_get($payload, 'message.call', []);
+                        $case = app(TicketCreationService::class)->createForWorkspace($workspace, [
+                            ...$args,
+                            'requesterPhone' => $args['requesterPhone']
+                                ?? $args['requester_phone']
+                                ?? $this->resolveCustomerNumber($payload),
+                            'externalCallId' => $args['externalCallId']
+                                ?? $args['external_call_id']
+                                ?? data_get($callBlock, 'id'),
+                            'source' => $args['source'] ?? 'voice',
+                        ], [
+                            'call' => is_array($callBlock) ? $callBlock : [],
+                            'vapi_assistant_id' => data_get($callBlock, 'assistantId'),
+                        ]);
 
                         // Send Notification to Workspace Users
                         try {
@@ -327,97 +254,30 @@ class VapiWebhookController extends Controller
                             Log::error('VAPI_NOTIFICATION_FAILED', ['error' => $e->getMessage()]);
                         }
 
-                        $results[] = [
-                            'toolCallId' => $toolCallId,
-                            'name' => $name,
-                            'result' => json_encode([
-                                'caseNumber' => $case->case_number,
-                                'id' => $case->id,
-                            ]),
-                        ];
+                        $results[] = $this->successToolResult($toolCallId, $name, [
+                            'caseNumber' => $case->case_number,
+                            'id' => $case->id,
+                        ]);
                     } elseif ($nameLower === 'bookmeeting') {
-                        $caseIdParam = $args['caseId'] ?? '';
-                        $case = SupportCase::where('workspace_id', $workspace->id)
-                            ->where(function ($q) use ($caseIdParam) {
-                                $q->where('case_number', $caseIdParam)
-                                    ->orWhere('id', $caseIdParam);
-                            })
-                            ->first();
+                        $meetingBooking = app(MeetingBookingService::class);
+                        $case = $meetingBooking->resolveCase($workspace, $args['caseId'] ?? '');
 
                         if (!$case) {
-                            $results[] = [
-                                'toolCallId' => $toolCallId,
-                                'name' => $name,
-                                'result' => json_encode(['error' => 'Case not found']),
-                            ];
+                            $results[] = $this->errorToolResult($toolCallId, $name, 'Case not found');
                             continue;
                         }
 
-                        try {
-                            $startsAt = \Carbon\Carbon::parse($args['dateTime'] ?? now()->addDay());
-                        } catch (\Exception) {
-                            $startsAt = now()->addDay()->setHour(14)->setMinute(0);
-                        }
-                        $endsAt = $startsAt->copy()->addMinutes(30);
+                        $booking = $meetingBooking->scheduleFromVoice($case, $args);
 
-                        $suggested = \App\Models\SuggestedEvent::create([
-                            'workspace_id' => $workspace->id,
-                            'case_id' => $case->id,
-                            'starts_at' => $startsAt,
-                            'ends_at' => $endsAt,
-                            'timezone' => 'UTC',
-                            'status' => 'pending',
+                        $results[] = $this->successToolResult($toolCallId, $name, [
+                            'success' => true,
+                            'booked' => $booking['booked'],
+                            'message' => $booking['message'],
+                            'suggestedEventId' => $booking['suggestedEvent']->id,
+                            'calendarEventId' => $booking['calendarEvent']?->id,
                         ]);
-
-                        $conn = \App\Models\CalendarConnection::where('workspace_id', $workspace->id)
-                            ->where('provider', 'google')
-                            ->first();
-
-                        $url = null;
-                        if ($conn && isset($conn->tokens['access_token'])) {
-                            $summary = "Support Follow-up: Case #{$case->case_number}";
-                            $response = \Illuminate\Support\Facades\Http::withToken($conn->tokens['access_token'])
-                                ->post('https://www.googleapis.com/calendar/v3/calendars/primary/events', [
-                                    'summary' => $summary,
-                                    'start' => ['dateTime' => $startsAt->toRfc3339String(), 'timeZone' => 'UTC'],
-                                    'end' => ['dateTime' => $endsAt->toRfc3339String(), 'timeZone' => 'UTC'],
-                                    'description' => "Discussing case {$case->case_number}",
-                                ]);
-
-                            if ($response->ok()) {
-                                $url = $response->json('htmlLink');
-                            }
-                        }
-
-                        if ($url) {
-                            \App\Models\CalendarEvent::create([
-                                'workspace_id' => $workspace->id,
-                                'case_id' => $case->id,
-                                'suggested_event_id' => $suggested->id,
-                                'provider' => 'google',
-                                'starts_at' => $startsAt,
-                                'ends_at' => $endsAt,
-                                'status' => 'created',
-                                'url' => $url,
-                            ]);
-                            $suggested->update(['status' => 'confirmed']);
-
-                            $msg = "Meeting successfully booked for " . $startsAt->format('l, F jS \a\t g:i A') . ". We have added this to the calendar and the user will see it in their account.";
-                        } else {
-                            $msg = "We have noted your preferred time of " . $startsAt->format('l, F jS \a\t g:i A') . " and our team will follow up shortly to confirm the calendar invite via email.";
-                        }
-
-                        $results[] = [
-                            'toolCallId' => $toolCallId,
-                            'name' => $name,
-                            'result' => json_encode(['success' => true, 'message' => $msg]),
-                        ];
                     } else {
-                        $results[] = [
-                            'toolCallId' => $toolCallId,
-                            'name' => $name,
-                            'result' => json_encode(['error' => "Unknown tool: {$name}"]),
-                        ];
+                        $results[] = $this->errorToolResult($toolCallId, $name, "Unknown tool: {$name}");
                     }
                 } catch (\Throwable $e) {
                     Log::error('VAPI_TOOL_EXCEPTION', [
@@ -427,11 +287,11 @@ class VapiWebhookController extends Controller
                     ]);
 
                     // Still return a result so Vapi doesn’t produce "No result returned"
-                    $results[] = [
-                        'toolCallId' => $toolCallId,
-                        'name' => $name,
-                        'result' => json_encode(['error' => 'Ticket creation failed']),
-                    ];
+                    $errorMessage = $nameLower === 'bookmeeting'
+                        ? 'Meeting booking failed'
+                        : 'Ticket creation failed';
+
+                    $results[] = $this->errorToolResult($toolCallId, $name, $errorMessage);
                 }
             }
 
@@ -441,18 +301,22 @@ class VapiWebhookController extends Controller
             ]);
 
             // ✅ Always return 200 and include results array
-            return response()->json([
-                'results' => $results,
-            ], 200);
+            return response()->json(['results' => $results], 200);
             } catch (\Throwable $topE) {
                 Log::error('VAPI_FATAL', ['error' => $topE->getMessage(), 'file' => $topE->getFile(), 'line' => $topE->getLine(), 'trace' => $topE->getTraceAsString()]);
-                return response()->json([
-                    'results' => [[
-                        'toolCallId' => 'debug',
-                        'name' => 'debug',
-                        'result' => 'ERROR: ' . $topE->getMessage() . ' in ' . basename($topE->getFile()) . ':' . $topE->getLine(),
-                    ]]
-                ], 200);
+                $results = [];
+
+                foreach ($this->extractToolCalls($payload) as $call) {
+                    $toolCallId = $call['id'] ?? $call['toolCallId'] ?? null;
+                    if (!$toolCallId) {
+                        continue;
+                    }
+
+                    $name = data_get($call, 'function.name') ?? $call['name'] ?? null;
+                    $results[] = $this->errorToolResult($toolCallId, $name, 'Internal tool error');
+                }
+
+                return response()->json(['results' => $results], 200);
             }
         }
 
@@ -525,6 +389,62 @@ class VapiWebhookController extends Controller
         }
 
         return [];
+    }
+
+    private function resolveCustomerNumber(array $payload): ?string
+    {
+        $value = data_get($payload, 'message.call.customer.number')
+            ?? data_get($payload, 'message.customer.number')
+            ?? data_get($payload, 'message.call.customer.phoneNumber')
+            ?? data_get($payload, 'message.call.from');
+
+        if (!is_string($value)) {
+            return null;
+        }
+
+        $value = trim($value);
+
+        return $value !== '' ? $value : null;
+    }
+
+    private function successToolResult(string $toolCallId, ?string $name, array $payload): array
+    {
+        $result = [
+            'toolCallId' => $toolCallId,
+            'result' => $this->encodeToolPayload($payload),
+        ];
+
+        if ($name) {
+            $result['name'] = $name;
+        }
+
+        return $result;
+    }
+
+    private function errorToolResult(string $toolCallId, ?string $name, string $message): array
+    {
+        $result = [
+            'toolCallId' => $toolCallId,
+            'error' => $this->singleLine($message),
+        ];
+
+        if ($name) {
+            $result['name'] = $name;
+        }
+
+        return $result;
+    }
+
+    private function encodeToolPayload(array $payload): string
+    {
+        $json = json_encode($payload, JSON_UNESCAPED_SLASHES);
+
+        return $json === false ? '{}' : $this->singleLine($json);
+    }
+
+    private function singleLine(string $value): string
+    {
+        return trim((string) preg_replace('/\s+/', ' ', $value));
     }
 
     /**

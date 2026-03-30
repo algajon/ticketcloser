@@ -183,6 +183,7 @@ class VapiProvisioningService
 
         return [
             'type' => 'function',
+            'async' => false,
             'function' => [
                 'name' => 'createCase',
                 'description' => 'Create a support case in Ticketcloser and return the case number to read back to the caller.',
@@ -193,10 +194,8 @@ class VapiProvisioningService
                         'description' => ['type' => 'string', 'description' => 'Full description of the issue as reported by the caller'],
                         'category' => ['type' => 'string', 'description' => 'Category: billing, shipping, warranty, account, or other'],
                         'priority' => ['type' => 'string', 'description' => 'Priority: low, normal, high, or critical'],
-                        'requesterPhone' => ['type' => 'string', 'description' => 'Caller phone number in E.164 format, e.g. +14155550100'],
-                        'externalCallId' => ['type' => 'string', 'description' => 'The Vapi call ID for traceability'],
                     ],
-                    'required' => ['title', 'description', 'requesterPhone', 'externalCallId'],
+                    'required' => ['title', 'description'],
                 ],
             ],
             'server' => [
@@ -204,6 +203,16 @@ class VapiProvisioningService
                 'headers' => [
                     'Authorization' => 'Bearer ' . $integrationToken,
                     'X-Workspace-Slug' => $workspaceSlug,
+                ],
+            ],
+            'parameters' => [
+                ['key' => 'requesterPhone', 'value' => '{{ customer.number }}'],
+                ['key' => 'source', 'value' => 'voice'],
+            ],
+            'variableExtractionPlan' => [
+                'aliases' => [
+                    ['key' => 'createdCaseId', 'value' => '{{ $.id }}'],
+                    ['key' => 'createdCaseNumber', 'value' => '{{ $.caseNumber }}'],
                 ],
             ],
         ];
@@ -215,16 +224,18 @@ class VapiProvisioningService
 
         return [
             'type' => 'function',
+            'async' => false,
             'function' => [
                 'name' => 'bookMeeting',
                 'description' => 'Book a follow-up meeting with the support team on the calendar directly. Use this when the caller wants to schedule a follow-up call or meeting.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
-                        'caseId' => ['type' => 'string', 'description' => 'The Case Number returned by the createCase function.'],
-                        'dateTime' => ['type' => 'string', 'description' => 'The requested datetime in ISO 8601 format (e.g., 2026-03-05T14:00:00Z)'],
+                        'caseId' => ['type' => 'string', 'description' => 'The Case Number returned by the createCase function if already known.'],
+                        'dateTime' => ['type' => 'string', 'description' => 'The requested datetime in ISO 8601 format (e.g., 2026-03-05T14:00:00Z). Convert relative dates like "tomorrow at 3 PM" into an exact timestamp before calling the tool.'],
+                        'timezone' => ['type' => 'string', 'description' => 'IANA timezone for the requested meeting time when known, e.g. America/New_York.'],
                     ],
-                    'required' => ['caseId', 'dateTime'],
+                    'required' => ['dateTime'],
                 ],
             ],
             'server' => [
@@ -233,6 +244,9 @@ class VapiProvisioningService
                     'Authorization' => 'Bearer ' . $integrationToken,
                     'X-Workspace-Slug' => $workspaceSlug,
                 ],
+            ],
+            'parameters' => [
+                ['key' => 'caseId', 'value' => '{{ createdCaseNumber }}'],
             ],
         ];
     }
@@ -340,14 +354,14 @@ You are a support phone agent for this business.
 
 Goals:
 1) Understand the customer issue.
-2) If the caller's phone number linked to the account is not clear, ask for it (E.164 format, +1...).
+2) The caller's phone number is usually already available from the call metadata, so do not ask for it unless it is truly missing.
 3) Ask at most 1–2 clarifying questions if necessary.
 4) Determine category and priority.
 5) Read back a short summary and ask for confirmation.
 6) ONLY after confirmation, call createCase with:
-   title, description, category, priority, requesterPhone, externalCallId
+   title, description, category, and priority
 7) After createCase returns a case number, tell the caller the case number and that support will follow up.
-8) Specifically ask if the caller would like to book a follow-up meeting. If they say yes, identify a time they want (e.g. "tomorrow at 2pm") and call the bookMeeting tool with the case number and the date/time. Tell them we look forward to the meeting.
+8) Specifically ask if the caller would like to book a follow-up meeting. If they say yes, identify a time they want (e.g. "tomorrow at 2pm") and call the bookMeeting tool with the exact ISO date/time. Tell them we look forward to the meeting.
 
 Be concise and helpful.
 PROMPT);
