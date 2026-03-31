@@ -186,7 +186,7 @@ class VapiProvisioningService
             'async' => false,
             'function' => [
                 'name' => 'createCase',
-                'description' => 'Create a support case in Ticketcloser and return the case number to read back to the caller.',
+                'description' => 'Create a support case in Ticketcloser after the caller confirms the summary. Call this once, then wait for the returned case number before using any follow-up scheduling tool.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
@@ -227,15 +227,15 @@ class VapiProvisioningService
             'async' => false,
             'function' => [
                 'name' => 'bookMeeting',
-                'description' => 'Book a follow-up meeting with the support team on the calendar directly. Use this when the caller wants to schedule a follow-up call or meeting.',
+                'description' => 'Book a follow-up meeting only after createCase has already returned a case number for this conversation. Never call this in parallel with createCase.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
-                        'caseId' => ['type' => 'string', 'description' => 'The Case Number returned by the createCase function if already known.'],
+                        'caseId' => ['type' => 'string', 'description' => 'The Case Number returned by the createCase function for this same conversation.'],
                         'dateTime' => ['type' => 'string', 'description' => 'The requested datetime in ISO 8601 format (e.g., 2026-03-05T14:00:00Z). Convert relative dates like "tomorrow at 3 PM" into an exact timestamp before calling the tool.'],
                         'timezone' => ['type' => 'string', 'description' => 'IANA timezone for the requested meeting time when known, e.g. America/New_York.'],
                     ],
-                    'required' => ['dateTime'],
+                    'required' => ['caseId', 'dateTime'],
                 ],
             ],
             'server' => [
@@ -263,6 +263,7 @@ class VapiProvisioningService
 
         $systemPrompt = $config->system_prompt ?: ($presetData['systemPrompt'] ?? $this->defaultPromptTemplate());
         $systemPrompt = str_replace('{{company_name}}', $workspace->name, $systemPrompt);
+        $systemPrompt .= "\n\n" . $this->toolExecutionGuardrailsPrompt();
 
         // Inject the current date so the LLM understands relative dates like "tomorrow"
         $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference when scheduling meetings or calculating relative times.]";
@@ -364,6 +365,19 @@ Goals:
 8) Specifically ask if the caller would like to book a follow-up meeting. If they say yes, identify a time they want (e.g. "tomorrow at 2pm") and call the bookMeeting tool with the exact ISO date/time. Tell them we look forward to the meeting.
 
 Be concise and helpful.
+PROMPT);
+    }
+
+    private function toolExecutionGuardrailsPrompt(): string
+    {
+        return trim(<<<'PROMPT'
+[SYSTEM NOTE: TOOL EXECUTION RULES]
+- Never call createCase and bookMeeting in parallel.
+- If the caller wants both a case and a meeting, first confirm the summary, then call createCase exactly once.
+- Wait for createCase to return the case number before calling bookMeeting.
+- Use the case number returned by createCase for bookMeeting.
+- Do not retry a tool after it succeeds.
+- If a tool fails, explain that briefly and decide the next step with the caller instead of repeatedly calling the same tool.
 PROMPT);
     }
 }

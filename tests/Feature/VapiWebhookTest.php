@@ -250,6 +250,76 @@ class VapiWebhookTest extends TestCase
     }
 
     /** @test */
+    public function it_handles_parallel_case_and_meeting_requests_in_a_single_payload(): void
+    {
+        $response = $this->postJson('/api/webhooks/vapi', [
+            'message' => [
+                'type' => 'tool-calls',
+                'toolCallList' => [
+                    [
+                        'id' => 'call_meeting_parallel_1',
+                        'type' => 'function',
+                        'function' => [
+                            'name' => 'bookMeeting',
+                            'arguments' => json_encode([
+                                'dateTime' => '2026-04-02T15:00:00Z',
+                            ]),
+                        ],
+                    ],
+                    [
+                        'id' => 'call_case_parallel_1',
+                        'type' => 'function',
+                        'function' => [
+                            'name' => 'createCase',
+                            'arguments' => json_encode([
+                                'title' => 'Laptop overheating',
+                                'description' => 'The laptop overheats and the caller wants to bring it in tomorrow.',
+                                'requesterPhone' => '+15550001111',
+                                'externalCallId' => 'vapi_parallel_call_1',
+                            ]),
+                        ],
+                    ],
+                ],
+                'call' => [
+                    'id' => 'vapi_parallel_call_1',
+                    'assistantId' => 'ast-1234',
+                    'from' => '+15550001111',
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer test-token-123',
+            'X-Workspace-Slug' => 'test-workspace',
+        ]);
+
+        $response->assertOk();
+        $results = collect($response->json('results'));
+
+        $createResult = $results->firstWhere('name', 'createCase');
+        $meetingResult = $results->firstWhere('name', 'bookMeeting');
+
+        $this->assertNotNull($createResult);
+        $this->assertNotNull($meetingResult);
+
+        $createPayload = json_decode($createResult['result'], true);
+        $meetingPayload = json_decode($meetingResult['result'], true);
+
+        $this->assertArrayHasKey('caseNumber', $createPayload);
+        $this->assertTrue($meetingPayload['success']);
+        $this->assertArrayHasKey('suggestedEventId', $meetingPayload);
+
+        $this->assertDatabaseHas('support_cases', [
+            'workspace_id' => $this->workspace->id,
+            'external_call_id' => 'vapi_parallel_call_1',
+            'title' => 'Laptop overheating',
+        ]);
+        $this->assertDatabaseHas('suggested_events', [
+            'id' => $meetingPayload['suggestedEventId'],
+            'workspace_id' => $this->workspace->id,
+            'status' => 'pending',
+        ]);
+    }
+
+    /** @test */
     public function it_books_the_meeting_immediately_when_google_calendar_is_connected(): void
     {
         Http::fake([

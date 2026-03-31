@@ -114,7 +114,8 @@ class VapiWebhookController extends Controller
                                     $basePrompt = 'You are a helpful customer support assistant for ' . $workspace->name . '.';
                                 }
                                 $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference.]";
-                                $systemPrompt = $memory . $basePrompt . $dateContext;
+                                $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
+                                $systemPrompt = $memory . $basePrompt . $toolRules . $dateContext;
 
                                 // Build toolIds array so Vapi doesn't strip tools when we override the model
                                 $toolIds = array_filter([
@@ -197,7 +198,8 @@ class VapiWebhookController extends Controller
             Log::info('VAPI_TOOL_CALLS_PAYLOAD', ['payload' => $payload]);
             try {
             // ✅ Robust tool call extraction (covers toolCallList, toolCalls, toolWithToolCallList)
-            $toolCalls = $this->extractToolCalls($payload);
+            $toolCalls = $this->prioritizeToolCalls($this->extractToolCalls($payload));
+            $callBlock = data_get($payload, 'message.call', []);
 
             // Resolve workspace from headers
             [$workspace, $authError] = $this->resolveWorkspaceFromHeaders($request);
@@ -227,7 +229,6 @@ class VapiWebhookController extends Controller
 
                 try {
                     if ($nameLower === 'createcase' || $nameLower === 'createmaintenanceticket' || $nameLower === 'createmortgagelead') {
-                        $callBlock = data_get($payload, 'message.call', []);
                         $case = app(TicketCreationService::class)->createForWorkspace($workspace, [
                             ...$args,
                             'requesterPhone' => $args['requesterPhone']
@@ -260,7 +261,19 @@ class VapiWebhookController extends Controller
                         ]);
                     } elseif ($nameLower === 'bookmeeting') {
                         $meetingBooking = app(MeetingBookingService::class);
-                        $case = $meetingBooking->resolveCase($workspace, $args['caseId'] ?? '');
+                        $case = $meetingBooking->resolveCase(
+                            $workspace,
+                            $args['caseId'] ?? $args['case_id'] ?? null
+                        );
+
+                        if (!$case) {
+                            $case = $meetingBooking->resolveCaseForCall(
+                                $workspace,
+                                $args['externalCallId']
+                                    ?? $args['external_call_id']
+                                    ?? data_get($callBlock, 'id')
+                            );
+                        }
 
                         if (!$case) {
                             $results[] = $this->errorToolResult($toolCallId, $name, 'Case not found');
@@ -365,6 +378,26 @@ class VapiWebhookController extends Controller
         }
 
         return [];
+    }
+
+    private function prioritizeToolCalls(array $toolCalls): array
+    {
+        usort($toolCalls, function (array $left, array $right): int {
+            return $this->toolPriority($left) <=> $this->toolPriority($right);
+        });
+
+        return $toolCalls;
+    }
+
+    private function toolPriority(array $toolCall): int
+    {
+        $name = strtolower((string) (data_get($toolCall, 'function.name') ?? $toolCall['name'] ?? ''));
+
+        return match ($name) {
+            'createcase', 'createmaintenanceticket', 'createmortgagelead' => 0,
+            'bookmeeting' => 1,
+            default => 2,
+        };
     }
 
     /**

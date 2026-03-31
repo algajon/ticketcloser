@@ -27,6 +27,18 @@ class MeetingBookingService
             ->first();
     }
 
+    public function resolveCaseForCall(Workspace $workspace, ?string $externalCallId): ?SupportCase
+    {
+        if ($externalCallId === null || trim($externalCallId) === '') {
+            return null;
+        }
+
+        return SupportCase::where('workspace_id', $workspace->id)
+            ->where('external_call_id', trim($externalCallId))
+            ->latest('id')
+            ->first();
+    }
+
     public function scheduleFromVoice(SupportCase $case, array $attributes): array
     {
         return DB::transaction(function () use ($case, $attributes) {
