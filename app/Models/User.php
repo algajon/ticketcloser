@@ -71,9 +71,28 @@ class User extends Authenticatable implements MustVerifyEmail
             if ($workspace) {
                 return $workspace;
             }
+
+            if (app()->bound('session')) {
+                session()->forget('current_workspace_id');
+            }
         }
 
-        return $this->workspaceMemberships()->with('workspace')->first()?->workspace;
+        $workspaces = $this->workspaces()
+            ->orderBy('workspaces.id')
+            ->limit(2)
+            ->get();
+
+        if ($workspaces->count() !== 1) {
+            return null;
+        }
+
+        $workspace = $workspaces->first();
+
+        if (app()->bound('session')) {
+            session(['current_workspace_id' => $workspace->id]);
+        }
+
+        return $workspace;
     }
 
     public function workspaces()

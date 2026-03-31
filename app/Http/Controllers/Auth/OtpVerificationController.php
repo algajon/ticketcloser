@@ -18,7 +18,7 @@ class OtpVerificationController extends Controller
         $user = $request->user();
 
         if ($user->hasVerifiedEmail()) {
-            return redirect()->intended(route('app.dashboard', absolute: false));
+            return redirect()->intended(route('dashboard', absolute: false));
         }
 
         if ($user->otp_code === $request->otp && $user->otp_expires_at && $user->otp_expires_at->isFuture()) {
@@ -27,7 +27,7 @@ class OtpVerificationController extends Controller
             $user->otp_expires_at = null;
             $user->save();
 
-            return redirect()->intended(route('app.onboarding.company', absolute: false));
+            return redirect()->intended(route('dashboard', absolute: false));
         }
 
         return back()->with('error', 'The verification code provided is invalid or has expired.');
@@ -38,7 +38,7 @@ class OtpVerificationController extends Controller
         $user = $request->user();
 
         if ($user->hasVerifiedEmail()) {
-            return redirect()->intended(route('app.dashboard', absolute: false));
+            return redirect()->intended(route('dashboard', absolute: false));
         }
 
         $otp = sprintf('%06d', mt_rand(100000, 999999));

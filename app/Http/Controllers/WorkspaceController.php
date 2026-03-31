@@ -52,6 +52,8 @@ class WorkspaceController extends Controller
             'role' => WorkspaceMembership::ROLE_OWNER,
         ]);
 
+        $request->session()->put('current_workspace_id', $workspace->id);
+
         return redirect()->route('app.onboarding.company');
     }
 

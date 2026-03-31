@@ -24,20 +24,34 @@ use App\Http\Controllers\SettingsController;
 */
 
 Route::get('/', function () {
-    // If logged in, send to the app
+    // If logged in, send to the auth/workspace gate
     if (auth()->check()) {
-        return redirect()->route('app.dashboard');
+        return redirect()->route('dashboard');
     }
 
     return view('index');
 })->name('home');
+
+Route::middleware('auth')->group(function () {
+    Route::get('/dashboard', function () {
+        if (! auth()->user()->hasVerifiedEmail()) {
+            return redirect()->route('verification.notice');
+        }
+
+        return redirect()->route('app.dashboard');
+    })->name('dashboard');
+
+    Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
+    Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+});
 
 /*
 |--------------------------------------------------------------------------
 | App (authenticated)
 |--------------------------------------------------------------------------
 */
-Route::middleware(['auth', 'verified', 'subscribed'])->prefix('app')->name('app.')->group(function () {
+Route::middleware(['auth', 'verified', 'workspace.ready', 'subscribed'])->prefix('app')->name('app.')->group(function () {
 
     /*
     |--------------------------------------------------------------------------

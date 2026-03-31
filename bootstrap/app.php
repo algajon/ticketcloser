@@ -16,6 +16,7 @@ return Application::configure(basePath: dirname(__DIR__))
             'resolve.workspace' => \App\Http\Middleware\ResolveWorkspace::class,
             'verify.workspace.token' => \App\Http\Middleware\VerifyWorkspaceToken::class,
             'verify.server.token' => \App\Http\Middleware\VerifyServerToken::class,
+            'workspace.ready' => \App\Http\Middleware\EnsureWorkspaceIsReady::class,
             'subscribed' => \App\Http\Middleware\EnsureActiveSubscription::class,
             'is_admin' => \App\Http\Middleware\IsAdmin::class,
         ]);

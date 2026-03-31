@@ -101,8 +101,9 @@ class RegisteredUserController extends Controller
         \Illuminate\Support\Facades\Mail::to($user->email)->send(new \App\Mail\OtpVerificationMail($otp));
 
         Auth::login($user);
+        $request->session()->put('current_workspace_id', $workspace->id);
 
-        return redirect()->route('app.onboarding.company');
+        return redirect()->route('dashboard');
     }
 
 }

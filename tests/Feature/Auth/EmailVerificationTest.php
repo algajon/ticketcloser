@@ -55,4 +55,21 @@ class EmailVerificationTest extends TestCase
 
         $this->assertFalse($user->fresh()->hasVerifiedEmail());
     }
+
+    public function test_email_can_be_verified_with_a_valid_otp(): void
+    {
+        $user = User::factory()->unverified()->create([
+            'otp_code' => '123456',
+            'otp_expires_at' => now()->addMinutes(15),
+        ]);
+
+        $response = $this->actingAs($user)->post(route('verification.verify.otp'), [
+            'otp' => '123456',
+        ]);
+
+        $this->assertTrue($user->fresh()->hasVerifiedEmail());
+        $this->assertNull($user->fresh()->otp_code);
+        $this->assertNull($user->fresh()->otp_expires_at);
+        $response->assertRedirect(route('dashboard', absolute: false));
+    }
 }
