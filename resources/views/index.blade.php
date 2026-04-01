@@ -1,460 +1,261 @@
-@php
-    $routeName = Route::currentRouteName() ?? '';
-@endphp
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="scroll-smooth">
 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>ticketcloser</title>
+    <title>TicketCloser</title>
     <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800&display=swap" rel="stylesheet" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <style>
-        .btn-glow {
-            box-shadow: 0 0 20px rgba(249, 115, 22, 0.4);
-            transition: all 0.3s ease;
-        }
-
-        .btn-glow:hover {
-            box-shadow: 0 0 30px rgba(249, 115, 22, 0.6);
-        }
-    </style>
 </head>
 
 <body style="background:#020202;color:#fff;overflow-x:hidden"
-    class="font-[Inter,system-ui,sans-serif] antialiased selection:bg-orange-500/30">
-
-    {{-- Three.js canvas underlay --}}
+    class="font-[Inter,system-ui,sans-serif] antialiased selection:bg-orange-500/20">
     <canvas id="three-canvas"
         style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none"></canvas>
 
-    {{-- Navigation --}}
-    <nav class="relative z-50 w-full px-6 py-5 bg-white border-b border-slate-200">
-        <div class="max-w-7xl mx-auto flex items-center justify-between">
-            <a href="/" class="flex items-center gap-2">
-                <span class="text-[17px] font-bold tracking-tight text-slate-900">ticketcloser</span>
-            </a>
-            <div class="flex items-center gap-6">
-                @auth
-                    <a href="{{ url('/dashboard') }}"
-                        class="text-[13px] font-medium text-slate-600 hover:text-slate-900 transition-colors">dashboard</a>
-                @else
-                    <a href="{{ route('login') }}"
-                        class="text-[13px] font-medium text-slate-600 hover:text-slate-900 transition-colors">Sign in</a>
-                    <a href="{{ route('register') }}"
-                        class="text-[13px] font-medium px-4 py-2 bg-[#f97316] hover:bg-[#ea580c] rounded-lg text-white transition-colors">
-                        Get started free
-                    </a>
-                @endauth
-            </div>
-        </div>
-    </nav>
-
-    {{-- Content Wrapper ensuring everything sits cleanly over the canvas --}}
-    <div class="relative z-10 w-full flex flex-col items-center">
-
-        {{-- Hero Section --}}
-        <main class="w-full flex flex-col items-center justify-center min-h-[75vh] px-4 text-center">
-            <h1 class="text-6xl md:text-7xl font-bold tracking-tight backdrop-blur-sm mb-4 text-white lowercase">
-                ticketcloser
-            </h1>
-
-            <p class="text-[15px] md:text-[17px] text-[#cbd5e1] max-w-xl mx-auto mb-10 font-normal">
-                Turn every phone call into a structured support ticket, automatically.
-            </p>
-
-            <div class="flex flex-col sm:flex-row items-center gap-4 w-full sm:w-auto">
-                <a href="{{ route('register') }}"
-                    class="w-full sm:w-auto px-6 py-3 bg-[#f97316] hover:bg-[#ea580c] text-white rounded-xl font-medium text-[15px] btn-glow">
-                    Create your own Voice Assistant ->
+    <div class="tc-landing-shell">
+        <nav class="relative z-50 w-full border-b border-slate-200 bg-white px-6 py-5">
+            <div class="relative mx-auto flex max-w-7xl items-center justify-between gap-6">
+                <a href="{{ route('home') }}" class="flex items-center gap-2">
+                    <span class="text-[17px] font-bold tracking-tight text-slate-900">ticketcloser</span>
                 </a>
-                {{--
-                <a href="#pricing"
-                    class="w-full sm:w-auto px-6 py-3 bg-[#1e293b]/80 border border-white/5 hover:bg-[#334155]/80 rounded-xl font-medium text-[15px] text-white transition-all backdrop-blur-md">
-                    View pricing
-                </a>
-                --}}
-            </div>
-        </main>
 
-        {{-- Trust / Value Strip --}}
-        <section class="w-full px-4 mb-8">
-            <div class="max-w-6xl mx-auto rounded-2xl border border-white/5 bg-black/30 backdrop-blur-md px-6 py-5">
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6 text-center md:text-left">
-                    <div class="flex flex-col gap-1">
-                        <span class="text-[12px] uppercase tracking-[0.18em] text-[#f97316]">capture everything</span>
-                        <p class="text-[14px] text-slate-300">Turn conversations into clean, trackable tickets without
-                            manual note-taking.</p>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <span class="text-[12px] uppercase tracking-[0.18em] text-[#f97316]">respond faster</span>
-                        <p class="text-[14px] text-slate-300">Route issues to the right team instantly and reduce missed
-                            follow-ups.</p>
-                    </div>
-                    <div class="flex flex-col gap-1">
-                        <span class="text-[12px] uppercase tracking-[0.18em] text-[#f97316]">stay accountable</span>
-                        <p class="text-[14px] text-slate-300">Give your team structured records, timestamps, and clear
-                            next steps on every call.</p>
-                    </div>
+                <div class="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 lg:flex">
+                    <a href="#platform"
+                        class="text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900">Platform</a>
+                    <a href="#workflow"
+                        class="text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900">Workflow</a>
+                    <a href="#operations"
+                        class="text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900">Operations</a>
+                </div>
+
+                <div class="flex items-center gap-6">
+                    @auth
+                        <a href="{{ url('/dashboard') }}"
+                            class="text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900">dashboard</a>
+                    @else
+                        <a href="{{ route('login') }}"
+                            class="text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900">Sign
+                            in</a>
+                        <a href="{{ route('register') }}"
+                            class="rounded-lg bg-[#f97316] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#ea580c]">
+                            Get started free
+                        </a>
+                    @endauth
                 </div>
             </div>
-        </section>
+        </nav>
 
-        {{-- Features Section --}}
-        <section class="w-full pt-16 pb-10 px-4">
-            <div class="max-w-6xl mx-auto">
-                <div class="text-center mb-14 py-12">
-                    <h2 class="text-3xl font-bold tracking-tight mb-4 text-white lowercase">built for high-volume
-                        support</h2>
-                    <p class="text-[15px] text-slate-400 max-w-2xl mx-auto">
-                        Everything you need to turn inbound support calls into a more reliable, more scalable workflow.
+        <main class="relative z-10">
+            <section class="px-4 py-10 sm:px-5 sm:py-14 lg:px-8 lg:py-18">
+                <div class="mx-auto flex min-h-[68vh] max-w-6xl flex-col items-center justify-center text-center">
+                    <!-- <div class="text-[0.75rem] font-semibold uppercase tracking-[0.3em] text-slate-300">
+                        ticketcloser
+                    </div> -->
+
+                    <h1 class="mt-5 max-w-5xl text-5xl font-bold tracking-tight text-orange-500 sm:text-6xl lg:text-7xl">
+                        ticketcloser
+                    </h1>
+
+                    <p class="mt-5 max-w-2xl text-[15px] font-normal text-[#cbd5e1] md:text-[17px]">
+                        Capture support calls, structure the details, and move every request into a cleaner operational
+                        workflow.
                     </p>
-                </div>
 
-                <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-6">
-                        <div class="w-10 h-2 rounded-xl"></div>
-                        <h3 class="text-lg font-semibold text-white mb-2">Automatic ticket creation</h3>
-                        <p class="text-[14px] leading-6 text-slate-300">
-                            Convert every call into a structured support ticket with the important details already
-                            organized.
-                        </p>
-                    </div>
-
-                    <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-6">
-                        <div class="w-10 h-2 rounded-xl"></div>
-                        <h3 class="text-lg font-semibold text-white mb-2">Call summaries</h3>
-                        <p class="text-[14px] leading-6 text-slate-300">
-                            Reduce back-and-forth by generating concise summaries your team can review in seconds.
-                        </p>
-                    </div>
-
-                    <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-6">
-                        <div class="w-10 h-2 rounded-xl"></div>
-                        <h3 class="text-lg font-semibold text-white mb-2">Smart routing</h3>
-                        <p class="text-[14px] leading-6 text-slate-300">
-                            Direct maintenance, support, or operational requests to the right person or department
-                            immediately.
-                        </p>
-                    </div>
-
-                    <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-6">
-                        <div class="w-10 h-2 rounded-xl"></div>
-                        <h3 class="text-lg font-semibold text-white mb-2">Status visibility</h3>
-                        <p class="text-[14px] leading-6 text-slate-300">
-                            Keep teams aligned with a clearer view of open issues, next actions, and ticket progress.
-                        </p>
-                    </div>
-
-                    <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-6">
-                        <div class="w-10 h-2 rounded-xl"></div>
-                        <h3 class="text-lg font-semibold text-white mb-2">Analytics and trends</h3>
-                        <p class="text-[14px] leading-6 text-slate-300">
-                            Identify recurring issues, peak support periods, and service bottlenecks from one place.
-                        </p>
-                    </div>
-
-                    <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-6">
-                        <div class="w-10 h-2 rounded-xl"></div>
-                        <h3 class="text-lg font-semibold text-white mb-2">Human-friendly workflows</h3>
-                        <p class="text-[14px] leading-6 text-slate-300">
-                            Give your staff structure without making the process feel heavier or more complicated.
-                        </p>
+                    <div class="mt-10 flex w-full flex-col items-center gap-4 sm:w-auto sm:flex-row">
+                        <a href="{{ route('register') }}"
+                            class="w-full rounded-xl bg-[#f97316] px-6 py-3 text-[15px] font-medium text-white shadow-[0_0_24px_rgba(249,115,22,0.38)] transition hover:bg-[#ea580c] hover:shadow-[0_0_34px_rgba(249,115,22,0.54)] sm:w-auto">
+                            Create your own Voice Assistant ->
+                        </a>
                     </div>
                 </div>
-            </div>
-        </section>
+            </section>
 
-        {{-- How It Works --}}
-        <section class="w-full pt-14 pb-10 px-4">
-            <div class="max-w-6xl mx-auto">
-                <div class="text-center mb-14">
-                    <h2 class="text-3xl font-bold tracking-tight mb-4 text-white lowercase">how it works</h2>
-                    <p class="text-[15px] text-slate-400 max-w-2xl mx-auto">
-                        A simple flow designed to reduce manual work and help your team close issues faster.
-                    </p>
-                </div>
-
-                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-8">
-                        <div class="text-[#f97316] text-sm font-semibold mb-4">Step 1</div>
-                        <h3 class="text-xl font-medium text-white mb-3">A customer calls</h3>
-                        <p class="text-[14px] leading-6 text-slate-300">
-                            Incoming support calls are captured and prepared for structured handling from the start.
-                        </p>
-                    </div>
-
-                    <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-8">
-                        <div class="text-[#f97316] text-sm font-semibold mb-4">Step 2</div>
-                        <h3 class="text-xl font-medium text-white mb-3">A ticket is created</h3>
-                        <p class="text-[14px] leading-6 text-slate-300">
-                            Key details from the conversation are organized into a ticket your team can immediately act
-                            on.
-                        </p>
-                    </div>
-
-                    <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-8">
-                        <div class="text-[#f97316] text-sm font-semibold mb-4">Step 3</div>
-                        <h3 class="text-xl font-medium text-white mb-3">Your team closes the ticket</h3>
-                        <p class="text-[14px] leading-6 text-slate-300">
-                            Assigned teams review, update, and resolve requests with less delay and less internal
-                            friction.
-                        </p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        {{-- Use Cases / Integrations --}}
-        <section class="w-full pt-14 pb-10 px-4">
-            <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-2 gap-8">
-                <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-8">
-                    <h2 class="text-2xl font-bold tracking-tight mb-5 text-white lowercase">ideal for teams handling
-                        repeat support volume</h2>
-                    <ul class="space-y-4 text-[14px] text-slate-300">
-                        <li class="flex items-start gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316] mt-2"></span>
-                            Property management teams handling maintenance or tenant support
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316] mt-2"></span>
-                            Customer support teams that rely heavily on inbound phone calls
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316] mt-2"></span>
-                            Operations teams that need clearer follow-up and handoff workflows
-                        </li>
-                        <li class="flex items-start gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316] mt-2"></span>
-                            Businesses looking to reduce manual intake and improve accountability
-                        </li>
-                    </ul>
-                </div>
-
-                <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-8">
-                    <h2 class="text-2xl font-bold tracking-tight mb-5 text-white lowercase">fits into your workflow</h2>
-                    <div class="grid grid-cols-2 gap-4">
-                        <div
-                            class="rounded-xl border border-white/5 bg-white/5 px-4 py-4 text-sm text-slate-300 text-center">
-                            phone systems
-                        </div>
-                        <div
-                            class="rounded-xl border border-white/5 bg-white/5 px-4 py-4 text-sm text-slate-300 text-center">
-                            email
-                        </div>
-                        <div
-                            class="rounded-xl border border-white/5 bg-white/5 px-4 py-4 text-sm text-slate-300 text-center">
-                            web chat
-                        </div>
-                        <div
-                            class="rounded-xl border border-white/5 bg-white/5 px-4 py-4 text-sm text-slate-300 text-center">
-                            support teams
-                        </div>
-                        <div
-                            class="rounded-xl border border-white/5 bg-white/5 px-4 py-4 text-sm text-slate-300 text-center">
-                            analytics
-                        </div>
-                        <div
-                            class="rounded-xl border border-white/5 bg-white/5 px-4 py-4 text-sm text-slate-300 text-center">
-                            internal ops
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-        {{-- Pricing Section --}}
-        {{--
-        <section id="pricing" class="w-full pt-20 pb-32 px-4 scroll-mt-20">
-            <div class="text-center mb-16">
-                <h2 class="text-3xl font-bold tracking-tight mb-4 text-white lowercase">features & pricing</h2>
-            </div>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-6xl mx-auto">
-                {{-- Startup Plan --}}
-                <!-- <div
-                    class="rounded-2xl p-8 flex flex-col border border-white/5 bg-black/40 backdrop-blur-md hover:border-white/10 transition-colors">
-                    <h3 class="text-xl font-medium text-white mb-2">Startup</h3>
-                    <div class="text-4xl font-bold text-white mb-6 mt-4">Custom</div>
-                    <ul class="space-y-4 mb-8 flex-1 text-[14px] text-slate-300">
-                        <li class="flex items-center gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                            AI Assistant Integration
-                        </li>
-                        <li class="flex items-center gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                            Email & Web Chat
-                        </li>
-                        <li class="flex items-center gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                            Standard Support
-                        </li>
-                    </ul>
-                    <a href="{{ route('register') }}"
-                        class="w-full py-3 px-4 border border-white/10 text-white font-medium rounded-xl text-center text-[14px] hover:bg-white/5 transition-colors">
-                        Contact Sales
-                    </a>
-                </div> -->
-
-                {{-- Pro Plan (Highlighted) --}}
-                <!-- <div
-                    class="rounded-2xl p-8 flex flex-col border border-[#f97316]/50 bg-black/60 backdrop-blur-md relative md:-mt-4 md:mb-4">
-                    <div
-                        class="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2 px-3 py-1 bg-[#f97316] rounded-full text-[10px] font-bold text-white tracking-widest uppercase shadow-lg shadow-[#f97316]/20">
-                        Most Popular
-                    </div>
-                    <h3 class="text-xl font-medium text-white mb-2">Pro</h3>
-                    <div class="text-4xl font-bold text-white mb-6 mt-4">Custom</div>
-                    <ul class="space-y-4 mb-8 flex-1 text-[14px] text-slate-300">
-                        <li class="flex items-center gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                            Everything in Startup
-                        </li>
-                        <li class="flex items-center gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                            Phone Integrations
-                        </li>
-                        <li class="flex items-center gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                            Advanced Analytics
-                        </li>
-                        <li class="flex items-center gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                            Priority Support
-                        </li>
-                    </ul>
-                    <a href="{{ route('register') }}"
-                        class="w-full py-3 px-4 bg-[#f97316] hover:bg-[#ea580c] text-white font-medium rounded-xl text-center text-[14px] btn-glow">
-                        Contact Sales
-                    </a>
-                </div>
- -->
-                {{-- Enterprise Plan --}}
-                <!-- <div
-                    class="rounded-2xl p-8 flex flex-col border border-white/5 bg-black/40 backdrop-blur-md hover:border-white/10 transition-colors">
-                    <h3 class="text-xl font-medium text-white mb-2">Enterprise</h3>
-                    <div class="text-4xl font-bold text-white mb-6 mt-4">Custom</div>
-                    <ul class="space-y-4 mb-8 flex-1 text-[14px] text-slate-300">
-                        <li class="flex items-center gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                            Everything in Pro
-                        </li>
-                        <li class="flex items-center gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                            Custom AI Models
-                        </li>
-                        <li class="flex items-center gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                            Dedicated Account Manager
-                        </li>
-                        <li class="flex items-center gap-3">
-                            <span class="w-1.5 h-1.5 rounded-full bg-[#f97316]"></span>
-                            SLA Guidelines
-                        </li>
-                    </ul>
-                    <a href="{{ route('register') }}"
-                        class="w-full py-3 px-4 border border-white/10 text-white font-medium rounded-xl text-center text-[14px] hover:bg-white/5 transition-colors">
-                        Contact Sales
-                    </a>
-                </div>
-            </div>
-        </section> -->
-
-
-                {{-- FAQ Section --}}
-                <section class="w-full pt-16 pb-10 px-4">
-                    <div class="max-w-4xl mx-auto">
-                        <div class="text-center mb-14">
-                            <h2 class="text-3xl font-bold tracking-tight mb-4 text-white lowercase">frequently asked
-                                questions
-                            </h2>
-                            <p class="text-[15px] text-slate-400">
-                                A few common questions teams usually ask before getting started.
+            <section id="platform" class="px-5 py-10 lg:px-8 lg:py-14">
+                <div class="mx-auto max-w-7xl">
+                    <div class="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
+                        <div class="tc-landing-panel p-8">
+                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
+                                Platform value</div>
+                            <h2 class="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">A calmer
+                                operating layer for support teams that live on the phone.</h2>
+                            <p class="mt-5 max-w-2xl text-base leading-7 text-slate-300">
+                                Reduce intake friction, keep call outcomes legible, and move from conversation to action
+                                without losing context.
                             </p>
                         </div>
 
-                        <div class="space-y-4">
-                            <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-6">
-                                <h3 class="text-[16px] font-semibold text-white mb-2">Do I need to change my current
-                                    support
-                                    process?</h3>
-                                <p class="text-[14px] leading-6 text-slate-300">
-                                    No. ticketcloser is designed to fit into your existing workflow while making intake
-                                    and
-                                    follow-up more structured.
-                                </p>
+                        <div class="grid gap-5 sm:grid-cols-2">
+                            <div class="tc-landing-panel p-6">
+                                <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
+                                    Inbound intake</div>
+                                <h3 class="mt-4 text-xl font-semibold text-white">Collect the right information on the
+                                    first call.</h3>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">Use prompts, required fields,
+                                    escalations, and caller metadata without making the conversation feel robotic.</p>
                             </div>
-
-                            <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-6">
-                                <h3 class="text-[16px] font-semibold text-white mb-2">Can this work for phone-based
-                                    support
-                                    teams?</h3>
-                                <p class="text-[14px] leading-6 text-slate-300">
-                                    Yes. It is especially useful for teams that handle high volumes of inbound calls and
-                                    need
-                                    better ticket accuracy.
-                                </p>
+                            <div class="tc-landing-panel p-6">
+                                <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
+                                    Ticket operations</div>
+                                <h3 class="mt-4 text-xl font-semibold text-white">Move from transcript to ticket without
+                                    cleanup work.</h3>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">Cases arrive with title, summary,
+                                    priority, source, and status already structured.</p>
                             </div>
-
-                            {{--
-                            <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-6">
-                                <h3 class="text-[16px] font-semibold text-white mb-2">Is pricing fixed?</h3>
-                                <p class="text-[14px] leading-6 text-slate-300">
-                                    Pricing is custom so it can match the size of your team, your workflows, and the
-                                    integrations you need.
-                                </p>
+                            <div class="tc-landing-panel p-6">
+                                <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
+                                    Assistant management</div>
+                                <h3 class="mt-4 text-xl font-semibold text-white">Run multiple assistants across
+                                    different workflows.</h3>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">Configure prompts, numbers, fallbacks,
+                                    and sync state from one workspace.</p>
                             </div>
-                            --}}
+                            <div class="tc-landing-panel p-6">
+                                <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
+                                    Operational review</div>
+                                <h3 class="mt-4 text-xl font-semibold text-white">See recent calls, outcomes, and
+                                    follow-up in one system.</h3>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">Track volume, review transcripts,
+                                    monitor meetings, and spot what still needs action.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
 
-                            <div class="rounded-2xl border border-white/5 bg-black/40 backdrop-blur-md p-6">
-                                <h3 class="text-[16px] font-semibold text-white mb-2">Can larger teams get a tailored
-                                    setup?
+            <section id="workflow" class="px-5 py-10 lg:px-8 lg:py-14">
+                <div class="mx-auto max-w-7xl">
+                    <div class="tc-landing-panel p-6 sm:p-8">
+                        <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+                            <div class="max-w-2xl">
+                                <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
+                                    Workflow</div>
+                                <h2 class="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Built
+                                    around the operational path your team actually follows.</h2>
+                            </div>
+                            <p class="max-w-2xl text-sm leading-7 text-slate-300">
+                                Keep the handoff between caller, assistant, and internal team intact from the first
+                                sentence to final resolution.
+                            </p>
+                        </div>
+
+                        <div class="mt-8 grid gap-5 lg:grid-cols-3">
+                            <div class="rounded-[1.4rem] border border-white/10 bg-white/5 p-6">
+                                <div class="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-orange-300">
+                                    Step 01</div>
+                                <h3 class="mt-4 text-xl font-semibold text-white">A caller reaches your assistant</h3>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">The assistant captures intent, urgency,
+                                    callback details, and issue context in real time.</p>
+                            </div>
+                            <div class="rounded-[1.4rem] border border-white/10 bg-white/5 p-6">
+                                <div class="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-orange-300">
+                                    Step 02</div>
+                                <h3 class="mt-4 text-xl font-semibold text-white">The system creates an actionable case
                                 </h3>
-                                <p class="text-[14px] leading-6 text-slate-300">
-                                    Yes. Enterprise plans can be configured around more advanced routing, analytics, and
-                                    support
-                                    requirements.
-                                </p>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">Teams get a clean record immediately,
+                                    with transcript context and operational fields already in place.</p>
+                            </div>
+                            <div class="rounded-[1.4rem] border border-white/10 bg-white/5 p-6">
+                                <div class="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-orange-300">
+                                    Step 03</div>
+                                <h3 class="mt-4 text-xl font-semibold text-white">Teams resolve, escalate, or schedule
+                                    next steps</h3>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">Use built-in scheduling and cleaner
+                                    status flow so requests do not get lost.</p>
                             </div>
                         </div>
                     </div>
-                </section>
-                {{-- Final CTA --}}
-                <section class="w-full pt-14 pb-24 px-4">
-                    <div class="max-w-5xl mx-auto rounded-3xl bg-black/50 backdrop-blur-md px-8 py-12 text-center">
-                        <h2 class="text-3xl md:text-4xl font-bold tracking-tight mb-4 text-white lowercase">
-                            stop losing time on messy support intake
-                        </h2>
-                        <p class="text-[15px] md:text-[16px] text-slate-300 max-w-2xl mx-auto mb-8">
-                            Give your team a faster way to capture, route, and close incoming requests with more
-                            consistency.
-                        </p>
+                </div>
+            </section>
 
-                        <div class="flex flex-col sm:flex-row items-center justify-center gap-4">
-                            <a href="{{ route('register') }}"
-                                class="w-full sm:w-auto px-6 py-3 bg-[#f97316] hover:bg-[#ea580c] text-white rounded-xl font-medium text-[15px] btn-glow">
-                                Get started free
-                            </a>
-                            {{--
-                            <a href="#pricing"
-                                class="w-full sm:w-auto px-6 py-3 bg-[#1e293b]/80 border border-white/5 hover:bg-[#334155]/80 rounded-xl font-medium text-[15px] text-white transition-all backdrop-blur-md">
-                                Explore pricing
-                            </a>
-                            --}}
+            <section id="operations" class="px-5 py-10 lg:px-8 lg:py-14">
+                <div class="mx-auto grid max-w-7xl gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+                    <div class="tc-landing-panel p-8">
+                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-400">Where it
+                            fits</div>
+                        <h2 class="mt-4 text-3xl font-semibold tracking-tight text-white">Designed for teams with repeat
+                            support volume and real operational accountability.</h2>
+                        <ul class="mt-8 space-y-4 text-sm leading-6 text-slate-300">
+                            <li class="flex items-start gap-3">
+                                <span class="mt-2 h-2 w-2 rounded-full bg-orange-400"></span>
+                                Property management teams handling maintenance and resident support.
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="mt-2 h-2 w-2 rounded-full bg-orange-400"></span>
+                                Service organizations that need structured phone intake without manual transcription
+                                work.
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="mt-2 h-2 w-2 rounded-full bg-orange-400"></span>
+                                Multi-tenant operations that require separate assistants, phone numbers, and workspaces.
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="mt-2 h-2 w-2 rounded-full bg-orange-400"></span>
+                                Support teams that want a more premium operating system than a generic helpdesk shell.
+                            </li>
+                        </ul>
+                    </div>
+
+                    <div class="tc-landing-panel p-8">
+                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-400">Why teams
+                            switch</div>
+                        <div class="mt-6 grid gap-4">
+                            <div class="rounded-[1.35rem] border border-white/10 bg-white/5 p-5">
+                                <div class="text-sm font-semibold text-white">Fewer missed details</div>
+                                <p class="mt-2 text-sm leading-6 text-slate-300">Required fields and prompts keep key
+                                    intake context from disappearing between call and case.</p>
+                            </div>
+                            <div class="rounded-[1.35rem] border border-white/10 bg-white/5 p-5">
+                                <div class="text-sm font-semibold text-white">Cleaner team handoff</div>
+                                <p class="mt-2 text-sm leading-6 text-slate-300">Recent activity, transcripts, and
+                                    summaries stay together so teams can act without hunting.</p>
+                            </div>
+                            <div class="rounded-[1.35rem] border border-white/10 bg-white/5 p-5">
+                                <div class="text-sm font-semibold text-white">Better tenant and workspace control</div>
+                                <p class="mt-2 text-sm leading-6 text-slate-300">Separate workspaces, assistant
+                                    settings, integrations, and billing as the operation grows.</p>
+                            </div>
                         </div>
                     </div>
-                </section>
+                </div>
+            </section>
 
-                {{-- Minimal Footer --}}
-                <footer
-                    class="w-full pt-20 pb-10 border-t border-white/5 text-center text-slate-500 text-[13px] bg-black/20 backdrop-blur-sm">
-                    <p>&copy; {{ date('Y') }} ticketcloser. All rights reserved.</p>
-                </footer>
+            <section class="px-5 pb-24 pt-10 lg:px-8">
+                <div class="mx-auto max-w-7xl">
+                    <div class="tc-landing-panel tc-landing-glow px-6 py-10 sm:px-10 sm:py-12">
+                        <div class="grid gap-8 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+                            <div class="max-w-3xl">
+                                <div
+                                    class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
+                                    Start with a real workspace</div>
+                                <h2 class="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Upgrade
+                                    your support intake without sacrificing clarity or operational taste.</h2>
+                                <p class="mt-4 text-base leading-7 text-slate-300">
+                                    Set up your workspace, sync an assistant, provision a number, and turn calls into
+                                    structured action.
+                                </p>
+                            </div>
 
-            </div>
+                            <div class="flex flex-col gap-3 sm:flex-row">
+                                <a href="{{ route('register') }}" class="tc-btn-glow !px-6 !py-3 text-base">Create a
+                                    workspace</a>
+                                <a href="{{ route('login') }}" class="tc-btn-glass !px-6 !py-3 text-base">Sign in</a>
+                            </div>
+                        </div>
+                    </div>
 
+                    <footer
+                        class="mt-8 flex flex-col gap-4 border-t border-white/10 pt-6 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
+                        <div>TicketCloser builds a more intentional operating layer for voice-first support.</div>
+                        <div>&copy; {{ date('Y') }} TicketCloser</div>
+                    </footer>
+                </div>
+            </section>
+        </main>
+    </div>
 </body>
 
 </html>
