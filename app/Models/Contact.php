@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Contact extends Model
 {
@@ -18,5 +19,15 @@ class Contact extends Model
     public function cases()
     {
         return $this->hasMany(SupportCase::class);
+    }
+
+    public function suggestedEvents(): HasMany
+    {
+        return $this->hasMany(SuggestedEvent::class);
+    }
+
+    public function calendarEvents(): HasMany
+    {
+        return $this->hasMany(CalendarEvent::class);
     }
 }

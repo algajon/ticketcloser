@@ -11,6 +11,7 @@ class SuggestedEvent extends Model
     protected $fillable = [
         'workspace_id',
         'case_id',
+        'contact_id',
         'starts_at',
         'ends_at',
         'timezone',
@@ -20,6 +21,7 @@ class SuggestedEvent extends Model
     ];
 
     protected $casts = [
+        'contact_id' => 'integer',
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
     ];
@@ -32,6 +34,11 @@ class SuggestedEvent extends Model
     public function supportCase(): BelongsTo
     {
         return $this->belongsTo(SupportCase::class, 'case_id');
+    }
+
+    public function contact(): BelongsTo
+    {
+        return $this->belongsTo(Contact::class);
     }
 
     public function calendarEvents(): HasMany

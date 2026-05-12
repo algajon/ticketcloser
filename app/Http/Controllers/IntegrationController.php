@@ -18,7 +18,7 @@ class IntegrationController extends Controller
 
     public function regenerateToken(Request $request, Workspace $workspace)
     {
-        $this->authorizeWorkspaceAccess($request, $workspace);
+        $this->authorizeWorkspaceRole($request, $workspace, ['owner', 'admin'], 'Only workspace admins can regenerate integration tokens.');
         $workspace->update(['integration_token' => Str::random(48)]);
         return back()->with('success', 'Integration token regenerated.');
     }

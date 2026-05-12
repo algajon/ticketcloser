@@ -11,7 +11,7 @@ return new class extends Migration {
             $table->id();
             $table->foreignId('workspace_id')->constrained()->cascadeOnDelete();
 
-            $table->string('name')->default('Ticketcloser Assistant');
+            $table->string('name')->default('tickIt Assistant');
             $table->longText('system_prompt')->nullable();
 
             $table->string('voice_provider')->nullable(); // e.g. "vapi" or "elevenlabs"

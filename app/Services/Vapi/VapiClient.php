@@ -64,12 +64,43 @@ class VapiClient
     /** Delete a phone number (best-effort, ignores 404) */
     public function deletePhoneNumber(string $id): void
     {
-        $this->http()->delete("/phone-number/{$id}")->throw();
+        $this->deleteResource("/phone-number/{$id}");
+    }
+
+    /** Delete an assistant (best-effort, ignores 404) */
+    public function deleteAssistant(string $id): void
+    {
+        $this->deleteResource("/assistant/{$id}");
+    }
+
+    /** Delete a tool (best-effort, ignores 404) */
+    public function deleteTool(string $id): void
+    {
+        $this->deleteResource("/tool/{$id}");
     }
 
     /** @throws RequestException */
     public function listVoices(): array
     {
         return $this->http()->get('/voices')->throw()->json();
+    }
+
+    /** @throws RequestException */
+    public function getCall(string $id): array
+    {
+        return $this->http()->get("/call/{$id}")->throw()->json();
+    }
+
+    private function deleteResource(string $uri): void
+    {
+        try {
+            $this->http()->delete($uri)->throw();
+        } catch (RequestException $e) {
+            if ($e->response?->status() === 404) {
+                return;
+            }
+
+            throw $e;
+        }
     }
 }

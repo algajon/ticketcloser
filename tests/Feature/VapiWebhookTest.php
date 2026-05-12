@@ -2,9 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\ProcessEndCallReport;
 use App\Models\AssistantConfig;
 use App\Models\CalendarConnection;
+use App\Models\Contact;
+use App\Models\UsageEvent;
 use App\Models\Workspace;
+use App\Models\WorkspacePhoneNumber;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -101,6 +105,47 @@ class VapiWebhookTest extends TestCase
     }
 
     /** @test */
+    public function it_can_lookup_an_existing_contact_as_a_tool_call(): void
+    {
+        $contact = Contact::create([
+            'workspace_id' => $this->workspace->id,
+            'name' => 'Nick Dillon',
+            'phone_e164' => '+16402298699',
+            'property_code' => '123 King Street West',
+            'unit' => '6',
+        ]);
+
+        $response = $this->postJson('/api/webhooks/vapi', [
+            'message' => [
+                'type' => 'tool-calls',
+                'toolCallList' => [[
+                    'id' => 'call_lookup_1',
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'lookupContact',
+                        'arguments' => json_encode([
+                            'phone' => '+16402298699',
+                        ]),
+                    ],
+                ]],
+            ],
+        ], [
+            'Authorization' => 'Bearer test-token-123',
+            'X-Workspace-Slug' => 'test-workspace',
+        ]);
+
+        $response->assertOk();
+
+        $parsed = json_decode($response->json('results.0.result'), true);
+
+        $this->assertTrue($parsed['found']);
+        $this->assertSame($contact->id, $parsed['contactId']);
+        $this->assertSame('Nick Dillon', $parsed['name']);
+        $this->assertSame('123 King Street West', $parsed['propertyCode']);
+        $this->assertSame('6', $parsed['unit']);
+    }
+
+    /** @test */
     public function it_reuses_the_same_ticket_when_the_same_call_is_processed_twice(): void
     {
         $payload = [
@@ -183,6 +228,185 @@ class VapiWebhookTest extends TestCase
             'vapi_call_id' => 'vapi_call_fallback_1',
             'from_number' => '+15557654321',
         ]);
+    }
+
+    /** @test */
+    public function it_blocks_assistant_routing_when_a_free_workspace_has_used_its_minutes(): void
+    {
+        $this->workspace->update(['plan_key' => 'free']);
+
+        $assistant = AssistantConfig::query()->where('workspace_id', $this->workspace->id)->firstOrFail();
+
+        WorkspacePhoneNumber::query()->create([
+            'workspace_id' => $this->workspace->id,
+            'assistant_id' => $assistant->id,
+            'vapi_phone_number_id' => 'pn_free_limit_1',
+            'e164' => '+18005550199',
+            'is_active' => true,
+        ]);
+
+        UsageEvent::query()->create([
+            'workspace_id' => $this->workspace->id,
+            'minutes' => 5,
+            'event_type' => 'call',
+            'occurred_at' => now(),
+            'metadata' => ['vapi_call_id' => 'historical_call_1'],
+        ]);
+
+        $response = $this->postJson('/api/webhooks/vapi', [
+            'message' => [
+                'type' => 'assistant-request',
+                'call' => [
+                    'id' => 'call_limit_1',
+                    'phoneNumberId' => 'pn_free_limit_1',
+                    'customer' => ['number' => '+15550001111'],
+                ],
+            ],
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('assistant.firstMessage', 'This workspace has reached its free voice limit. Please contact the business to upgrade their account.');
+    }
+
+    /** @test */
+    public function it_personalizes_the_opening_line_for_a_known_contact(): void
+    {
+        $assistant = AssistantConfig::query()->where('workspace_id', $this->workspace->id)->firstOrFail();
+        $assistant->update([
+            'first_message' => 'Hi, thanks for calling Northline Support.',
+            'language_code' => 'fr-FR',
+            'vapi_tool_id' => 'tool_case_123',
+            'vapi_booking_tool_id' => 'tool_booking_123',
+            'vapi_lookup_tool_id' => 'tool_lookup_123',
+            'vapi_case_lookup_tool_id' => 'tool_case_lookup_123',
+        ]);
+
+        WorkspacePhoneNumber::create([
+            'workspace_id' => $this->workspace->id,
+            'assistant_id' => $assistant->id,
+            'vapi_phone_number_id' => 'pn_known_contact_1',
+            'e164' => '+18005550199',
+            'is_active' => true,
+        ]);
+
+        Contact::create([
+            'workspace_id' => $this->workspace->id,
+            'name' => 'Nick Dillon',
+            'phone_e164' => '+16402298699',
+        ]);
+
+        $response = $this->postJson('/api/webhooks/vapi', [
+            'message' => [
+                'type' => 'assistant-request',
+                'call' => [
+                    'id' => 'call_known_contact_1',
+                    'phoneNumberId' => 'pn_known_contact_1',
+                    'customer' => ['number' => '+16402298699'],
+                ],
+            ],
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('assistantId', 'ast-1234');
+        $response->assertJsonPath('assistantOverrides.firstMessage', 'Hi, thanks for calling Northline Support. Ravi de vous reparler, Nick.');
+        $response->assertJsonPath('assistantOverrides.variableValues.knownCallerSuffix', ' Ravi de vous reparler, Nick.');
+        $this->assertSame(
+            ['tool_case_123', 'tool_booking_123', 'tool_case_lookup_123'],
+            array_values(array_filter($response->json('assistantOverrides.model.toolIds')))
+        );
+        $this->assertStringContainsString(
+            'Keep caller-facing replies in fr-FR',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'If the caller asks what name, number, property, unit, or prior case you already have on file, answer directly',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'known returning caller named Nick Dillon',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'Never say \'Just a sec\'',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'Use that context immediately instead of pausing to check records again out loud',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'Use any caller context already provided in the system note before deciding whether to call lookupContact or lookupCase',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'answer immediately that you have them as Nick Dillon',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+    }
+
+    /** @test */
+    public function it_can_lookup_recent_cases_for_a_contact_as_a_tool_call(): void
+    {
+        $contact = Contact::create([
+            'workspace_id' => $this->workspace->id,
+            'name' => 'Nick Dillon',
+            'phone_e164' => '+16402298699',
+        ]);
+
+        \App\Models\SupportCase::create([
+            'workspace_id' => $this->workspace->id,
+            'contact_id' => $contact->id,
+            'case_number' => 'TC-PAST001',
+            'title' => 'Leaking sink',
+            'description' => 'Kitchen sink has been leaking for two days.',
+            'status' => 'waiting',
+            'priority' => 'high',
+            'source' => 'voice',
+        ]);
+
+        \App\Models\SupportCase::create([
+            'workspace_id' => $this->workspace->id,
+            'contact_id' => $contact->id,
+            'case_number' => 'TC-PAST002',
+            'title' => 'Paint peeling',
+            'description' => 'Paint is peeling near the bathroom ceiling.',
+            'status' => 'new',
+            'priority' => 'normal',
+            'source' => 'voice',
+        ]);
+
+        $response = $this->postJson('/api/webhooks/vapi', [
+            'message' => [
+                'type' => 'tool-calls',
+                'toolCallList' => [[
+                    'id' => 'call_lookup_case_1',
+                    'type' => 'function',
+                    'function' => [
+                        'name' => 'lookupCase',
+                        'arguments' => json_encode([
+                            'phone' => '+16402298699',
+                            'limit' => 2,
+                        ]),
+                    ],
+                ]],
+            ],
+        ], [
+            'Authorization' => 'Bearer test-token-123',
+            'X-Workspace-Slug' => 'test-workspace',
+        ]);
+
+        $response->assertOk();
+
+        $parsed = json_decode($response->json('results.0.result'), true);
+
+        $this->assertTrue($parsed['found']);
+        $this->assertTrue($parsed['contactFound']);
+        $this->assertSame($contact->id, $parsed['contactId']);
+        $this->assertSame('Nick Dillon', $parsed['contactName']);
+        $this->assertCount(2, $parsed['cases']);
+        $this->assertSame('TC-PAST002', $parsed['cases'][0]['caseNumber']);
+        $this->assertSame('Paint peeling', $parsed['cases'][0]['title']);
+        $this->assertSame('new', $parsed['cases'][0]['status']);
     }
 
     /** @test */
@@ -477,5 +701,93 @@ class VapiWebhookTest extends TestCase
         $this->assertCount(1, $data);
         $this->assertEquals('call_wrong123', $data[0]['toolCallId']);
         $this->assertEquals('Invalid token', $data[0]['error']);
+    }
+
+    /** @test */
+    public function it_rejects_requests_with_an_invalid_vapi_secret_when_configured(): void
+    {
+        config(['services.vapi.secret' => 'expected-secret']);
+
+        $response = $this->postJson('/api/webhooks/vapi', [
+            'message' => [
+                'type' => 'assistant-request',
+                'call' => [
+                    'id' => 'call_secret_1',
+                    'phoneNumberId' => 'pn_secret_1',
+                ],
+            ],
+        ], [
+            'x-vapi-secret' => 'wrong-secret',
+        ]);
+
+        $response
+            ->assertStatus(401)
+            ->assertJson(['error' => 'Unauthorized']);
+    }
+
+    /** @test */
+    public function it_accepts_end_of_call_reports(): void
+    {
+        $response = $this->postJson('/api/webhooks/vapi', [
+            'message' => [
+                'type' => 'end-of-call-report',
+                'call' => [
+                    'id' => 'vapi_call_report_1',
+                    'customer' => [
+                        'number' => '+15551112222',
+                    ],
+                ],
+                'artifact' => [
+                    'transcript' => [
+                        [
+                            'role' => 'user',
+                            'message' => 'Hi, my name is Janet.',
+                        ],
+                    ],
+                ],
+            ],
+        ], [
+            'Authorization' => 'Bearer test-token-123',
+            'X-Workspace-Slug' => 'test-workspace',
+        ]);
+
+        $response->assertOk();
+
+        Queue::assertPushed(ProcessEndCallReport::class, function (ProcessEndCallReport $job) {
+            return $job->workspace->is($this->workspace)
+                && data_get($job->payload, 'message.call.id') === 'vapi_call_report_1';
+        });
+    }
+
+    /** @test */
+    public function it_resolves_end_of_call_reports_by_phone_number_or_assistant_without_tool_headers(): void
+    {
+        WorkspacePhoneNumber::create([
+            'workspace_id' => $this->workspace->id,
+            'assistant_id' => AssistantConfig::query()->where('workspace_id', $this->workspace->id)->value('id'),
+            'vapi_phone_number_id' => 'pn-prod-123',
+            'e164' => '+12165550123',
+        ]);
+
+        $response = $this->postJson('/api/webhooks/vapi', [
+            'message' => [
+                'type' => 'end-of-call-report',
+                'call' => [
+                    'id' => 'vapi_call_report_2',
+                    'assistantId' => 'ast-1234',
+                    'phoneNumberId' => 'pn-prod-123',
+                    'customer' => [
+                        'number' => '+15554443333',
+                    ],
+                ],
+            ],
+        ]);
+
+        $response->assertOk();
+
+        Queue::assertPushed(ProcessEndCallReport::class, function (ProcessEndCallReport $job) {
+            return $job->workspace->is($this->workspace)
+                && data_get($job->payload, 'message.call.id') === 'vapi_call_report_2';
+        });
     }
 }

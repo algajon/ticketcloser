@@ -13,4 +13,7 @@ Route::middleware(['resolve.workspace', 'verify.workspace.token'])->group(functi
     Route::post('/cases', [CaseController::class, 'store']);
     Route::get('/cases', [CaseController::class, 'index']);
     Route::get('/cases/{id}', [CaseController::class, 'show']);
+    Route::post('/tickets', [CaseController::class, 'store']);
+    Route::get('/tickets', [CaseController::class, 'index']);
+    Route::get('/tickets/{id}', [CaseController::class, 'show']);
 });

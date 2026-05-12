@@ -6,6 +6,7 @@ use App\Models\CalendarConnection;
 use App\Services\StripeService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rules\Password;
 
 class SettingsController extends Controller
@@ -15,7 +16,7 @@ class SettingsController extends Controller
     }
 
     /**
-     * Unified settings page — tab is driven by ?tab= query param.
+     * Unified settings page - tab is driven by ?tab= query param.
      */
     public function index(Request $request)
     {
@@ -27,6 +28,7 @@ class SettingsController extends Controller
 
         // Tab-specific data
         if ($tab === 'integrations' && $workspace) {
+            abort_unless($user->canManageIntegrations($workspace), 403, 'Only workspace admins can manage integrations.');
             $data['integrationToken'] = $workspace->integration_token;
             $data['vapiWebhookUrl'] = config('services.vapi.webhook_url');
         }
@@ -38,6 +40,7 @@ class SettingsController extends Controller
         }
 
         if ($tab === 'payment' && $workspace) {
+            abort_unless($user->canManageBilling($workspace), 403, 'Only workspace admins can manage billing.');
             $data['paymentMethods'] = $this->getPaymentMethods($workspace);
             $data['subscription'] = $workspace->subscription;
         }
@@ -90,14 +93,33 @@ class SettingsController extends Controller
     {
         $workspace = $request->user()->currentWorkspace();
         abort_unless($workspace, 404);
+        abort_unless($request->user()->canManageWorkspace($workspace), 403, 'Only workspace admins can change workspace settings.');
 
         $data = $request->validate([
             'name' => 'required|string|max:255',
             'default_timezone' => 'required|string|max:80',
             'case_label' => 'required|string|max:40',
+            'logo' => 'nullable|image|max:2048',
+            'remove_logo' => 'nullable|boolean',
         ]);
 
+        $removeLogo = (bool) ($data['remove_logo'] ?? false);
+        unset($data['logo'], $data['remove_logo']);
+
+        if ($request->hasFile('logo')) {
+            $removeLogo = true;
+            $data['logo_path'] = $request->file('logo')->store('workspace-logos', 'public');
+        } elseif ($removeLogo) {
+            $data['logo_path'] = null;
+        }
+
+        $previousLogoPath = $workspace->logo_path;
+
         $workspace->update($data);
+
+        if ($removeLogo && filled($previousLogoPath) && $previousLogoPath !== $workspace->logo_path) {
+            Storage::disk('public')->delete($previousLogoPath);
+        }
 
         return back()->with('success', 'Workspace settings updated.');
     }
@@ -127,6 +149,7 @@ class SettingsController extends Controller
     {
         $workspace = $request->user()->currentWorkspace();
         abort_unless($workspace, 404);
+        abort_unless($request->user()->canManageBilling($workspace), 403, 'Only workspace admins can manage billing.');
 
         $url = $this->stripe->createPortalSession(
             $workspace,

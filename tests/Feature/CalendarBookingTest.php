@@ -23,7 +23,10 @@ class CalendarBookingTest extends TestCase
     {
         parent::setUp();
         $this->user = User::factory()->create();
-        $this->workspace = Workspace::factory()->create();
+        $this->user->markEmailAsVerified();
+        $this->workspace = Workspace::factory()->create([
+            'onboarding_step' => 'done',
+        ]);
         \DB::table('workspace_memberships')->insert([
             'user_id' => $this->user->id,
             'workspace_id' => $this->workspace->id,
@@ -38,6 +41,7 @@ class CalendarBookingTest extends TestCase
         Queue::fake();
         $this->case = SupportCase::create([
             'workspace_id' => $this->workspace->id,
+            'case_number' => 'TC-CAL001',
             'title' => 'Test Case',
             'description' => 'A test case description.',
             'status' => 'new',
@@ -75,6 +79,7 @@ class CalendarBookingTest extends TestCase
         $caseWithDate = SupportCase::withoutEvents(function () {
             return SupportCase::create([
                 'workspace_id' => $this->workspace->id,
+                'case_number' => 'TC-CAL002',
                 'title' => 'Meeting request',
                 'description' => 'I need a meeting tomorrow at 10am to discuss the lease.',
                 'status' => 'new',

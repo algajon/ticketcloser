@@ -10,6 +10,7 @@ class CalendarEvent extends Model
     protected $fillable = [
         'workspace_id',
         'case_id',
+        'contact_id',
         'suggested_event_id',
         'provider',
         'provider_event_id',
@@ -22,6 +23,7 @@ class CalendarEvent extends Model
     ];
 
     protected $casts = [
+        'contact_id' => 'integer',
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
         'payload' => 'array',
@@ -35,6 +37,11 @@ class CalendarEvent extends Model
     public function supportCase(): BelongsTo
     {
         return $this->belongsTo(SupportCase::class, 'case_id');
+    }
+
+    public function contact(): BelongsTo
+    {
+        return $this->belongsTo(Contact::class);
     }
 
     public function suggestedEvent(): BelongsTo

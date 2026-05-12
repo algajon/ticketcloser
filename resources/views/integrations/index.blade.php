@@ -1,57 +1,41 @@
 @extends('layouts.saas')
 
-@section('title')
-    ticketcloser • Integrations
-@endsection
-
-@section('header')
-    Integrations
-@endsection
+@section('title', 'tickIt - Integrations')
+@section('header_eyebrow', 'External systems')
+@section('header', 'Integrations')
+@section('header_description', 'Copy your token, check the webhook, and connect outside tools.')
 
 @section('content')
-<div class="tc-page-header">
-    <h1>Integrations</h1>
-    <p>Manage your API token and external connections.</p>
-</div>
+    @php($baseUrl = config('app.url'))
 
-<div class="space-y-4">
-    <div class="tc-card p-6">
-        <div class="flex items-start justify-between gap-4 mb-4">
-            <div>
-                <h2 class="tc-h3">Integration token</h2>
-                <p class="tc-small mt-0.5">Send as <code
-                        class="font-mono text-xs bg-slate-100 px-1 py-0.5 rounded">Authorization: Bearer &lt;token&gt;</code>
-                    on all API requests.</p>
+    <div class="space-y-6">
+        <x-ui.panel title="API token" description="Use this token when another tool sends data into this workspace.">
+            <div class="space-y-5">
+                <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
+                    <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Bearer token</div>
+                    <div class="mt-3 flex items-center gap-3">
+                        <code class="min-w-0 flex-1 truncate text-xs text-slate-700">{{ $workspace->integration_token }}</code>
+                        <button type="button" class="tc-btn-ghost !px-3 !py-2 text-xs" onclick="navigator.clipboard.writeText('{{ $workspace->integration_token }}')">Copy</button>
+                    </div>
+                </div>
+
+                <form method="POST" action="{{ route('app.integrations.token.regenerate', $workspace) }}" x-data="{ loading: false }"
+                    @submit="if(!confirm('Regenerate token? Existing integrations using the old token will stop working immediately.')) { $event.preventDefault(); return; } loading = true;">
+                    @csrf
+                    <div class="mb-4 rounded-[1.25rem] border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm leading-6 text-amber-800">
+                        Regenerating the token will break any active integrations still using the current value.
+                    </div>
+                    <button type="submit" class="tc-btn-danger" x-bind:disabled="loading">
+                        <span x-text="loading ? 'Regenerating...' : 'Regenerate token'">Regenerate token</span>
+                    </button>
+                </form>
             </div>
-        </div>
+        </x-ui.panel>
 
-        <div
-            class="group flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-sm font-mono mb-4">
-            <span class="flex-1 truncate text-slate-700 select-all">{{ $workspace->integration_token }}</span>
-            <button onclick="navigator.clipboard.writeText('{{ $workspace->integration_token }}')"
-                class="flex-shrink-0 text-xs text-muted hover:text-slate-800">Copy</button>
-        </div>
-
-        <form method="POST" action="{{ route('app.integrations.token.regenerate', $workspace) }}"
-            x-data="{ loading: false }"
-            @submit="if(!confirm('Regenerate token? Existing integrations using the old token will stop working immediately.')) { $event.preventDefault(); return; } loading = true;">
-            @csrf
-            <div class="rounded-xl border border-yellow-200 bg-yellow-50 p-3 text-sm text-yellow-800 mb-3">Regenerating
-                breaks any active Vapi tool connections, only do this if the token is compromised.</div>
-            <button type="submit" class="tc-btn-danger">Regenerate token</button>
-        </form>
-    </div>
-
-    <div class="tc-card p-6">
-        <h2 class="tc-h3 mb-4">API reference</h2>
-        @php($baseUrl = config('app.url'))
-        <div class="space-y-5">
-            <div>
-                <p class="tc-small uppercase tracking-wide font-medium mb-2">Create a case, POST
-                    {{ $baseUrl }}/api/cases
-                </p>
-                <div class="bg-slate-900 text-slate-100 rounded-xl p-4 font-mono text-xs overflow-auto">
-                    <pre>POST {{ $baseUrl }}/api/cases
+        <div class="grid gap-6 xl:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
+            <x-ui.panel title="API example" description="Example request for creating a ticket.">
+                <div class="rounded-[1.35rem] border border-slate-200 bg-slate-950 p-5 text-slate-100">
+<pre class="overflow-auto text-xs leading-6"><code>POST {{ $baseUrl }}/api/tickets
 Authorization: Bearer {{ $workspace->integration_token }}
 X-Workspace-Slug: {{ $workspace->slug }}
 
@@ -61,50 +45,26 @@ X-Workspace-Slug: {{ $workspace->slug }}
   "category": "account",
   "priority": "high",
   "requesterPhone": "+14155550100"
-}
-</pre>
-                    <button onclick="navigator.clipboard.writeText(document.querySelector('pre').innerText)"
-                        class="mt-1 text-slate-400 hover:text-slate-100 text-xs">Copy</button>
+}</code></pre>
                 </div>
-            </div>
+            </x-ui.panel>
 
-            <div>
-                <p class="tc-small uppercase tracking-wide font-medium mb-2">Required headers</p>
-                <table class="w-full text-sm">
-                    <thead class="text-xs text-muted border-b border-slate-200">
-                        <tr>
-                            <th class="py-2 text-left font-medium">Header</th>
-                            <th class="py-2 text-left font-medium">Value</th>
-                        </tr>
-                    </thead>
-                    <tbody class="divide-y divide-slate-100">
-                        <tr>
-                            <td class="py-2 font-mono text-xs">Authorization</td>
-                            <td class="py-2 text-slate-600">Bearer &lt;integration_token&gt;</td>
-                        </tr>
-                        <tr>
-                            <td class="py-2 font-mono text-xs">X-Workspace-Slug</td>
-                            <td class="py-2"><code
-                                    class="font-mono text-xs bg-slate-100 px-1.5 py-0.5 rounded">{{ $workspace->slug }}</code>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+            <x-ui.panel title="Provider status" description="Quick check for the main connection path.">
+                <div class="space-y-4">
+                    <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
+                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Vapi webhook</div>
+                        <div class="mt-3 text-sm leading-6 text-slate-700">{{ config('services.vapi.webhook_url') }}</div>
+                        <div class="mt-4">
+                            <x-ui.badge tone="{{ config('services.vapi.key') ? 'success' : 'warning' }}">{{ config('services.vapi.key') ? 'Connected' : 'Missing API key' }}</x-ui.badge>
+                        </div>
+                    </div>
+
+                    <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
+                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Required header</div>
+                        <div class="mt-3 text-sm text-slate-700"><code class="rounded bg-slate-200 px-1.5 py-0.5 text-xs">X-Workspace-Slug: {{ $workspace->slug }}</code></div>
+                    </div>
+                </div>
+            </x-ui.panel>
         </div>
     </div>
-
-    <div class="tc-card p-6">
-        <h2 class="tc-h3 mb-1">Vapi webhook</h2>
-        <p class="tc-small mb-4">This is the URL Vapi sends tool-call events to. Paste this into your Vapi tool server
-            URL field.</p>
-        <div
-            class="group flex items-center gap-2 rounded-xl bg-slate-50 border border-slate-200 px-3 py-2 text-sm font-mono">
-            <span class="flex-1 truncate text-slate-700 select-all">{{ config('services.vapi.webhook_url') }}</span>
-            <button onclick="navigator.clipboard.writeText('{{ config('services.vapi.webhook_url') }}')"
-                class="flex-shrink-0 text-xs text-muted hover:text-slate-800">Copy</button>
-        </div>
-    </div>
-</div>
-
 @endsection

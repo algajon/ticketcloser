@@ -17,9 +17,9 @@ class WorkspaceFactory extends Factory
             'name' => $name,
             'slug' => Str::slug($name) . '-' . Str::lower(Str::random(4)),
             'credits_balance' => 0,
-            'case_label' => 'ticket',
+            'case_label' => 'Ticket',
             'default_timezone' => 'UTC',
-            'onboarding_step' => 1,
+            'onboarding_step' => 'company',
         ];
     }
 }

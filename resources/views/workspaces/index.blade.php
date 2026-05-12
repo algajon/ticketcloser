@@ -1,59 +1,55 @@
 @extends('layouts.saas')
 
-@section('title', 'ticketcloser • Workspaces')
+@section('title', 'tickIt - Workspaces')
+@section('header_eyebrow', 'Workspace')
 @section('header', 'Workspaces')
+@section('header_description', 'Switch between workspaces and open settings for each one.')
+
+@section('header_actions')
+    <a href="{{ route('app.workspaces.create') }}" class="tc-btn-primary">New workspace</a>
+@endsection
 
 @section('content')
-    <div class="space-y-6">
-        <div class="flex items-center justify-between gap-4">
-            <div>
-                <h2 class="text-lg font-semibold text-slate-900">Your workspaces</h2>
-                <p class="mt-1 text-sm text-slate-500">Switch between companies or create a new workspace.</p>
-            </div>
-            <a href="{{ route('app.workspaces.create') }}"
-                class="inline-flex items-center rounded-lg bg-orange-500 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-600">
-                New workspace
-            </a>
-        </div>
-
-        <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            @forelse($workspaces as $workspace)
-                <div class="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    @if($workspaces->isEmpty())
+        <x-ui.panel>
+            <x-ui.empty-state title="No workspaces yet" description="Create your first workspace to get started." actionText="Create workspace" :actionHref="route('app.workspaces.create')" />
+        </x-ui.panel>
+    @else
+        <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+            @foreach($workspaces as $workspace)
+                <div class="tc-card-hover p-6">
                     <div class="flex items-start justify-between gap-3">
-                        <div>
-                            <h3 class="text-base font-semibold text-slate-900">{{ $workspace->name }}</h3>
-                            <p class="mt-1 text-sm text-slate-500">{{ $workspace->slug }}</p>
+                        <div class="min-w-0">
+                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Workspace</div>
+                            <h2 class="mt-2 truncate text-lg font-semibold text-slate-950">{{ $workspace->name }}</h2>
+                            <p class="mt-2 text-sm text-slate-500">{{ $workspace->slug }}</p>
                         </div>
                         @if(auth()->user()->currentWorkspace()?->id === $workspace->id)
-                            <span class="rounded-full bg-emerald-100 px-3 py-1 text-xs font-semibold text-emerald-700">Current</span>
+                            <x-ui.badge tone="success">Current</x-ui.badge>
                         @endif
                     </div>
 
-                    <div class="mt-4 space-y-3 text-sm text-slate-600">
-                        <p>Timezone: <span class="font-medium text-slate-900">{{ $workspace->default_timezone }}</span></p>
-                        <p>Case label: <span class="font-medium text-slate-900">{{ $workspace->case_label }}</span></p>
+                    <div class="mt-5 grid gap-3 text-sm text-slate-600">
+                        <div class="rounded-[1.2rem] border border-slate-200 bg-slate-50/80 p-4">
+                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Timezone</div>
+                            <div class="mt-2 font-medium text-slate-900">{{ $workspace->default_timezone }}</div>
+                        </div>
+                        <div class="rounded-[1.2rem] border border-slate-200 bg-slate-50/80 p-4">
+                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Ticket label</div>
+                            <div class="mt-2 font-medium text-slate-900">{{ $workspace->case_label }}</div>
+                        </div>
                     </div>
 
-                    <div class="mt-5 flex items-center gap-2">
-                        <form method="POST" action="{{ route('app.workspaces.switch', $workspace) }}">
+                    <div class="mt-5 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                        <form method="POST" action="{{ route('app.workspaces.switch', $workspace) }}" class="w-full sm:w-auto">
                             @csrf
-                            <button type="submit"
-                                class="inline-flex items-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-700">
-                                Switch
-                            </button>
+                            <button type="submit" class="tc-btn-primary w-full justify-center sm:w-auto">Switch</button>
                         </form>
 
-                        <a href="{{ route('app.workspaces.settings', $workspace) }}"
-                            class="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                            Settings
-                        </a>
+                        <a href="{{ route('app.workspaces.settings', $workspace) }}" class="tc-btn-secondary w-full justify-center sm:w-auto">Settings</a>
                     </div>
                 </div>
-            @empty
-                <div class="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-10 text-sm text-slate-500">
-                    No workspaces yet. Create your first one to get started.
-                </div>
-            @endforelse
+            @endforeach
         </div>
-    </div>
+    @endif
 @endsection

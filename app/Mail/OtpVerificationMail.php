@@ -27,8 +27,8 @@ class OtpVerificationMail extends Mailable
     public function envelope(): Envelope
     {
         return new Envelope(
-            from: new \Illuminate\Mail\Mailables\Address('jon@ticketcloser.online', 'Jon from ticketcloser'),
-            subject: 'Verify your email address - ticketcloser',
+            from: new \Illuminate\Mail\Mailables\Address('jon@ticketcloser.online', 'Jon from tickIt'),
+            subject: 'Verify your email address - tickIt',
         );
     }
 

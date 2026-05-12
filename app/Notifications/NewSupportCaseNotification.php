@@ -27,15 +27,15 @@ class NewSupportCaseNotification extends Notification implements ShouldQueue
         $url = route('app.tickets.show', $case->id);
         
         return (new MailMessage)
-            ->subject("New Case: [{$case->case_number}] {$case->title}")
+            ->subject("New Ticket: [{$case->case_number}] {$case->title}")
             ->greeting("Hello,")
-            ->line("A new support case was just created via phone support.")
-            ->line("**Case Number:** {$case->case_number}")
+            ->line("A new support ticket was just created via phone support.")
+            ->line("**Ticket Number:** {$case->case_number}")
             ->line("**Title:** {$case->title}")
             ->line("**Priority:** " . ucfirst($case->priority))
             ->line("**Description:**")
             ->line($case->description)
-            ->action('View Case', $url)
-            ->line('Ticketcloser AI Assistant');
+            ->action('View Ticket', $url)
+            ->line('tickIt AI Assistant');
     }
 }

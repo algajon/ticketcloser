@@ -4,8 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\SupportCase;
 use App\Models\CaseEvent;
+use App\Services\Tickets\TicketCreationService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Str;
 
 class CaseController extends Controller
 {
@@ -19,24 +19,20 @@ class CaseController extends Controller
             'category' => 'nullable|string|max:100',
             'priority' => 'nullable|in:low,normal,high,critical',
             'requesterPhone' => 'nullable|string|max:30',
+            'requesterName' => 'nullable|string|max:120',
             'requesterEmail' => 'nullable|email|max:200',
+            'propertyCode' => 'nullable|string|max:120',
+            'unit' => 'nullable|string|max:80',
+            'accessNotes' => 'nullable|string|max:2000',
+            'preferredVisitWindow' => 'nullable|string|max:160',
+            'vendorName' => 'nullable|string|max:120',
+            'vendorPhone' => 'nullable|string|max:30',
+            'opsStage' => 'nullable|string|max:40',
             'source' => 'nullable|string|max:30',
             'externalCallId' => 'nullable|string|max:200',
         ]);
 
-        $case = SupportCase::create([
-            'workspace_id' => $workspace->id,
-            'case_number' => 'TC-' . now()->format('Ymd') . '-' . Str::upper(Str::random(6)),
-            'title' => $data['title'],
-            'description' => $data['description'] ?? null,
-            'category' => $data['category'] ?? null,
-            'priority' => $data['priority'] ?? 'normal',
-            'status' => 'new',
-            'requester_phone' => $data['requesterPhone'] ?? null,
-            'requester_email' => $data['requesterEmail'] ?? null,
-            'source' => $data['source'] ?? 'voice',
-            'external_call_id' => $data['externalCallId'] ?? null,
-        ]);
+        $case = app(TicketCreationService::class)->createForWorkspace($workspace, $data);
 
         CaseEvent::create([
             'workspace_id' => $workspace->id,

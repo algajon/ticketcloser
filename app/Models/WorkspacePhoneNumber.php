@@ -12,6 +12,9 @@ class WorkspacePhoneNumber extends Model
         'assistant_id',
         'e164',
         'forwarding_number',
+        'provisioning_mode',
+        'external_provider',
+        'vapi_credential_id',
         'vapi_phone_number_id',
         'is_active',
     ];

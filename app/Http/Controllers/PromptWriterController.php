@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AssistantConfig;
 use App\Models\PromptVersion;
 use App\Models\Workspace;
 use App\Services\PromptGenerationService;
@@ -37,16 +38,30 @@ class PromptWriterController extends Controller
     public function generate(Request $request)
     {
         $validated = $request->validate([
-            'description' => 'required|string|max:500',
-            'assistant_type' => 'required|in:maintenance,mortgage,support,leasing',
+            'assistant_id' => 'nullable|integer',
+            'description' => 'required|string|max:3000',
+            'assistant_name' => 'nullable|string|max:120',
+            'first_message' => 'nullable|string|max:500',
+            'current_prompt' => 'nullable|string|max:6000',
+            'assistant_type' => 'required|in:bright_guide,steady_operator,confident_closer,premium_concierge,custom',
             'tone' => 'required|in:professional,friendly,strict',
             'strictness' => 'required|in:low,medium,high',
+            'language' => 'nullable|string|max:20',
             'tools_enabled' => 'nullable|array',
             'tools_enabled.*' => 'string|max:64',
         ]);
 
         $workspace = $request->user()->currentWorkspace();
         abort_unless($workspace, 403, 'No active workspace.');
+
+        if (! empty($validated['assistant_id'])) {
+            $assistant = AssistantConfig::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('id', $validated['assistant_id'])
+                ->first();
+
+            abort_unless($assistant, 403, 'Assistant does not belong to the current workspace.');
+        }
 
         // Rate limiting: max 10 per user per minute
         $key = 'prompt-generate:' . $request->user()->id;
@@ -68,6 +83,8 @@ class PromptWriterController extends Controller
         return response()->json([
             'version_id' => $version->id,
             'markdown' => $version->output_markdown,
+            'mode' => $this->generator->lastGenerationMode(),
+            'ai_available' => $this->generator->aiAvailable(),
         ]);
     }
 

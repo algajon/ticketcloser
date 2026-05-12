@@ -16,6 +16,8 @@ use App\Http\Controllers\PromptWriterController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\AdminPresetController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\WorkspaceFeedbackController;
+use App\Http\Controllers\WorkspaceHelperController;
 
 /*
 |--------------------------------------------------------------------------
@@ -31,6 +33,55 @@ Route::get('/', function () {
 
     return view('index');
 })->name('home');
+
+Route::view('/terms', 'legal.terms')->name('terms');
+Route::view('/docs', 'docs.index')->name('docs');
+
+Route::get('/robots.txt', function () {
+    $appUrl = rtrim(config('app.url') ?: url('/'), '/');
+
+    $lines = [
+        'User-agent: *',
+        'Allow: /',
+        'Disallow: /app',
+        'Disallow: /admin',
+        'Disallow: /dashboard',
+        'Disallow: /login',
+        'Disallow: /register',
+        'Disallow: /forgot-password',
+        '',
+        'Sitemap: '.$appUrl.'/sitemap.xml',
+    ];
+
+    return response(implode("\n", $lines), 200, ['Content-Type' => 'text/plain; charset=UTF-8']);
+})->name('robots');
+
+Route::get('/sitemap.xml', function () {
+    $urls = [
+        [
+            'loc' => route('home'),
+            'lastmod' => now()->toDateString(),
+            'changefreq' => 'weekly',
+            'priority' => '1.0',
+        ],
+        [
+            'loc' => route('terms'),
+            'lastmod' => now()->toDateString(),
+            'changefreq' => 'yearly',
+            'priority' => '0.2',
+        ],
+        [
+            'loc' => route('docs'),
+            'lastmod' => now()->toDateString(),
+            'changefreq' => 'monthly',
+            'priority' => '0.6',
+        ],
+    ];
+
+    return response()
+        ->view('sitemap', ['urls' => $urls])
+        ->header('Content-Type', 'application/xml; charset=UTF-8');
+})->name('sitemap');
 
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', function () {
@@ -86,6 +137,7 @@ Route::middleware(['auth', 'verified', 'workspace.ready', 'subscribed'])->prefix
     Route::get('/workspaces', [WorkspaceController::class, 'index'])->name('workspaces.index');
     Route::get('/workspaces/new', [WorkspaceController::class, 'create'])->name('workspaces.create');
     Route::post('/workspaces', [WorkspaceController::class, 'store'])->name('workspaces.store');
+    Route::get('/workspaces/check-slug', [WorkspaceController::class, 'checkSlug'])->name('workspaces.check-slug');
 
     // Switch current workspace (store slug in session, etc.)
     Route::post('/workspaces/{workspace:slug}/switch', [WorkspaceController::class, 'switch'])
@@ -113,6 +165,8 @@ Route::middleware(['auth', 'verified', 'workspace.ready', 'subscribed'])->prefix
 
     Route::post('/workspaces/{workspace:slug}/cases/{case}/status', [SupportCaseController::class, 'updateStatus'])
         ->name('cases.status.update');
+    Route::post('/workspaces/{workspace:slug}/cases/{case}/workflow', [SupportCaseController::class, 'updateWorkflow'])
+        ->name('cases.workflow.update');
 
     /*
     |--------------------------------------------------------------------------
@@ -142,6 +196,8 @@ Route::middleware(['auth', 'verified', 'workspace.ready', 'subscribed'])->prefix
         ->name('assistant.show');
     Route::post('/workspaces/{workspace:slug}/assistants/{assistant}', [VoiceAssistantController::class, 'update'])
         ->name('assistant.update');
+    Route::post('/workspaces/{workspace:slug}/assistants/{assistant}/duplicate', [VoiceAssistantController::class, 'duplicate'])
+        ->name('assistant.duplicate');
     Route::delete('/workspaces/{workspace:slug}/assistants/{assistant}', [VoiceAssistantController::class, 'destroy'])
         ->name('assistant.destroy');
 
@@ -156,10 +212,15 @@ Route::middleware(['auth', 'verified', 'workspace.ready', 'subscribed'])->prefix
     // Queues, Contacts, Call logs
     Route::get('/workspaces/{workspace:slug}/queues', [\App\Http\Controllers\QueuesController::class, 'index'])->name('queues.index');
     Route::get('/workspaces/{workspace:slug}/contacts', [\App\Http\Controllers\ContactsController::class, 'index'])->name('contacts.index');
+    Route::get('/workspaces/{workspace:slug}/contacts/{contact}', [\App\Http\Controllers\ContactsController::class, 'show'])->name('contacts.show');
     Route::get('/workspaces/{workspace:slug}/contacts/{contact}/edit', [\App\Http\Controllers\ContactsController::class, 'edit'])->name('contacts.edit');
     Route::patch('/workspaces/{workspace:slug}/contacts/{contact}', [\App\Http\Controllers\ContactsController::class, 'update'])->name('contacts.update');
     Route::delete('/workspaces/{workspace:slug}/contacts/{contact}', [\App\Http\Controllers\ContactsController::class, 'destroy'])->name('contacts.destroy');
     Route::get('/workspaces/{workspace:slug}/calls', [\App\Http\Controllers\CallEventsController::class, 'index'])->name('calls.index');
+    Route::get('/workspaces/{workspace:slug}/calls/analytics', [\App\Http\Controllers\CallEventsController::class, 'analytics'])->name('calls.analytics');
+    Route::get('/workspaces/{workspace:slug}/calls/{call}', [\App\Http\Controllers\CallEventsController::class, 'show'])->name('calls.show');
+    Route::post('/workspaces/{workspace:slug}/feedback', [WorkspaceFeedbackController::class, 'store'])->name('feedback.store');
+    Route::post('/workspaces/{workspace:slug}/helper/chat', [WorkspaceHelperController::class, 'chat'])->name('helper.chat');
 
     /*
     |--------------------------------------------------------------------------

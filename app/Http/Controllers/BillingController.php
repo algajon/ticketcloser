@@ -8,11 +8,14 @@ use App\Models\UsageEvent;
 use App\Models\CreditLedger;
 use App\Models\Workspace;
 use App\Services\StripeService;
+use App\Services\Vapi\VapiCallSyncService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 
 class BillingController extends Controller
 {
+    use Concerns\AuthorizesWorkspace;
+
     public function __construct(protected StripeService $stripe)
     {
     }
@@ -22,8 +25,9 @@ class BillingController extends Controller
      */
     public function index(Request $request)
     {
-        $workspace = $request->user()->currentWorkspace();
-        abort_unless($workspace, 404, 'No active workspace.');
+        $workspace = $this->requireBillingWorkspace($request);
+
+        app(VapiCallSyncService::class)->hydrateMissingWorkspaceCalls($workspace, 12);
 
         $subscription = Subscription::where('workspace_id', $workspace->id)
             ->latest()
@@ -45,8 +49,37 @@ class BillingController extends Controller
             ->where('occurred_at', '>=', $periodStart)
             ->count();
 
+        if ((float) $usageMinutes === 0.0) {
+            $usageMinutes = round(
+                ((int) \App\Models\CallEvent::where('workspace_id', $workspace->id)
+                    ->where('created_at', '>=', $periodStart)
+                    ->sum('duration_seconds')) / 60,
+                1
+            );
+        }
+
+        if ((int) $usageCalls === 0) {
+            $usageCalls = \App\Models\CallEvent::where('workspace_id', $workspace->id)
+                ->where('created_at', '>=', $periodStart)
+                ->count();
+        }
+
         $plan = $workspace->activePlan();
         $creditsBalance = $workspace->credits_balance;
+        $includedMinutes = (int) ($plan['max_minutes'] ?? 0);
+        $hasUnlimitedMinutes = $includedMinutes === -1;
+        $overageRate = $plan['overage_per_minute'] ?? null;
+        $basePrice = (float) ($plan['price_monthly'] ?? 0);
+        $extraMinutes = $hasUnlimitedMinutes
+            ? 0.0
+            : max(0, round((float) $usageMinutes - $includedMinutes, 1));
+        $estimatedOverage = $overageRate !== null
+            ? round($extraMinutes * (float) $overageRate, 2)
+            : 0.0;
+        $estimatedCycleTotal = round($basePrice + $estimatedOverage, 2);
+        $usagePercent = $hasUnlimitedMinutes || $includedMinutes <= 0
+            ? 0
+            : min(100, (((float) $usageMinutes) / $includedMinutes) * 100);
 
         return view('billing.index', compact(
             'workspace',
@@ -55,7 +88,16 @@ class BillingController extends Controller
             'usageMinutes',
             'usageCalls',
             'plan',
-            'creditsBalance'
+            'creditsBalance',
+            'periodStart',
+            'includedMinutes',
+            'hasUnlimitedMinutes',
+            'overageRate',
+            'basePrice',
+            'extraMinutes',
+            'estimatedOverage',
+            'estimatedCycleTotal',
+            'usagePercent'
         ));
     }
 
@@ -64,8 +106,7 @@ class BillingController extends Controller
      */
     public function plans(Request $request)
     {
-        $workspace = $request->user()->currentWorkspace();
-        abort_unless($workspace, 404, 'No active workspace.');
+        $workspace = $this->requireBillingWorkspace($request);
 
         $plans = config('plans');
         $currentPlan = $workspace->plan_key ?? 'free';
@@ -74,23 +115,22 @@ class BillingController extends Controller
     }
 
     /**
-     * Handle plan selection — either start Stripe Checkout or activate free trial.
+     * Handle plan selection - either start Stripe Checkout or activate free trial.
      */
     public function selectPlan(Request $request)
     {
         $request->validate(['plan' => 'required|in:' . implode(',', array_keys(config('plans')))]);
-        $workspace = $request->user()->currentWorkspace();
-        abort_unless($workspace, 404);
+        $workspace = $this->requireBillingWorkspace($request);
 
         $planKey = $request->plan;
 
-        // Free plan — just activate it
+        // Free plan - just activate it
         if ($planKey === 'free') {
             $workspace->update(['plan_key' => 'free']);
             return redirect()->route('app.dashboard')->with('success', 'Free trial activated!');
         }
 
-        // Paid plan — redirect to Stripe Checkout
+        // Paid plan - redirect to Stripe Checkout
         $priceMap = [
             'startup' => config('services.stripe.prices.startup'),
             'pro' => config('services.stripe.prices.pro'),
@@ -117,8 +157,7 @@ class BillingController extends Controller
      */
     public function portal(Request $request)
     {
-        $workspace = $request->user()->currentWorkspace();
-        abort_unless($workspace, 404);
+        $workspace = $this->requireBillingWorkspace($request);
 
         $url = $this->stripe->createPortalSession(
             $workspace,
@@ -134,8 +173,7 @@ class BillingController extends Controller
     public function checkout(Request $request)
     {
         $request->validate(['plan' => 'required|in:startup,pro,enterprise']);
-        $workspace = $request->user()->currentWorkspace();
-        abort_unless($workspace, 404);
+        $workspace = $this->requireBillingWorkspace($request);
 
         // Map plan keys to Stripe Price IDs (set in env)
         $priceMap = [
@@ -192,5 +230,14 @@ class BillingController extends Controller
         Log::info('Stripe webhook handled', ['type' => $event->type]);
 
         return response()->json(['ok' => true]);
+    }
+
+    protected function requireBillingWorkspace(Request $request): Workspace
+    {
+        $workspace = $request->user()->currentWorkspace();
+        abort_unless($workspace, 404, 'No active workspace.');
+        $this->authorizeWorkspaceRole($request, $workspace, ['owner', 'admin'], 'Only workspace admins can manage billing.');
+
+        return $workspace;
     }
 }

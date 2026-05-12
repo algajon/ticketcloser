@@ -1,55 +1,53 @@
 @extends('layouts.guest')
 
+@section('title', 'tickIt - Sign In')
+@section('guest_layout', 'centered')
+
 @section('content')
-    <div class="mb-8 text-center">
-        <h1 class="text-2xl font-bold text-white tracking-tight">Welcome back</h1>
-        <p class="text-[14px] text-slate-400 mt-2">Sign in to your account to continue</p>
+    <div>
+        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-400">Welcome back</div>
+        <h1 class="mt-4 text-3xl font-semibold tracking-tight text-white">Sign in</h1>
+        <p class="mt-3 text-sm leading-6 text-slate-300">Use your email and password.</p>
     </div>
 
-    <form method="POST" action="{{ route('login') }}" class="space-y-4 backdrop-blur-md">
+    <form method="POST" action="{{ route('login') }}" class="mt-8 space-y-5">
         @csrf
 
-        <div class="space-y-1.5 text-left">
-            <label for="email" class="block text-[13px] font-medium text-slate-300">Email address</label>
-            <input id="email" type="email" name="email" value="{{ old('email') }}" required autofocus
-                autocomplete="username"
-                class="w-full bg-[#0b0f19]/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] transition-all text-[14px]"
-                placeholder="name@company.com" />
+        <div class="tc-field">
+            <label for="email" class="tc-field-label text-slate-200">Email address</label>
+            <input id="email" type="email" name="email" value="{{ old('email') }}" required autofocus autocomplete="username"
+                class="tc-input-dark" placeholder="name@company.com" />
             @if($errors->first('email'))
-                <p class="text-[13px] text-red-500 mt-1">{{ $errors->first('email') }}</p>
+                <p class="tc-error text-red-300">{{ $errors->first('email') }}</p>
             @endif
         </div>
 
-        <div class="space-y-1.5 text-left">
-            <div class="flex items-center justify-between">
-                <label for="password" class="block text-[13px] font-medium text-slate-300">Password</label>
-                @if (Route::has('password.request'))
-                    <a href="{{ route('password.request') }}"
-                        class="text-[12px] font-medium text-[#f97316] hover:text-[#ea580c] transition-colors">
-                        Forgot password?
-                    </a>
+        <div class="tc-field">
+            <div class="flex items-center justify-between gap-3">
+                <label for="password" class="tc-field-label text-slate-200">Password</label>
+                @if(Route::has('password.request'))
+                    <a href="{{ route('password.request') }}" class="text-sm font-medium text-orange-300 transition hover:text-orange-200">Forgot password?</a>
                 @endif
             </div>
             <input id="password" type="password" name="password" required autocomplete="current-password"
-                class="w-full bg-[#0b0f19]/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] transition-all text-[14px]"
-                placeholder="••••••••" />
+                class="tc-input-dark" placeholder="Enter your password" />
             @if($errors->first('password'))
-                <p class="text-[13px] text-red-500 mt-1">{{ $errors->first('password') }}</p>
+                <p class="tc-error text-red-300">{{ $errors->first('password') }}</p>
             @endif
         </div>
 
-        <div class="flex items-center pt-2">
-            <input id="remember_me" type="checkbox" name="remember"
-                class="w-4 h-4 rounded border-white/10 bg-[#0b0f19]/50 text-[#f97316] focus:ring-[#f97316] focus:ring-offset-[#020202]">
-            <label for="remember_me" class="ml-2 block text-[13px] text-slate-400">
-                Remember me
-            </label>
-        </div>
+        <label for="remember_me" class="flex cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300">
+            <input id="remember_me" type="checkbox" name="remember" class="h-4 w-4 rounded border-white/10 bg-slate-950/20 text-orange-500 focus:ring-orange-500 focus:ring-offset-0">
+            <span>Keep me signed in</span>
+        </label>
 
-        <button type="submit"
-            class="w-full mt-6 px-4 py-2.5 bg-[#f97316] hover:bg-[#ea580c] text-white rounded-lg font-medium text-[14px] transition-all"
-            style="box-shadow: 0 0 15px rgba(249, 115, 22, 0.3);">
+        <button type="submit" class="tc-btn-glow mt-3 w-full justify-center !py-3 text-base">
             Sign in
         </button>
     </form>
+
+    <div class="mt-8 border-t border-white/10 pt-6 text-sm text-slate-400">
+        New here?
+        <a href="{{ route('register') }}" class="font-medium text-orange-300 transition hover:text-orange-200">Create one here</a>
+    </div>
 @endsection

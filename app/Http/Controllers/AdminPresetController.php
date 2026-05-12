@@ -10,7 +10,7 @@ class AdminPresetController extends Controller
 {
     public function index()
     {
-        $presets = AssistantPreset::all();
+        $presets = AssistantPreset::ensureDefaults();
         return view('admin.presets.index', compact('presets'));
     }
 

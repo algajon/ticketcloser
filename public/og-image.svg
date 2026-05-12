@@ -1,0 +1,21 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="90" y1="50" x2="1080" y2="590" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#060A13"/>
+      <stop offset="1" stop-color="#121C31"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(948 132) rotate(132.478) scale(404.786 427.149)">
+      <stop stop-color="#F97316" stop-opacity="0.35"/>
+      <stop offset="1" stop-color="#F97316" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1200" height="630" rx="40" fill="url(#bg)"/>
+  <rect width="1200" height="630" rx="40" fill="url(#glow)"/>
+  <rect x="56" y="56" width="1088" height="518" rx="32" fill="#FFFFFF" fill-opacity="0.02" stroke="#FFFFFF" stroke-opacity="0.08"/>
+  <text x="104" y="160" fill="#F97316" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700" letter-spacing="0.24em">tickIt</text>
+  <text x="104" y="274" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="800">Never miss another</text>
+  <text x="104" y="360" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="76" font-weight="800">business call.</text>
+  <text x="104" y="436" fill="#CBD5E1" font-family="Inter, Arial, sans-serif" font-size="30" font-weight="500">AI phone answering, ticket creation, transcripts, and meeting booking for business teams.</text>
+  <rect x="104" y="488" width="324" height="64" rx="18" fill="#F97316"/>
+  <text x="164" y="529" fill="#FFFFFF" font-family="Inter, Arial, sans-serif" font-size="28" font-weight="700">Calls in. Tickets out.</text>
+</svg>

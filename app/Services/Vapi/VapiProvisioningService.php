@@ -3,8 +3,12 @@
 namespace App\Services\Vapi;
 
 use App\Models\AssistantConfig;
+use App\Models\AssistantPreset;
+use App\Models\VoiceConfig;
 use App\Models\Workspace;
 use App\Models\WorkspacePhoneNumber;
+use App\Support\RegionalPilotStackCatalog;
+use Illuminate\Support\Facades\DB;
 
 class VapiProvisioningService
 {
@@ -15,30 +19,38 @@ class VapiProvisioningService
 
     public function provisionAssistantAndTool(Workspace $workspace, array $input): AssistantConfig
     {
-        // Backwards compatible: find-or-create the default assistant and delegate
         $config = AssistantConfig::firstOrCreate(
-            ['workspace_id' => $workspace->id, 'name' => ($input['name'] ?? 'Ticketcloser Assistant')],
-            ['name' => $input['name'] ?? 'Ticketcloser Assistant']
+            ['workspace_id' => $workspace->id, 'name' => ($input['name'] ?? 'tickIt Assistant')],
+            ['name' => $input['name'] ?? 'tickIt Assistant']
         );
 
         return $this->provisionAssistantAndToolForConfig($config, $workspace, $input);
     }
 
-    /**
-     * Provision (or update) a specific AssistantConfig and its tool in Vapi.
-     */
     public function provisionAssistantAndToolForConfig(AssistantConfig $config, Workspace $workspace, array $input): AssistantConfig
     {
+        $resolvedVoiceId = $input['voice_id'] ?? $config->voice_id;
+        $resolvedLanguageCode = $this->normalizeLanguageCode(
+            $input['language_code'] ?? $config->language_code,
+            $resolvedVoiceId,
+            $workspace,
+        );
+
         $config->fill([
             'name' => $input['name'] ?? $config->name,
+            'first_message' => $input['first_message'] ?? $config->first_message,
             'system_prompt' => $input['system_prompt'] ?? $config->system_prompt,
             'voice_provider' => $input['voice_provider'] ?? $config->voice_provider,
-            'voice_id' => $input['voice_id'] ?? $config->voice_id,
-            'preset_key' => $input['preset_key'] ?? $config->preset_key,
+            'voice_id' => $resolvedVoiceId,
+            'language_code' => $resolvedLanguageCode,
+            'model_name' => AssistantConfig::normalizedModelName($input['model_name'] ?? $config->model_name),
+            'preset_key' => AssistantPreset::normalizeKey($input['preset_key'] ?? $config->preset_key),
             'override_params' => $input['override_params'] ?? $config->override_params,
             'intake_params' => $input['intake_params'] ?? $config->intake_params,
             'is_active' => $input['is_active'] ?? true,
         ])->save();
+
+        $this->applyWorkspaceGuardrails($config, $workspace);
 
         $integrationToken = $workspace->integration_token
             ?? throw new \RuntimeException('Workspace integration token not found.');
@@ -48,7 +60,6 @@ class VapiProvisioningService
             integrationToken: $integrationToken
         );
 
-        // 1) Tool (idempotent)
         if ($config->vapi_tool_id) {
             $updatePayload = $toolPayload;
             unset($updatePayload['type']);
@@ -59,7 +70,6 @@ class VapiProvisioningService
             $config->save();
         }
 
-        // 1.5) Booking Tool (idempotent)
         $bookingToolPayload = $this->buildBookMeetingToolPayload(
             workspaceSlug: $workspace->slug,
             integrationToken: $integrationToken
@@ -75,8 +85,44 @@ class VapiProvisioningService
             $config->save();
         }
 
-        // 2) Assistant (idempotent)
-        $assistantPayload = $this->buildAssistantPayload($config, $config->vapi_tool_id, $config->vapi_booking_tool_id, $workspace);
+        $lookupToolPayload = $this->buildLookupContactToolPayload(
+            workspaceSlug: $workspace->slug,
+            integrationToken: $integrationToken
+        );
+
+        if ($config->vapi_lookup_tool_id) {
+            $updatePayload = $lookupToolPayload;
+            unset($updatePayload['type']);
+            $this->vapi->updateTool($config->vapi_lookup_tool_id, $updatePayload);
+        } else {
+            $tool = $this->vapi->createTool($lookupToolPayload);
+            $config->vapi_lookup_tool_id = $tool['id'] ?? null;
+            $config->save();
+        }
+
+        $caseLookupToolPayload = $this->buildLookupCaseToolPayload(
+            workspaceSlug: $workspace->slug,
+            integrationToken: $integrationToken
+        );
+
+        if ($config->vapi_case_lookup_tool_id) {
+            $updatePayload = $caseLookupToolPayload;
+            unset($updatePayload['type']);
+            $this->vapi->updateTool($config->vapi_case_lookup_tool_id, $updatePayload);
+        } else {
+            $tool = $this->vapi->createTool($caseLookupToolPayload);
+            $config->vapi_case_lookup_tool_id = $tool['id'] ?? null;
+            $config->save();
+        }
+
+        $assistantPayload = $this->buildAssistantPayload(
+            $config,
+            $config->vapi_tool_id,
+            $config->vapi_booking_tool_id,
+            $config->vapi_lookup_tool_id,
+            $config->vapi_case_lookup_tool_id,
+            $workspace
+        );
 
         if ($config->vapi_assistant_id) {
             $this->vapi->updateAssistant($config->vapi_assistant_id, $assistantPayload);
@@ -91,34 +137,113 @@ class VapiProvisioningService
 
     public function provisionPhoneNumber(Workspace $workspace, array $input): WorkspacePhoneNumber
     {
-        $assistantConfig = null;
-        if (!empty($input['assistant_id'])) {
-            $assistantConfig = AssistantConfig::where('workspace_id', $workspace->id)->where('id', $input['assistant_id'])->firstOrFail();
+        if (! empty($input['assistant_id'])) {
+            $assistantConfig = AssistantConfig::where('workspace_id', $workspace->id)
+                ->where('id', $input['assistant_id'])
+                ->firstOrFail();
         } else {
             $assistantConfig = AssistantConfig::where('workspace_id', $workspace->id)->firstOrFail();
         }
 
-        if (!$assistantConfig->vapi_assistant_id) {
+        $plan = $workspace->activePlan();
+        $phoneLimit = $workspace->bypassesPlanLimits()
+            ? -1
+            : (int) ($plan['max_phone_numbers'] ?? -1);
+
+        if ($phoneLimit !== -1) {
+            $existingNumberCount = WorkspacePhoneNumber::query()
+                ->where('workspace_id', $workspace->id)
+                ->whereNotNull('vapi_phone_number_id')
+                ->where(function ($query) use ($assistantConfig) {
+                    $query->whereNull('assistant_id')
+                        ->orWhere('assistant_id', '!=', $assistantConfig->id);
+                })
+                ->count();
+
+            $existingForAssistant = WorkspacePhoneNumber::query()
+                ->where('workspace_id', $workspace->id)
+                ->where('assistant_id', $assistantConfig->id)
+                ->whereNotNull('vapi_phone_number_id')
+                ->exists();
+
+            if (! $existingForAssistant && $existingNumberCount >= $phoneLimit) {
+                throw new \RuntimeException('This plan has reached its phone number limit.');
+            }
+        }
+
+        if (! $assistantConfig->vapi_assistant_id) {
             throw new \RuntimeException('You must sync the assistant before provisioning a phone number.');
         }
 
         $record = WorkspacePhoneNumber::firstOrCreate([
             'workspace_id' => $workspace->id,
-            'assistant_id' => $assistantConfig->id
+            'assistant_id' => $assistantConfig->id,
         ]);
-        $record->is_active = true;
+        $record->assistant_id = $assistantConfig->id;
+        $record->provisioning_mode = $input['provisioning_mode'] ?? $record->provisioning_mode ?? $workspace->preferredPhoneSetupMode();
+        $record->external_provider = $input['external_provider'] ?? $record->external_provider ?? $workspace->preferredExternalPhoneProvider();
+        $record->vapi_credential_id = $input['vapi_credential_id'] ?? $record->vapi_credential_id ?? $workspace->default_vapi_credential_id;
 
         $areaCode = isset($input['area_code'])
             ? preg_replace('/\D+/', '', (string) $input['area_code'])
             : null;
 
-        // Step 1: Create (or skip if already provisioned in Vapi)
-        if (!$record->vapi_phone_number_id) {
+        if ($record->provisioning_mode !== 'vapi_instant') {
+            if (array_key_exists('forwarding_number', $input)) {
+                $record->forwarding_number = $input['forwarding_number'];
+            }
+
+            if (filled($record->vapi_credential_id)) {
+                $payload = [
+                    'provider' => 'byo-phone-number',
+                    'credentialId' => $record->vapi_credential_id,
+                    'name' => $workspace->name . ' Support',
+                    'assistantId' => $assistantConfig->vapi_assistant_id,
+                    'serverUrl' => config('services.vapi.webhook_url'),
+                ];
+
+                $routingNumber = preg_replace('/[^0-9+]/', '', (string) ($record->forwarding_number ?? ''));
+                if ($routingNumber !== '') {
+                    $payload['number'] = $routingNumber;
+                }
+
+                if ($record->vapi_phone_number_id) {
+                    $pn = $this->vapi->updatePhoneNumber($record->vapi_phone_number_id, $payload);
+                } else {
+                    $pn = $this->vapi->createPhoneNumber($payload);
+                }
+
+                $record->vapi_phone_number_id = $pn['id'] ?? $record->vapi_phone_number_id;
+                $record->e164 = $pn['number'] ?? $pn['sipUri'] ?? $routingNumber ?: $record->e164;
+            } elseif (
+                $record->provisioning_mode === 'existing_business_number'
+                && ! empty($input['auto_forwarding_target'])
+            ) {
+                if (! $record->vapi_phone_number_id) {
+                    $pn = $this->createVapiNumber($record, $workspace, $assistantConfig, $areaCode);
+                } else {
+                    $pn = $this->vapi->updatePhoneNumber($record->vapi_phone_number_id, [
+                        'name' => $workspace->name . ' Support',
+                        'serverUrl' => config('services.vapi.webhook_url'),
+                        'assistantId' => $assistantConfig->vapi_assistant_id,
+                    ]);
+                    $record->e164 = $pn['number'] ?? $pn['sipUri'] ?? $record->e164;
+                    $record->assistant_id = $assistantConfig->id;
+                    $record->save();
+                }
+            }
+
+            $record->is_active = filled($record->vapi_phone_number_id) || filled($record->forwarding_number) || filled($record->e164);
+            $record->save();
+
+            return $record->fresh();
+        }
+
+        $record->is_active = true;
+
+        if (! $record->vapi_phone_number_id) {
             $pn = $this->createVapiNumber($record, $workspace, $assistantConfig, $areaCode);
         } else {
-            // Try to update the existing Vapi number. If Vapi rejects it
-            // (e.g. the number was never fully provisioned and has broken state),
-            // delete the orphan in Vapi + reset the DB record, then create fresh.
             try {
                 $pn = $this->vapi->updatePhoneNumber($record->vapi_phone_number_id, [
                     'name' => $workspace->name . ' Support',
@@ -129,12 +254,12 @@ class VapiProvisioningService
                 $record->assistant_id = $assistantConfig->id;
                 $record->save();
             } catch (\Illuminate\Http\Client\RequestException $e) {
-                // Broken/orphaned Vapi record — nuke it and start fresh
                 try {
                     $this->vapi->deletePhoneNumber($record->vapi_phone_number_id);
                 } catch (\Throwable) {
-                    // Ignore 404 — already gone from Vapi side
+                    // Ignore missing phone numbers in Vapi.
                 }
+
                 $record->vapi_phone_number_id = null;
                 $record->e164 = null;
                 $record->save();
@@ -151,7 +276,61 @@ class VapiProvisioningService
         return $record->fresh();
     }
 
-    /** @throws \Illuminate\Http\Client\RequestException */
+    public function deleteAssistantAndLinkedResources(Workspace $workspace, AssistantConfig $assistant): void
+    {
+        $phoneNumbers = WorkspacePhoneNumber::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('assistant_id', $assistant->id)
+            ->get();
+
+        foreach ($phoneNumbers as $phoneNumber) {
+            if (filled($phoneNumber->vapi_phone_number_id)) {
+                $this->vapi->deletePhoneNumber($phoneNumber->vapi_phone_number_id);
+            }
+        }
+
+        if (filled($assistant->vapi_assistant_id)) {
+            $this->vapi->deleteAssistant($assistant->vapi_assistant_id);
+        }
+
+        if (filled($assistant->vapi_tool_id)) {
+            $this->vapi->deleteTool($assistant->vapi_tool_id);
+        }
+
+        if (filled($assistant->vapi_booking_tool_id)) {
+            $this->vapi->deleteTool($assistant->vapi_booking_tool_id);
+        }
+
+        if (filled($assistant->vapi_lookup_tool_id)) {
+            $this->vapi->deleteTool($assistant->vapi_lookup_tool_id);
+        }
+
+        if (filled($assistant->vapi_case_lookup_tool_id)) {
+            $this->vapi->deleteTool($assistant->vapi_case_lookup_tool_id);
+        }
+
+        DB::transaction(function () use ($assistant, $phoneNumbers): void {
+            foreach ($phoneNumbers as $phoneNumber) {
+                $phoneNumber->delete();
+            }
+
+            $assistant->delete();
+        });
+    }
+
+    public function deletePhoneNumber(Workspace $workspace, WorkspacePhoneNumber $phoneNumber): void
+    {
+        if ($phoneNumber->workspace_id !== $workspace->id) {
+            throw new \RuntimeException('Phone number does not belong to this workspace.');
+        }
+
+        if (filled($phoneNumber->vapi_phone_number_id)) {
+            $this->vapi->deletePhoneNumber($phoneNumber->vapi_phone_number_id);
+        }
+
+        $phoneNumber->delete();
+    }
+
     private function createVapiNumber(
         WorkspacePhoneNumber $record,
         Workspace $workspace,
@@ -174,6 +353,7 @@ class VapiProvisioningService
         $record->e164 = $pn['number'] ?? $pn['sipUri'] ?? null;
         $record->assistant_id = $assistantConfig->id;
         $record->save();
+
         return $pn;
     }
 
@@ -186,14 +366,20 @@ class VapiProvisioningService
             'async' => false,
             'function' => [
                 'name' => 'createCase',
-                'description' => 'Create a support case in Ticketcloser after the caller confirms the summary. Call this once, then wait for the returned case number before using any follow-up scheduling tool.',
+                'description' => 'Create a support case in tickIt after the caller confirms the summary. If the caller also wants a meeting, create the case first, wait for the returned case number, and only then move to scheduling.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
                         'title' => ['type' => 'string', 'description' => 'Short issue title (one sentence)'],
                         'description' => ['type' => 'string', 'description' => 'Full description of the issue as reported by the caller'],
-                        'category' => ['type' => 'string', 'description' => 'Category: billing, shipping, warranty, account, or other'],
+                        'requesterName' => ['type' => 'string', 'description' => 'Caller name if they shared it during the conversation'],
+                        'requesterEmail' => ['type' => 'string', 'description' => 'Caller email if they shared it and it matters for follow-up'],
+                        'category' => ['type' => 'string', 'description' => 'Category such as maintenance, plumbing, hvac, electrical, lockout, billing, technical, or other'],
                         'priority' => ['type' => 'string', 'description' => 'Priority: low, normal, high, or critical'],
+                        'propertyCode' => ['type' => 'string', 'description' => 'Property, building, or address when the business needs that context'],
+                        'unit' => ['type' => 'string', 'description' => 'Unit, suite, or apartment number when relevant'],
+                        'accessNotes' => ['type' => 'string', 'description' => 'Access details, lockbox notes, or entry instructions when relevant'],
+                        'preferredVisitWindow' => ['type' => 'string', 'description' => 'Preferred follow-up or visit window when the caller gives one'],
                     ],
                     'required' => ['title', 'description'],
                 ],
@@ -227,13 +413,13 @@ class VapiProvisioningService
             'async' => false,
             'function' => [
                 'name' => 'bookMeeting',
-                'description' => 'Book a follow-up meeting only after createCase has already returned a case number for this conversation. Never call this in parallel with createCase.',
+                'description' => 'Book a follow-up meeting only after createCase has already returned a case number for this conversation. If the caller asks to schedule before a case exists, explain that you will log the request first and then book the follow-up immediately after. Never call this in parallel with createCase.',
                 'parameters' => [
                     'type' => 'object',
                     'properties' => [
                         'caseId' => ['type' => 'string', 'description' => 'The Case Number returned by the createCase function for this same conversation.'],
-                        'dateTime' => ['type' => 'string', 'description' => 'The requested datetime in ISO 8601 format (e.g., 2026-03-05T14:00:00Z). Convert relative dates like "tomorrow at 3 PM" into an exact timestamp before calling the tool.'],
-                        'timezone' => ['type' => 'string', 'description' => 'IANA timezone for the requested meeting time when known, e.g. America/New_York.'],
+                        'dateTime' => ['type' => 'string', 'description' => 'The requested datetime in ISO 8601 format (for example 2026-03-05T14:00:00Z). Convert relative dates like "tomorrow at 3 PM" into an exact timestamp before calling the tool.'],
+                        'timezone' => ['type' => 'string', 'description' => 'IANA timezone for the requested meeting time when known, for example America/New_York.'],
                     ],
                     'required' => ['caseId', 'dateTime'],
                 ],
@@ -251,11 +437,77 @@ class VapiProvisioningService
         ];
     }
 
-    private function buildAssistantPayload(AssistantConfig $config, ?string $toolId, ?string $bookingToolId, Workspace $workspace): array
+    private function buildLookupContactToolPayload(string $workspaceSlug, string $integrationToken): array
+    {
+        $webhookUrl = config('services.vapi.webhook_url');
+
+        return [
+            'type' => 'function',
+            'async' => false,
+            'function' => [
+                'name' => 'lookupContact',
+                'description' => 'Look up an existing contact by caller phone number before asking for details the business may already have on file. If you call this without a phone number, tickIt will use the live caller number automatically. Use this only when caller context is not already provided in your system note, or when the caller asks what details are already on file. Never narrate this lookup out loud.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'phone' => ['type' => 'string', 'description' => 'Caller phone number if you need to override the default metadata phone number.'],
+                        'email' => ['type' => 'string', 'description' => 'Caller email if they mention it and you want to look them up by email.'],
+                    ],
+                ],
+            ],
+            'server' => [
+                'url' => $webhookUrl,
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $integrationToken,
+                    'X-Workspace-Slug' => $workspaceSlug,
+                ],
+            ],
+            'parameters' => [
+                ['key' => 'phone', 'value' => '{{ customer.number }}'],
+            ],
+        ];
+    }
+
+    private function buildLookupCaseToolPayload(string $workspaceSlug, string $integrationToken): array
+    {
+        $webhookUrl = config('services.vapi.webhook_url');
+
+        return [
+            'type' => 'function',
+            'async' => false,
+            'function' => [
+                'name' => 'lookupCase',
+                'description' => 'Look up recent cases for the current caller or a known contact so you can sound familiar with their history. Use this silently only when recent case history would genuinely help, such as when the caller asks about a previous issue or when the system note does not already provide enough history. Never say "just a sec", "one moment", or similar filler before using it.',
+                'parameters' => [
+                    'type' => 'object',
+                    'properties' => [
+                        'contactId' => ['type' => 'string', 'description' => 'The contact ID returned by lookupContact when available.'],
+                        'phone' => ['type' => 'string', 'description' => 'Caller phone number if you need to override the default metadata phone number.'],
+                        'email' => ['type' => 'string', 'description' => 'Caller email if they mention it and you want to match recent cases by email.'],
+                        'limit' => ['type' => 'integer', 'description' => 'How many recent cases to return. Keep this small, usually 1 to 3.'],
+                    ],
+                ],
+            ],
+            'server' => [
+                'url' => $webhookUrl,
+                'headers' => [
+                    'Authorization' => 'Bearer ' . $integrationToken,
+                    'X-Workspace-Slug' => $workspaceSlug,
+                ],
+            ],
+            'parameters' => [
+                ['key' => 'phone', 'value' => '{{ customer.number }}'],
+            ],
+        ];
+    }
+
+    private function buildAssistantPayload(AssistantConfig $config, ?string $toolId, ?string $bookingToolId, ?string $lookupToolId, ?string $caseLookupToolId, Workspace $workspace): array
     {
         $presetData = [];
-        if ($config->preset_key) {
-            $preset = \App\Models\AssistantPreset::where('key', $config->preset_key)->first();
+        $presetKey = AssistantPreset::normalizeKey($config->preset_key);
+
+        if ($presetKey) {
+            $preset = AssistantPreset::ensureDefaults()->firstWhere('key', $presetKey);
             if ($preset && $preset->vapi_payload_json) {
                 $presetData = $preset->vapi_payload_json;
             }
@@ -264,56 +516,99 @@ class VapiProvisioningService
         $systemPrompt = $config->system_prompt ?: ($presetData['systemPrompt'] ?? $this->defaultPromptTemplate());
         $systemPrompt = str_replace('{{company_name}}', $workspace->name, $systemPrompt);
         $systemPrompt .= "\n\n" . $this->toolExecutionGuardrailsPrompt();
+        $systemPrompt .= "\n\n" . $this->knownCallerGuardrailsPrompt();
 
-        // Inject the current date so the LLM understands relative dates like "tomorrow"
-        $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference when scheduling meetings or calculating relative times.]";
-        $systemPrompt .= $dateContext;
+        if (! empty($config->language_code)) {
+            $systemPrompt .= "\n\n[SYSTEM NOTE: Keep caller-facing replies in {$config->language_code} unless the caller clearly switches language and the business supports that change.]";
+        }
 
-        // IMPORTANT: toolIds must live inside the 'model' object per Vapi API spec.
-        // Placing it at the top level causes Vapi to reject the assistant creation.
+        $systemPrompt .= "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference when scheduling meetings or calculating relative times.]";
+        $modelName = AssistantConfig::normalizedModelName($config->model_name);
+        $isRealtimeModel = AssistantConfig::isRealtimeModelName($modelName);
+
         $model = [
             'provider' => 'openai',
-            'model' => 'gpt-4o-mini',
+            'model' => $modelName,
             'messages' => [
                 ['role' => 'system', 'content' => $systemPrompt],
             ],
         ];
 
+        if ($isRealtimeModel) {
+            $model['temperature'] = 0.6;
+            $model['maxTokens'] = 380;
+        }
+
         if ($toolId) {
             $model['toolIds'][] = $toolId;
         }
+
         if ($bookingToolId) {
             $model['toolIds'][] = $bookingToolId;
         }
 
-        if (!empty($config->fallback_phone)) {
-             $model['tools'][] = [
-                 'type' => 'transferCall',
-                 'destinations' => [
-                     [
-                         'type' => 'number',
-                         'number' => preg_replace('/[^0-9+]/', '', $config->fallback_phone),
-                     ]
-                 ]
-             ];
-             // Append to system prompt to instruct the AI to use it
-             $model['messages'][0]['content'] .= "\n\n[SYSTEM NOTE: YOUR MOST IMPORTANT EMERGENCY RULE! If the user becomes exceptionally frustrated, aggressively demands a human/manager, or reports a high-severity emergency, you MUST immediately execute the transferCall tool to route them to the live escalation team. Do not attempt to resolve the issue yourself in these scenarios.]";
+        if ($lookupToolId) {
+            $model['toolIds'][] = $lookupToolId;
         }
+
+        if ($caseLookupToolId) {
+            $model['toolIds'][] = $caseLookupToolId;
+        }
+
+        if (! empty($config->fallback_phone)) {
+            $model['tools'][] = [
+                'type' => 'transferCall',
+                'destinations' => [[
+                    'type' => 'number',
+                    'number' => preg_replace('/[^0-9+]/', '', $config->fallback_phone),
+                ]],
+            ];
+
+            $model['messages'][0]['content'] .= "\n\n[SYSTEM NOTE: If the caller is exceptionally frustrated, demands a human, or reports a high-severity emergency, immediately use the transferCall tool. Do not keep troubleshooting in those situations.]";
+        }
+
+        $firstMessage = $this->buildFirstMessage($config);
 
         $payload = [
             'name' => $config->name,
             'model' => $model,
-            'firstMessage' => $presetData['firstMessage'] ?? 'Hi! Thanks for calling support — how can I help today?',
+            'firstMessage' => $firstMessage,
         ];
 
-        $voice = $this->voiceBlock($config);
+        $voiceConfig = VoiceConfig::query()
+            ->where('workspace_id', $workspace->id)
+            ->latest('id')
+            ->first();
+
+        $payload['artifactPlan'] = [
+            'recordingEnabled' => (bool) ($voiceConfig?->recording_enabled ?? true),
+            'loggingEnabled' => true,
+            'transcriptPlan' => [
+                'enabled' => (bool) ($voiceConfig?->transcript_enabled ?? true),
+                'assistantName' => $config->name ?: 'Assistant',
+                'userName' => 'Caller',
+            ],
+        ];
+
+        $voice = $this->voiceBlock($config, $workspace);
         if ($voice) {
             $payload['voice'] = $voice;
         }
 
-        // Apply talking plans
-        $startSpeakingPlan = $presetData['startSpeakingPlan'] ?? [];
-        $stopSpeakingPlan = $presetData['stopSpeakingPlan'] ?? [];
+        if (! $isRealtimeModel) {
+            $payload['transcriber'] = $this->transcriberBlock($config, $workspace);
+        }
+        $payload['backgroundSpeechDenoisingPlan'] = [
+            'smartDenoisingPlan' => [
+                'enabled' => true,
+            ],
+        ];
+
+        $startSpeakingPlan = $this->applyStartSpeakingDefaults(
+            $presetData['startSpeakingPlan'] ?? [],
+            $config,
+        );
+        $stopSpeakingPlan = $this->applyStopSpeakingDefaults($presetData['stopSpeakingPlan'] ?? [], $config);
 
         $overrides = $config->override_params ?? [];
         if (isset($overrides['waitSeconds'])) {
@@ -326,45 +621,108 @@ class VapiProvisioningService
             $stopSpeakingPlan['backoffSeconds'] = (float) $overrides['backoffSeconds'];
         }
 
-        if (!empty($startSpeakingPlan)) {
+        if (! empty($startSpeakingPlan)) {
             $payload['startSpeakingPlan'] = $startSpeakingPlan;
         }
-        if (!empty($stopSpeakingPlan)) {
+        if (! empty($stopSpeakingPlan)) {
             $payload['stopSpeakingPlan'] = $stopSpeakingPlan;
         }
 
         return $payload;
     }
 
-    private function voiceBlock(AssistantConfig $config): ?array
+    private function voiceBlock(AssistantConfig $config, Workspace $workspace): ?array
     {
-        if (!$config->voice_provider || !$config->voice_id) {
-            return null;
+        $defaultVoice = $this->defaultVoiceProfile($config, $workspace);
+        $voiceProvider = $config->voice_provider ?: $defaultVoice['provider'];
+        $voiceId = $config->voice_id ?: $defaultVoice['voiceId'];
+        $isRealtimeModel = AssistantConfig::isRealtimeModelName($config->model_name);
+
+        if ($voiceId === 'Hana') {
+            $voiceProvider = $defaultVoice['provider'];
+            $voiceId = $defaultVoice['voiceId'];
+        }
+
+        if ($isRealtimeModel && ! $this->supportsRealtimeVoice($voiceProvider, $voiceId)) {
+            $voiceProvider = $defaultVoice['provider'];
+            $voiceId = $defaultVoice['voiceId'];
+        }
+
+        $speed = (float) ($defaultVoice['speed'] ?? 1.0);
+
+        if ($isRealtimeModel) {
+            $speed = max($speed, 1.16);
         }
 
         return [
-            'provider' => $config->voice_provider,
-            'voiceId' => $config->voice_id,
+            'provider' => $voiceProvider,
+            'voiceId' => $voiceId,
+            'speed' => round($speed, 2),
+        ];
+    }
+
+    private function transcriberBlock(AssistantConfig $config, Workspace $workspace): array
+    {
+        $languageCode = $config->language_code ?: RegionalPilotStackCatalog::defaultLanguageForMarket($workspace->primary_market ?? null);
+        $transcriber = RegionalPilotStackCatalog::transcriberProfile($languageCode);
+
+        $keyterms = collect([
+            $workspace->name,
+            $workspace->case_label,
+            $config->name,
+        ])
+            ->filter(fn ($value) => is_string($value) && trim($value) !== '')
+            ->map(fn ($value) => trim((string) $value))
+            ->unique()
+            ->values()
+            ->all();
+
+        return [
+            'provider' => $transcriber['provider'],
+            'model' => $transcriber['model'],
+            'language' => $transcriber['language'],
+            'smartFormat' => true,
+            'numerals' => true,
+            'keyterm' => $keyterms,
+            'fallbackPlan' => [
+                'transcribers' => [[
+                    'provider' => $transcriber['fallback']['provider'],
+                    'language' => $transcriber['fallback']['language'],
+                ]],
+            ],
         ];
     }
 
     private function defaultPromptTemplate(): string
     {
         return trim(<<<'PROMPT'
-You are a support phone agent for this business.
+You are the voice assistant for this business.
 
-Goals:
-1) Understand the customer issue.
-2) The caller's phone number is usually already available from the call metadata, so do not ask for it unless it is truly missing.
-3) Ask at most 1–2 clarifying questions if necessary.
-4) Determine category and priority.
-5) Read back a short summary and ask for confirmation.
-6) ONLY after confirmation, call createCase with:
-   title, description, category, and priority
-7) After createCase returns a case number, tell the caller the case number and that support will follow up.
-8) Specifically ask if the caller would like to book a follow-up meeting. If they say yes, identify a time they want (e.g. "tomorrow at 2pm") and call the bookMeeting tool with the exact ISO date/time. Tell them we look forward to the meeting.
+Core behavior:
+1) Sound natural, clear, upbeat, and easy to follow, but never rushed.
+2) Never talk over the caller or treat a short pause like the end of their thought.
+3) Ask one question at a time.
+4) When the caller shares their full name and it matters for follow-up, politely confirm the spelling once.
+5) Capture the caller's name when it matters, and include requesterName in createCase if they shared it.
+6) The caller's phone number is usually already available from call metadata, so do not ask for it unless it is truly missing.
+7) If caller context is not already provided in your system note and you truly need to know whether the business already has caller details on file, silently use lookupContact before asking the caller to repeat identity details.
+8) If recent case history would help and it is not already provided in your system note, silently use lookupCase only after you know who the caller is.
+9) Ask at most 1-2 clarifying questions before moving toward action.
+10) Read back a short summary and ask for confirmation.
+11) ONLY after confirmation, call createCase with:
+   title, description, category, priority, requesterName, requesterEmail, and any property, unit, access, or visit-window details that matter for the business
+12) After createCase returns a case number, tell the caller the case number and the next step in one clean sentence.
+13) If the caller wants a follow-up meeting, book it only after the case exists.
+14) If the caller asks to book the meeting before a case exists, explain that you will log the request first and then book the follow-up right after.
 
-Be concise and helpful.
+Spoken style:
+- Keep responses short and easy to hear.
+- Keep energy up and avoid long, dragging sentences.
+- Never mention internal tool names.
+- Do not make the caller repeat information you already have.
+- Never narrate a contact or case lookup with phrases like "Just a sec", "One moment", "Let me check that", or "Hold on while I look that up". Do the lookup silently and continue naturally.
+- If you already have caller context in your system note, use it immediately instead of pausing to re-check it.
+- Never create a separate turn whose only purpose is announcing that you recognize the caller or are checking their details. If you know the caller, simply greet them naturally and continue.
 PROMPT);
     }
 
@@ -376,8 +734,228 @@ PROMPT);
 - If the caller wants both a case and a meeting, first confirm the summary, then call createCase exactly once.
 - Wait for createCase to return the case number before calling bookMeeting.
 - Use the case number returned by createCase for bookMeeting.
+- Use any caller context already provided in your system note first.
+- Use lookupContact only if caller context is missing, unclear, or the caller asks what details are on file.
+- Use lookupCase only if recent case history would help and it is not already provided in your system note.
+- Do not use lookupContact or lookupCase at the very start of the call when the system note already contains caller identity or recent case context.
+- Never call lookupContact repeatedly once you already have enough caller context.
+- Never call lookupCase repeatedly once you already have enough recent case context.
+- If the caller asks for a meeting before a case exists, explain that you will log the request first and then handle the booking immediately after the case is created.
+- Never say the booking cannot happen just because the case has not been created yet.
 - Do not retry a tool after it succeeds.
 - If a tool fails, explain that briefly and decide the next step with the caller instead of repeatedly calling the same tool.
+- Never say "Just a sec", "One moment", or similar filler before using lookupContact or lookupCase. Do those lookups silently.
 PROMPT);
+    }
+
+    private function knownCallerGuardrailsPrompt(): string
+    {
+        return trim(<<<'PROMPT'
+[SYSTEM NOTE: RETURNING CALLER RULES]
+- If your system note already tells you who the caller is, use that context immediately and do not pause to re-check it out loud.
+- If your system note already tells you the caller's saved name, answer directly from that saved name and do not use lookupContact again during the same call unless the caller disputes the record.
+- Only use lookupContact if the caller context you already have is missing, unclear, or the caller asks what details are on file.
+- If lookupContact confirms a returning caller and recent case history would help, use lookupCase silently before asking repeated questions.
+- If you know the caller's saved name, use that name naturally in the conversation and do not say you do not know their name.
+- If recent case context is available, use it briefly and naturally so the caller feels recognized without sounding scripted.
+- If you know the caller is returning, you may follow the opening line with one short familiar sentence such as "Nice to speak with you again, Jon." before moving into the request.
+- Do not create a second assistant turn just to recognize the caller after the opening line. If you already know who they are, include that naturally in the opening line or the very next sentence and continue with the reason for the call.
+- If the caller asks what name you have on file, answer directly from the saved contact context.
+- Only ask the caller to spell or confirm their name if no saved contact is found or if the saved name appears incomplete.
+- Never invent a caller name. If no saved contact exists, simply say you do not have a name on file yet and ask for it clearly.
+- Never announce caller recognition or record checking with phrases like "Just a sec", "One moment", "Give me a moment", or similar lookup filler. Either use what you already know or do the lookup silently.
+PROMPT);
+    }
+
+    private function applyStartSpeakingDefaults(array $startSpeakingPlan, AssistantConfig $config): array
+    {
+        $startSpeakingPlan['waitSeconds'] = (float) ($startSpeakingPlan['waitSeconds'] ?? 0.62);
+
+        if (AssistantConfig::isRealtimeModelName($config->model_name)) {
+            $startSpeakingPlan['waitSeconds'] = min($startSpeakingPlan['waitSeconds'], 0.44);
+        }
+
+        if (! isset($startSpeakingPlan['smartEndpointingPlan'])) {
+            $languageCode = strtolower((string) ($config->language_code ?: 'en-US'));
+            $startSpeakingPlan['smartEndpointingPlan'] = str_starts_with($languageCode, 'en')
+                ? [
+                    'provider' => 'livekit',
+                    'waitFunction' => '240 + 2800 * x',
+                ]
+                : [
+                    'provider' => 'vapi',
+                ];
+        }
+
+        return $startSpeakingPlan;
+    }
+
+    private function applyStopSpeakingDefaults(array $stopSpeakingPlan, AssistantConfig $config): array
+    {
+        $stopSpeakingPlan['numWords'] = (int) ($stopSpeakingPlan['numWords'] ?? 2);
+        $stopSpeakingPlan['voiceSeconds'] = (float) ($stopSpeakingPlan['voiceSeconds'] ?? 0.34);
+        $stopSpeakingPlan['backoffSeconds'] = (float) ($stopSpeakingPlan['backoffSeconds'] ?? 1.05);
+        $stopSpeakingPlan['acknowledgementPhrases'] = $stopSpeakingPlan['acknowledgementPhrases'] ?? ['okay', 'got it', 'right', 'understood'];
+        $stopSpeakingPlan['interruptionPhrases'] = $stopSpeakingPlan['interruptionPhrases'] ?? ['stop', 'hold on', 'wait', 'one second'];
+
+        if (AssistantConfig::isRealtimeModelName($config->model_name)) {
+            $stopSpeakingPlan['numWords'] = max((int) $stopSpeakingPlan['numWords'], 3);
+            $stopSpeakingPlan['voiceSeconds'] = min(max((float) $stopSpeakingPlan['voiceSeconds'], 0.34), 0.38);
+            $stopSpeakingPlan['backoffSeconds'] = min(max((float) $stopSpeakingPlan['backoffSeconds'], 0.92), 1.05);
+        }
+
+        return $stopSpeakingPlan;
+    }
+
+    private function defaultVoiceProfile(AssistantConfig $config, Workspace $workspace): array
+    {
+        $languageCode = strtolower((string) ($config->language_code ?: 'en-US'));
+        $presetKey = AssistantPreset::normalizeKey($config->preset_key);
+        $isRealtimeModel = AssistantConfig::isRealtimeModelName($config->model_name);
+        $primaryMarket = $workspace->primaryMarket();
+
+        if ($workspace->isFreePlan() && ! $workspace->bypassesPlanLimits()) {
+            if (str_starts_with($languageCode, 'ar-')) {
+                return match ($presetKey) {
+                    'confident_closer', 'steady_operator' => ['provider' => 'azure', 'voiceId' => 'ar-AE-HamdanNeural', 'speed' => 1.04],
+                    default => ['provider' => 'azure', 'voiceId' => 'ar-AE-FatimaNeural', 'speed' => 1.08],
+                };
+            }
+
+            return match ($presetKey) {
+                'steady_operator' => ['provider' => 'vapi', 'voiceId' => 'Savannah', 'speed' => 1.08],
+                'confident_closer' => ['provider' => 'vapi', 'voiceId' => 'Elliot', 'speed' => 1.1],
+                'premium_concierge' => ['provider' => 'vapi', 'voiceId' => 'Clara', 'speed' => 1.08],
+                default => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.12],
+            };
+        }
+
+        if ($isRealtimeModel) {
+            return match ($presetKey) {
+                'premium_concierge' => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.22],
+                'bright_guide' => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.22],
+                'steady_operator' => ['provider' => 'openai', 'voiceId' => 'alloy', 'speed' => 1.18],
+                'confident_closer' => ['provider' => 'openai', 'voiceId' => 'alloy', 'speed' => 1.2],
+                default => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.2],
+            };
+        }
+
+        if (str_starts_with($languageCode, 'es')) {
+            return ['provider' => 'azure', 'voiceId' => 'es-ES-ElviraNeural', 'speed' => 1.1];
+        }
+
+        if (str_starts_with($languageCode, 'ar-')) {
+            return match ($presetKey) {
+                'confident_closer', 'steady_operator' => ['provider' => 'azure', 'voiceId' => 'ar-AE-HamdanNeural', 'speed' => 1.04],
+                default => ['provider' => 'azure', 'voiceId' => 'ar-AE-FatimaNeural', 'speed' => 1.08],
+            };
+        }
+
+        if ($primaryMarket === RegionalPilotStackCatalog::UAE && str_starts_with($languageCode, 'en-')) {
+            return match ($presetKey) {
+                'confident_closer', 'steady_operator' => ['provider' => 'azure', 'voiceId' => 'en-GB-RyanNeural', 'speed' => 1.05],
+                default => ['provider' => 'azure', 'voiceId' => 'en-GB-SoniaNeural', 'speed' => 1.08],
+            };
+        }
+
+        if (str_starts_with($languageCode, 'fr-ca')) {
+            return ['provider' => 'azure', 'voiceId' => 'fr-CA-SylvieNeural', 'speed' => 1.08];
+        }
+
+        if (str_starts_with($languageCode, 'fr')) {
+            return ['provider' => 'azure', 'voiceId' => 'fr-FR-DeniseNeural', 'speed' => 1.08];
+        }
+
+        return match ($presetKey) {
+            'bright_guide' => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.12],
+            'steady_operator' => ['provider' => 'vapi', 'voiceId' => 'Savannah', 'speed' => 1.08],
+            'confident_closer' => ['provider' => 'vapi', 'voiceId' => 'Elliot', 'speed' => 1.1],
+            'premium_concierge' => ['provider' => 'vapi', 'voiceId' => 'Clara', 'speed' => 1.08],
+            default => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.1],
+        };
+    }
+
+    private function supportsRealtimeVoice(string $provider, string $voiceId): bool
+    {
+        if ($provider !== 'openai') {
+            return false;
+        }
+
+        return in_array($voiceId, ['alloy', 'echo', 'shimmer', 'marin', 'cedar'], true);
+    }
+
+    private function buildFirstMessage(AssistantConfig $config): string
+    {
+        $base = trim((string) $config->first_message);
+
+        if ($base === '') {
+            $base = 'Hi! Thanks for calling support - how can I help today?';
+        }
+
+        return rtrim($base) . '{{ knownCallerSuffix | default: "" }}';
+    }
+
+    private function normalizeLanguageCode(?string $languageCode, ?string $voiceId, Workspace $workspace): string
+    {
+        $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode($languageCode);
+        $voiceId = trim((string) $voiceId);
+
+        foreach ([
+            'ar-AE-' => 'ar-AE',
+            'en-US-' => 'en-US',
+            'en-GB-' => 'en-GB',
+            'es-ES-' => 'es-ES',
+            'fr-CA-' => 'fr-CA',
+            'fr-FR-' => 'fr-FR',
+        ] as $voicePrefix => $resolvedLanguageCode) {
+            if (str_starts_with($voiceId, $voicePrefix)) {
+                return $resolvedLanguageCode;
+            }
+        }
+
+        if ($languageCode) {
+            return $languageCode;
+        }
+
+        return $workspace->preferredLanguageCode();
+    }
+
+    private function applyWorkspaceGuardrails(AssistantConfig $config, Workspace $workspace): void
+    {
+        if (! $workspace->isFreePlan() || $workspace->bypassesPlanLimits()) {
+            return;
+        }
+
+        $defaultModel = AssistantConfig::DEFAULT_MODEL;
+        $defaultVoice = $this->defaultVoiceProfile(
+            new AssistantConfig([
+                'preset_key' => $config->preset_key,
+                'language_code' => $config->language_code,
+                'model_name' => $defaultModel,
+            ]),
+            $workspace,
+        );
+
+        $allowArabicFreeVoice = str_starts_with((string) $config->language_code, 'ar-');
+
+        $config->forceFill([
+            'model_name' => $defaultModel,
+            'voice_provider' => $defaultVoice['provider'],
+            'voice_id' => $defaultVoice['voiceId'],
+        ])->save();
+
+        if (! $allowArabicFreeVoice && $defaultVoice['provider'] !== 'vapi') {
+            $config->forceFill([
+                'voice_provider' => 'vapi',
+                'voice_id' => $this->defaultVoiceProfile(
+                    new AssistantConfig([
+                        'preset_key' => $config->preset_key,
+                        'language_code' => 'en-US',
+                        'model_name' => $defaultModel,
+                    ]),
+                    $workspace,
+                )['voiceId'],
+            ])->save();
+        }
     }
 }

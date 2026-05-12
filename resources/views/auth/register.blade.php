@@ -1,59 +1,86 @@
 @extends('layouts.guest')
 
+@section('title', 'tickIt - Create Account')
+@section('guest_layout', 'centered')
+@section('auth_width', 'max-w-md')
+
 @section('content')
-    <div class="mb-8 text-center">
-        <h1 class="text-2xl font-bold text-white tracking-tight">Create an account</h1>
-        <p class="text-[14px] text-slate-400 mt-2">Get started with ticketcloser for free.</p>
+    <div>
+        <div class="text-sm font-medium text-slate-400">Create account</div>
+        <h1 class="mt-4 text-3xl font-semibold tracking-tight text-white">Create your account</h1>
+        <p class="mt-3 text-sm leading-6 text-slate-300">Use your name, email, and password to continue.</p>
     </div>
 
-    <form method="POST" action="{{ route('register') }}" class="space-y-4">
+    <form method="POST" action="{{ route('register') }}" class="mt-8 space-y-4">
         @csrf
 
-        <div class="space-y-1.5 text-left">
-            <label for="name" class="block text-[13px] font-medium text-slate-300">Full name</label>
-            <input id="name" type="text" name="name" value="{{ old('name') }}" required autofocus autocomplete="name"
-                class="w-full bg-[#0b0f19]/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] transition-all text-[14px]"
-                placeholder="John Doe" />
-            @if($errors->first('name'))
-                <p class="text-[13px] text-red-500 mt-1">{{ $errors->first('name') }}</p>
-            @endif
+        <div class="grid gap-4 sm:grid-cols-2">
+            <div class="tc-field sm:col-span-2">
+                <label for="name" class="tc-field-label text-slate-200">Full name</label>
+                <input id="name" type="text" name="name" value="{{ old('name') }}" required autofocus autocomplete="name"
+                    class="tc-input-dark" placeholder="Jane Smith" />
+                @if($errors->first('name'))
+                    <p class="tc-error text-red-300">{{ $errors->first('name') }}</p>
+                @endif
+            </div>
+
+            <div class="tc-field sm:col-span-2">
+                <label for="email" class="tc-field-label text-slate-200">Email address</label>
+                <input id="email" type="email" name="email" value="{{ old('email') }}" required autocomplete="username"
+                    class="tc-input-dark" placeholder="name@company.com" />
+                @if($errors->first('email'))
+                    <p class="tc-error text-red-300">{{ $errors->first('email') }}</p>
+                @endif
+            </div>
+
+            <div class="tc-field">
+                <label for="password" class="tc-field-label text-slate-200">Password</label>
+                <input id="password" type="password" name="password" required autocomplete="new-password"
+                    class="tc-input-dark" placeholder="Choose a password" />
+                @if($errors->first('password'))
+                    <p class="tc-error text-red-300">{{ $errors->first('password') }}</p>
+                @endif
+            </div>
+
+            <div class="tc-field">
+                <label for="password_confirmation" class="tc-field-label text-slate-200">Confirm password</label>
+                <input id="password_confirmation" type="password" name="password_confirmation" required autocomplete="new-password"
+                    class="tc-input-dark" placeholder="Repeat your password" />
+                @if($errors->first('password_confirmation'))
+                    <p class="tc-error text-red-300">{{ $errors->first('password_confirmation') }}</p>
+                @endif
+            </div>
         </div>
 
-        <div class="space-y-1.5 text-left">
-            <label for="email" class="block text-[13px] font-medium text-slate-300">Email address</label>
-            <input id="email" type="email" name="email" value="{{ old('email') }}" required autocomplete="username"
-                class="w-full bg-[#0b0f19]/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] transition-all text-[14px]"
-                placeholder="name@company.com" />
-            @if($errors->first('email'))
-                <p class="text-[13px] text-red-500 mt-1">{{ $errors->first('email') }}</p>
-            @endif
-        </div>
+        <div class="space-y-3 pt-1">
+            <label for="terms" class="flex cursor-pointer items-start gap-3 text-sm leading-6 text-slate-300">
+                <input id="terms" type="checkbox" name="terms" value="1" required {{ old('terms') ? 'checked' : '' }}
+                    class="mt-1 h-4 w-4 rounded border-white/10 bg-slate-950/20 text-orange-500 focus:ring-orange-500 focus:ring-offset-0" />
+                <span>
+                    I agree to the
+                    <a href="{{ route('terms') }}" target="_blank" class="font-medium text-orange-300 transition hover:text-orange-200">terms and conditions</a>.
+                </span>
+            </label>
 
-        <div class="space-y-1.5 text-left">
-            <label for="password" class="block text-[13px] font-medium text-slate-300">Password</label>
-            <input id="password" type="password" name="password" required autocomplete="new-password"
-                class="w-full bg-[#0b0f19]/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] transition-all text-[14px]"
-                placeholder="••••••••" />
-            @if($errors->first('password'))
-                <p class="text-[13px] text-red-500 mt-1">{{ $errors->first('password') }}</p>
-            @endif
+            <label for="marketing_opt_in" class="flex cursor-pointer items-start gap-3 text-sm leading-6 text-slate-300">
+                <input id="marketing_opt_in" type="checkbox" name="marketing_opt_in" value="1" {{ old('marketing_opt_in') ? 'checked' : '' }}
+                    class="mt-1 h-4 w-4 rounded border-white/10 bg-slate-950/20 text-orange-500 focus:ring-orange-500 focus:ring-offset-0" />
+                <span>
+                    Send me product updates and the tickIt newsletter.
+                </span>
+            </label>
         </div>
+        @if($errors->first('terms'))
+            <p class="tc-error text-red-300">{{ $errors->first('terms') }}</p>
+        @endif
 
-        <div class="space-y-1.5 text-left">
-            <label for="password_confirmation" class="block text-[13px] font-medium text-slate-300">Confirm password</label>
-            <input id="password_confirmation" type="password" name="password_confirmation" required
-                autocomplete="new-password"
-                class="w-full bg-[#0b0f19]/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] transition-all text-[14px]"
-                placeholder="••••••••" />
-            @if($errors->first('password_confirmation'))
-                <p class="text-[13px] text-red-500 mt-1">{{ $errors->first('password_confirmation') }}</p>
-            @endif
-        </div>
-
-        <button type="submit"
-            class="w-full mt-6 px-4 py-2.5 bg-[#f97316] hover:bg-[#ea580c] text-white rounded-lg font-medium text-[14px] transition-all"
-            style="box-shadow: 0 0 15px rgba(249, 115, 22, 0.3);">
+        <button type="submit" class="tc-btn-glow mt-3 w-full justify-center !py-3 text-base">
             Create account
         </button>
+
+        <p class="text-center text-sm text-slate-400">
+            Already have an account?
+            <a href="{{ route('login') }}" class="font-medium text-orange-300 transition hover:text-orange-200">Sign in</a>
+        </p>
     </form>
 @endsection

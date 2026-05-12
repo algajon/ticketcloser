@@ -45,7 +45,7 @@ class EnsureActiveSubscription
             return $next($request);
         }
 
-        // Subscription lapsed — send them to plan picker
+        // Subscription lapsed - send them to plan picker
         return redirect()->route('app.billing.plans')
             ->with('error', 'Your subscription has expired. Please choose a plan to continue.');
     }

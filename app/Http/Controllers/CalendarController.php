@@ -7,6 +7,7 @@ use App\Models\CalendarEvent;
 use App\Models\SuggestedEvent;
 use App\Models\SupportCase;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
@@ -76,7 +77,13 @@ class CalendarController extends Controller
         $clientId = config('services.google.client_id');
         $redirectUri = route('app.calendar.google.callback');
         $scopes = urlencode('https://www.googleapis.com/auth/calendar.events');
-        $state = base64_encode(json_encode(['workspace_id' => $workspace->id]));
+        $statePayload = [
+            'workspace_id' => $workspace->id,
+            'user_id' => $request->user()->id,
+            'nonce' => Str::random(40),
+        ];
+        $request->session()->put('google_oauth_state', $statePayload);
+        $state = urlencode(Crypt::encryptString(json_encode($statePayload)));
 
         $url = "https://accounts.google.com/o/oauth2/v2/auth"
             . "?client_id={$clientId}"
@@ -95,9 +102,28 @@ class CalendarController extends Controller
      */
     public function googleCallback(Request $request)
     {
-        $state = json_decode(base64_decode($request->get('state', '')), true);
-        $workspaceId = $state['workspace_id'] ?? null;
-        abort_unless($workspaceId, 400);
+        $encodedState = (string) $request->get('state', '');
+        abort_unless($encodedState !== '', 400);
+
+        try {
+            $state = json_decode(Crypt::decryptString(urldecode($encodedState)), true, 512, JSON_THROW_ON_ERROR);
+        } catch (\Throwable) {
+            abort(400, 'Invalid OAuth state.');
+        }
+
+        $expectedState = $request->session()->pull('google_oauth_state');
+        abort_unless(
+            is_array($expectedState)
+                && is_array($state)
+                && hash_equals((string) ($expectedState['workspace_id'] ?? ''), (string) ($state['workspace_id'] ?? ''))
+                && hash_equals((string) ($expectedState['user_id'] ?? ''), (string) ($state['user_id'] ?? ''))
+                && hash_equals((string) ($expectedState['nonce'] ?? ''), (string) ($state['nonce'] ?? '')),
+            403
+        );
+
+        $workspaceId = (int) ($state['workspace_id'] ?? 0);
+        abort_unless($workspaceId > 0, 400);
+        abort_unless($request->user()?->hasWorkspace($workspaceId), 403);
 
         $code = $request->get('code');
         $tokens = $this->exchangeGoogleCode($code);
@@ -245,7 +271,7 @@ class CalendarController extends Controller
 
         $tokens = $conn->tokens;
         $case = $suggested->supportCase;
-        $summary = $case ? "Case #{$case->id}: {$case->subject}" : 'Scheduled from TicketCloser';
+        $summary = $case ? "Case #{$case->case_number}: {$case->title}" : 'Scheduled from TicketCloser';
 
         $response = \Illuminate\Support\Facades\Http::withToken($tokens['access_token'] ?? '')
             ->post('https://www.googleapis.com/calendar/v3/calendars/primary/events', [

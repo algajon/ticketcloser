@@ -1,64 +1,54 @@
 @extends('layouts.guest')
 
-@section('title')
-    ticketcloser • Verify Email
-@endsection
+@section('title', 'tickIt - Verify Email')
+@section('guest_eyebrow', 'Account verification')
+@section('guest_title', 'Verify your email to continue.')
+@section('guest_copy', 'Enter the six-digit code from your inbox to finish setting up your account.')
 
 @section('content')
-    <div class="mb-6 text-center">
-        <h1 class="text-2xl font-bold text-white tracking-tight">Verify your email</h1>
-        <p class="mt-2 text-sm text-slate-400">
-            Enter the 6-digit code we sent to your email address to finish setting up your account.
-        </p>
+    <div>
+        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-400">Email verification</div>
+        <h1 class="mt-4 text-3xl font-semibold tracking-tight text-white">Verify your email</h1>
+        <p class="mt-3 text-sm leading-6 text-slate-300">Enter the six-digit code we sent to your inbox.</p>
     </div>
 
     @if(session('status') === 'verification-link-sent')
-        <div class="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+        <div class="mt-6 rounded-[1.35rem] border border-emerald-400/20 bg-emerald-400/10 px-4 py-3 text-sm font-medium text-emerald-200">
             A new verification code has been sent to your email address.
         </div>
     @endif
 
     @if(session('error'))
-        <div class="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm text-red-200">
+        <div class="mt-6 rounded-[1.35rem] border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm font-medium text-red-200">
             {{ session('error') }}
         </div>
     @endif
 
-    <form method="POST" action="{{ route('verification.verify.otp') }}" class="space-y-4">
+    <form method="POST" action="{{ route('verification.verify.otp') }}" class="mt-8 space-y-5">
         @csrf
 
-        <div class="space-y-1.5 text-left">
-            <label for="otp" class="block text-[13px] font-medium text-slate-300">Verification code</label>
+        <div class="tc-field">
+            <label for="otp" class="tc-field-label text-slate-200">Verification code</label>
             <input id="otp" type="text" name="otp" value="{{ old('otp') }}" required maxlength="6" inputmode="numeric"
-                autocomplete="one-time-code"
-                class="w-full bg-[#0b0f19]/50 border border-white/10 rounded-lg px-3 py-2 text-white placeholder-slate-500 focus:outline-none focus:border-[#f97316] focus:ring-1 focus:ring-[#f97316] transition-all text-[14px] tracking-[0.35em]"
-                placeholder="123456" />
+                autocomplete="one-time-code" class="tc-input-dark text-center tracking-[0.35em]" placeholder="123456" />
+            <p class="tc-help text-slate-400">Use the code from your email. It expires soon.</p>
             @if($errors->first('otp'))
-                <p class="text-[13px] text-red-400 mt-1">{{ $errors->first('otp') }}</p>
+                <p class="tc-error text-red-300">{{ $errors->first('otp') }}</p>
             @endif
         </div>
 
-        <button type="submit"
-            class="w-full mt-2 px-4 py-2.5 bg-[#f97316] hover:bg-[#ea580c] text-white rounded-lg font-medium text-[14px] transition-all"
-            style="box-shadow: 0 0 15px rgba(249, 115, 22, 0.3);">
-            Verify code
-        </button>
+        <button type="submit" class="tc-btn-glow w-full justify-center !py-3 text-base">Verify code</button>
     </form>
 
-    <div class="mt-6 flex items-center justify-between gap-3">
+    <div class="mt-8 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-6">
         <form method="POST" action="{{ route('verification.send') }}">
             @csrf
-            <button type="submit" class="text-sm font-medium text-[#f97316] hover:text-[#ea580c] transition-colors">
-                Resend code
-            </button>
+            <button type="submit" class="text-sm font-medium text-orange-300 transition hover:text-orange-200">Resend code</button>
         </form>
 
         <form method="POST" action="{{ route('logout') }}">
             @csrf
-            <button type="submit"
-                class="text-sm text-slate-400 hover:text-white underline underline-offset-2 transition-colors">
-                Sign out
-            </button>
+            <button type="submit" class="text-sm text-slate-400 transition hover:text-white">Sign out</button>
         </form>
     </div>
 @endsection

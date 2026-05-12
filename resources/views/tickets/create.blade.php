@@ -10,7 +10,7 @@
     <div class="max-w-2xl mx-auto">
         <div class="tc-page-header">
             <h1>Create {{ $workspace->case_label ?? 'Ticket' }}</h1>
-            <p>Fill in the details below to create a new support case.</p>
+            <p>Fill in the details below to create a new support ticket.</p>
         </div>
 
         <div class="tc-card p-6">

@@ -2,9 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Contact;
+use App\Models\SupportCase;
 use App\Models\Workspace;
+use App\Services\Contacts\ContactLinkingService;
 use App\Services\Meetings\MeetingBookingService;
 use App\Services\Tickets\TicketCreationService;
+use App\Support\RegionalPilotStackCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -16,8 +20,17 @@ class VapiWebhookController extends Controller
         $payload = $request->all();
 
         // 1) Verify Webhook Signature
-        $secret = config('services.vapi.secret');
-        if ($secret && $request->header('x-vapi-secret') !== $secret) {
+        $secret = (string) config('services.vapi.secret', '');
+        $providedSecret = (string) $request->header('x-vapi-secret', '');
+
+        if ($secret === '') {
+            if (! app()->environment(['local', 'testing'])) {
+                Log::warning('VAPI_WEBHOOK_SECRET_MISSING_ALLOWING_REQUEST', [
+                    'ip' => $request->ip(),
+                    'type' => data_get($payload, 'message.type'),
+                ]);
+            }
+        } elseif ($providedSecret === '' || ! hash_equals($secret, $providedSecret)) {
             Log::warning('VAPI_WEBHOOK_UNAUTHORIZED', ['ip' => $request->ip()]);
             return response()->json(['error' => 'Unauthorized'], 401);
         }
@@ -40,24 +53,20 @@ class VapiWebhookController extends Controller
                 if ($workspacePhone && $workspacePhone->workspace) {
                     $workspace = $workspacePhone->workspace;
 
-                    // Enforce one-call limit for non-paid users
-                    if ($workspace->isFreePlan()) {
-                        // Prevent concurrent call spam by using an atomic cache lock
-                        $lockKey = "vapi_free_call_{$workspace->id}";
-                        if (!\Illuminate\Support\Facades\Cache::add($lockKey, true, now()->addMinutes(10)) || $workspace->callEvents()->count() >= 1) {
-                            return response()->json([
-                                'assistant' => [
-                                    'model' => [
-                                        'provider' => 'openai',
-                                        'model' => 'gpt-4o-mini',
-                                        'messages' => [
-                                            ['role' => 'system', 'content' => 'Tell the caller that this workspace has reached its call limit and they need to upgrade their plan, then hang up immediately.']
-                                        ],
-                                    ],
-                                    'firstMessage' => 'We are sorry, but this workspace has reached its free call limit. Please contact the business to upgrade their account. Goodbye.',
-                                ],
-                            ], 200);
+                    if (! $workspacePhone->is_active && $workspace->bypassesPlanLimits()) {
+                        $workspacePhone->forceFill(['is_active' => true])->save();
+                    }
+
+                    if (!$workspacePhone->is_active) {
+                        return response()->json($this->assistantLimitPayload('This line is currently inactive. Please contact the business again later.'), 200);
+                    }
+
+                    if ($workspace->isFreePlan() && $workspace->hasReachedVoiceMinuteLimit()) {
+                        if ($workspacePhone->is_active) {
+                            $workspacePhone->forceFill(['is_active' => false])->save();
                         }
+
+                        return response()->json($this->assistantLimitPayload('This workspace has reached its free voice limit. Please contact the business to upgrade their account.'), 200);
                     }
                     // Return the assigned assistant for this phone number
                     if ($workspacePhone->assistant && $workspacePhone->assistant->vapi_assistant_id) {
@@ -67,87 +76,117 @@ class VapiWebhookController extends Controller
 
                         // The Brain: Prospecting Context Injection
                         if ($customerNumber) {
-                            $phoneSearch = ltrim(preg_replace('/\D+/', '', $customerNumber), '1+');
-                            if (strlen($phoneSearch) > 5) {
-                                $contact = \App\Models\Contact::where('workspace_id', $workspace->id)
-                                    ->where('phone_e164', 'like', "%{$phoneSearch}%")
-                                    ->with(['cases' => function ($q) {
-                                        $q->orderBy('created_at', 'desc')->take(3);
-                                    }])
-                                    ->first();
+                            $contact = app(ContactLinkingService::class)
+                                ->lookupForWorkspace($workspace, $customerNumber, null);
 
-                                $memory = "[SYSTEM NOTE: IMPORTANT CALLER CONTEXT - The caller's phone number is {$customerNumber}. YOU ALREADY KNOW THEIR PHONE NUMBER AND MUST NEVER ASK THEM TO PROVIDE IT OR SPELL IT OUT. ONLY confirm it is the best number to reach them if necessary. ";
-                                
-                                if ($contact) {
-                                    if ($contact->name) {
-                                        $memory .= "They are a known returning caller named {$contact->name}. ";
-                                        if ($contact->property_code || $contact->unit) {
-                                            $memory .= "Their property on file is {$contact->property_code}" . ($contact->unit ? " Unit {$contact->unit}" : "") . ". ";
-                                        }
-                                    } else {
-                                        $memory .= "They are a returning caller. ";
-                                    }
+                            if ($contact) {
+                                $contact->load(['cases' => function ($q) {
+                                    $q->orderBy('created_at', 'desc')->take(3);
+                                }]);
+                            }
 
-                                    if ($contact->cases && $contact->cases->count() > 0) {
-                                        $memory .= "Their recent support cases are: ";
-                                        foreach ($contact->cases as $c) {
-                                            $memory .= "Case #{$c->case_number} ('{$c->title}', status: {$c->status}). ";
-                                        }
-                                        $memory .= "Please greet them warmly" . ($contact->name ? " by their name" : "") . " and briefly ask if they are calling about their recent case or if it's something new.";
-                                    } else {
-                                        $memory .= "Please greet them warmly" . ($contact->name ? " by their name" : "") . " as a returning client.";
+                            $memory = "[SYSTEM NOTE: IMPORTANT CALLER CONTEXT - The caller's phone number is {$customerNumber}. YOU ALREADY KNOW THEIR PHONE NUMBER AND MUST NEVER ASK THEM TO PROVIDE IT OR SPELL IT OUT. ONLY confirm it is the best number to reach them if necessary. If the caller asks what name, number, property, unit, or prior case you already have on file, answer directly using the saved details below instead of saying you do not know. Do not create a separate assistant turn just to recognize the caller or announce that you are checking records. If you already know who they are, use that naturally in the greeting or next sentence and move straight into helping them. ";
+                            
+                            if ($contact) {
+                                if ($contact->name) {
+                                    $memory .= "They are a known returning caller named {$contact->name}. ";
+                                    if ($contact->property_code || $contact->unit) {
+                                        $memory .= "Their property on file is {$contact->property_code}" . ($contact->unit ? " Unit {$contact->unit}" : "") . ". ";
                                     }
+                                    $memory .= "If the caller asks whether you know their name or what name is on file, answer immediately that you have them as {$contact->name}. ";
                                 } else {
-                                    $memory .= "They are a first-time caller. Greet them warmly and ask how you can help them today.";
+                                    $memory .= "They are a returning caller. ";
                                 }
-                                $memory .= "]\n\n";
 
-                                // Build the system prompt to override the default model messages
-                                $basePrompt = $workspacePhone->assistant->system_prompt;
-                                if (empty($basePrompt) && $workspacePhone->assistant->preset) {
-                                    $basePrompt = $workspacePhone->assistant->preset->vapi_payload_json['systemPrompt'] ?? '';
-                                    if ($basePrompt) {
-                                        $basePrompt = str_replace('{{company_name}}', $workspace->name, $basePrompt);
+                                if ($contact->cases && $contact->cases->count() > 0) {
+                                    $memory .= "Their recent support cases are: ";
+                                    foreach ($contact->cases as $c) {
+                                        $memory .= "Case #{$c->case_number} ('{$c->title}', status: {$c->status}). ";
                                     }
+                                    $memory .= "Please greet them warmly" . ($contact->name ? " by their name" : "") . " and briefly ask if they are calling about their recent case or if it's something new.";
+                                } else {
+                                    $memory .= "Please greet them warmly" . ($contact->name ? " by their name" : "") . " as a returning client.";
                                 }
-                                if (empty($basePrompt)) {
-                                    $basePrompt = 'You are a helpful customer support assistant for ' . $workspace->name . '.';
+                            } else {
+                                $memory .= "They are a first-time caller. Greet them warmly and ask how you can help them today.";
+                            }
+                            $memory .= " You already have the caller context that tickIt could confidently resolve before the call started. Use that context immediately instead of pausing to check records again out loud. Never say 'Just a sec', 'One moment', 'Give me a moment', 'Hold on a sec', or similar filler while checking caller identity or past case context. If you truly still need more context, call the lookup tools silently and continue naturally.";
+                            $memory .= "]\n\n";
+
+                            // Build the system prompt to override the default model messages
+                            $basePrompt = $workspacePhone->assistant->system_prompt;
+                            if (empty($basePrompt) && $workspacePhone->assistant->preset) {
+                                $basePrompt = $workspacePhone->assistant->preset->vapi_payload_json['systemPrompt'] ?? '';
+                                if ($basePrompt) {
+                                    $basePrompt = str_replace('{{company_name}}', $workspace->name, $basePrompt);
                                 }
-                                $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference.]";
-                                $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
-                                $systemPrompt = $memory . $basePrompt . $toolRules . $dateContext;
+                            }
+                            if (empty($basePrompt)) {
+                                $basePrompt = 'You are a helpful customer support assistant for ' . $workspace->name . '.';
+                            }
+                            $languageGuardrail = $this->languageGuardrail($workspacePhone->assistant->language_code);
+                            $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference.]";
+                            $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Use any caller context already provided in the system note before deciding whether to call lookupContact or lookupCase.\n- If the system note already gives you the caller's identity or recent case context, do not call lookupContact or lookupCase at the start of the call.\n- Use lookupContact only if the existing caller context is missing, unclear, or the caller asks what details are on file.\n- Use lookupCase only if recent case history would genuinely help and it was not already provided in the system note.\n- Never narrate lookupContact or lookupCase with phrases like 'Just a sec', 'One moment', 'Give me a moment', or 'Hold on a sec'.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
+                            $systemPrompt = $memory . $basePrompt . $toolRules . $languageGuardrail . $dateContext;
 
-                                // Build toolIds array so Vapi doesn't strip tools when we override the model
-                                $toolIds = array_filter([
-                                    $workspacePhone->assistant->vapi_tool_id ?? null,
-                                    $workspacePhone->assistant->vapi_booking_tool_id ?? null,
-                                ]);
+                            // Build toolIds array so Vapi doesn't strip tools when we override the model
+                            $toolIds = array_filter([
+                                $workspacePhone->assistant->vapi_tool_id ?? null,
+                                $workspacePhone->assistant->vapi_booking_tool_id ?? null,
+                                $workspacePhone->assistant->vapi_case_lookup_tool_id ?? null,
+                            ]);
 
-                                $modelOverride = [
-                                    'provider' => 'openai',
-                                    'model' => 'gpt-4o-mini',
-                                    'messages' => [
-                                        ['role' => 'system', 'content' => $systemPrompt]
-                                    ],
+                            if (! $contact) {
+                                $toolIds[] = $workspacePhone->assistant->vapi_lookup_tool_id ?? null;
+                            }
+
+                            $toolIds = array_values(array_filter($toolIds));
+
+                            $selectedModel = \App\Models\AssistantConfig::normalizedModelName($workspacePhone->assistant->model_name);
+                            $modelOverride = [
+                                'provider' => 'openai',
+                                'model' => $selectedModel,
+                                'messages' => [
+                                    ['role' => 'system', 'content' => $systemPrompt]
+                                ],
+                            ];
+
+                            if (\App\Models\AssistantConfig::isRealtimeModelName($selectedModel)) {
+                                $modelOverride['temperature'] = 0.6;
+                                $modelOverride['maxTokens'] = 250;
+                            }
+
+                            if (!empty($toolIds)) {
+                                $modelOverride['toolIds'] = $toolIds;
+                            }
+
+                            // Preserve the inline transferCall tool if a fallback phone is configured
+                            $fallbackPhone = $workspacePhone->assistant->fallback_phone ?? null;
+                            if ($fallbackPhone) {
+                                $modelOverride['tools'][] = [
+                                    'type' => 'transferCall',
+                                    'destinations' => [[
+                                        'type' => 'number',
+                                        'number' => preg_replace('/[^0-9+]/', '', $fallbackPhone),
+                                    ]],
                                 ];
+                            }
 
-                                if (!empty($toolIds)) {
-                                    $modelOverride['toolIds'] = array_values($toolIds);
-                                }
+                            $overrides = ['model' => $modelOverride];
 
-                                // Preserve the inline transferCall tool if a fallback phone is configured
-                                $fallbackPhone = $workspacePhone->assistant->fallback_phone ?? null;
-                                if ($fallbackPhone) {
-                                    $modelOverride['tools'][] = [
-                                        'type' => 'transferCall',
-                                        'destinations' => [[
-                                            'type' => 'number',
-                                            'number' => preg_replace('/[^0-9+]/', '', $fallbackPhone),
-                                        ]],
-                                    ];
-                                }
-
-                                $overrides = ['model' => $modelOverride];
+                            if ($contact?->name) {
+                                $knownCallerSuffix = $this->knownCallerSuffix(
+                                    $contact->name,
+                                    $workspacePhone->assistant->language_code,
+                                );
+                                $overrides['firstMessage'] = $this->runtimeFirstMessage(
+                                    $workspacePhone->assistant->first_message,
+                                    $contact->name,
+                                    $workspacePhone->assistant->language_code,
+                                );
+                                $overrides['variableValues'] = [
+                                    'knownCallerSuffix' => $knownCallerSuffix,
+                                ];
                             }
                         }
 
@@ -172,7 +211,7 @@ class VapiWebhookController extends Controller
                         'firstMessage' => "I'm sorry, this phone number is not currently configured. Please contact the administrator.",
                         'model' => [
                             'provider' => 'openai',
-                            'model' => 'gpt-3.5-turbo',
+                            'model' => 'gpt-4o-mini',
                             'messages' => [
                                 [
                                     'role' => 'system',
@@ -181,8 +220,8 @@ class VapiWebhookController extends Controller
                             ]
                         ],
                         'voice' => [
-                            'provider' => '11labs',
-                            'voiceId' => 'bIHbv24MWmeRgasZH58o',
+                            'provider' => 'vapi',
+                            'voiceId' => 'Emma',
                         ]
                     ]
                 ], 200);
@@ -259,6 +298,35 @@ class VapiWebhookController extends Controller
                             'caseNumber' => $case->case_number,
                             'id' => $case->id,
                         ]);
+                    } elseif ($nameLower === 'lookupcontact') {
+                        $contact = $this->lookupExistingContact(
+                            $workspace,
+                            $args['phone'] ?? $args['requesterPhone'] ?? $args['requester_phone'] ?? $this->resolveCustomerNumber($payload),
+                            $args['email'] ?? $args['requesterEmail'] ?? $args['requester_email'] ?? null,
+                        );
+
+                        $results[] = $this->successToolResult($toolCallId, $name, [
+                            'found' => (bool) $contact,
+                            'contactId' => $contact?->id,
+                            'name' => $contact?->name,
+                            'phone' => $contact?->phone_e164,
+                            'email' => $contact?->email,
+                            'propertyCode' => $contact?->property_code,
+                            'unit' => $contact?->unit,
+                            'recentCaseNumbers' => $contact
+                                ? $contact->cases()->latest()->limit(3)->pluck('case_number')->values()->all()
+                                : [],
+                        ]);
+                    } elseif ($nameLower === 'lookupcase') {
+                        $lookup = $this->lookupRecentCases(
+                            $workspace,
+                            $args['phone'] ?? $args['requesterPhone'] ?? $args['requester_phone'] ?? $this->resolveCustomerNumber($payload),
+                            $args['email'] ?? $args['requesterEmail'] ?? $args['requester_email'] ?? null,
+                            $args['contactId'] ?? $args['contact_id'] ?? null,
+                            $args['limit'] ?? null,
+                        );
+
+                        $results[] = $this->successToolResult($toolCallId, $name, $lookup);
                     } elseif ($nameLower === 'bookmeeting') {
                         $meetingBooking = app(MeetingBookingService::class);
                         $case = $meetingBooking->resolveCase(
@@ -300,9 +368,12 @@ class VapiWebhookController extends Controller
                     ]);
 
                     // Still return a result so Vapi doesn’t produce "No result returned"
-                    $errorMessage = $nameLower === 'bookmeeting'
-                        ? 'Meeting booking failed'
-                        : 'Ticket creation failed';
+                    $errorMessage = match ($nameLower) {
+                        'bookmeeting' => 'Meeting booking failed',
+                        'lookupcontact' => 'Contact lookup failed',
+                        'lookupcase' => 'Case lookup failed',
+                        default => 'Ticket creation failed',
+                    };
 
                     $results[] = $this->errorToolResult($toolCallId, $name, $errorMessage);
                 }
@@ -334,16 +405,166 @@ class VapiWebhookController extends Controller
         }
 
         if ($type === 'end-of-call-report') {
-            [$workspace, $authError] = $this->resolveWorkspaceFromHeaders($request);
+            [$workspace, $authError] = $this->resolveWorkspaceForPayload($request, $payload);
 
             if ($workspace) {
-                \App\Jobs\ProcessEndCallReport::dispatch($workspace, $payload);
+                \App\Jobs\ProcessEndCallReport::dispatchSync($workspace, $payload);
+            } else {
+                Log::warning('VAPI_END_REPORT_WORKSPACE_RESOLVE_FAILED', [
+                    'error' => $authError,
+                    'callId' => data_get($payload, 'message.call.id'),
+                    'phoneNumberId' => data_get($payload, 'message.call.phoneNumberId'),
+                    'assistantId' => data_get($payload, 'message.call.assistantId'),
+                ]);
             }
             return response()->json(['ok' => true], 200);
         }
 
         // Anything else: acknowledge
         return response()->json(['ok' => true], 200);
+    }
+
+    private function lookupExistingContact(Workspace $workspace, ?string $phone, ?string $email): ?Contact
+    {
+        $contact = app(ContactLinkingService::class)->lookupForWorkspace($workspace, $phone, $email);
+
+        if (! $contact) {
+            return null;
+        }
+
+        return $contact->fresh();
+    }
+
+    private function lookupRecentCases(
+        Workspace $workspace,
+        ?string $phone,
+        ?string $email,
+        mixed $contactId,
+        mixed $limit,
+    ): array {
+        $contact = null;
+
+        if (filled($contactId)) {
+            $contact = Contact::query()
+                ->where('workspace_id', $workspace->id)
+                ->find($contactId);
+        }
+
+        if (! $contact) {
+            $contact = $this->lookupExistingContact($workspace, $phone, $email);
+        }
+
+        $query = SupportCase::query()
+            ->where('workspace_id', $workspace->id)
+            ->latest();
+
+        if ($contact) {
+            $query->where('contact_id', $contact->id);
+        } elseif (filled($phone) || filled($email)) {
+            $query->where(function ($caseQuery) use ($phone, $email) {
+                if (filled($phone)) {
+                    $caseQuery->orWhere('requester_phone', $phone);
+                }
+
+                if (filled($email)) {
+                    $caseQuery->orWhere('requester_email', $email);
+                }
+            });
+        } else {
+            return [
+                'found' => false,
+                'contactFound' => false,
+                'contactId' => null,
+                'contactName' => null,
+                'cases' => [],
+            ];
+        }
+
+        $normalizedLimit = max(1, min((int) ($limit ?: 3), 5));
+        $cases = $query->limit($normalizedLimit)->get();
+
+        return [
+            'found' => $cases->isNotEmpty(),
+            'contactFound' => (bool) $contact,
+            'contactId' => $contact?->id,
+            'contactName' => $contact?->name,
+            'cases' => $cases->map(function (SupportCase $case) {
+                return [
+                    'caseNumber' => $case->case_number,
+                    'title' => $case->title,
+                    'status' => $case->status,
+                    'priority' => $case->priority,
+                    'category' => $case->category,
+                    'source' => $case->source,
+                    'createdAt' => optional($case->created_at)->toIso8601String(),
+                    'summary' => Str::limit($this->singleLine((string) $case->description), 180),
+                ];
+            })->values()->all(),
+        ];
+    }
+
+    private function shortContactName(?string $name): string
+    {
+        $parts = preg_split('/\s+/', trim((string) $name)) ?: [];
+
+        return $parts[0] ?? trim((string) $name);
+    }
+
+    private function runtimeFirstMessage(?string $baseMessage, ?string $contactName, ?string $languageCode = null): string
+    {
+        $baseMessage = trim((string) $baseMessage);
+
+        if ($baseMessage === '') {
+            $baseMessage = $this->defaultFirstMessage($languageCode);
+        }
+
+        if (! $contactName) {
+            return $baseMessage;
+        }
+
+        return rtrim($baseMessage) . $this->knownCallerSuffix($contactName, $languageCode);
+    }
+
+    private function defaultFirstMessage(?string $languageCode = null): string
+    {
+        return match ($this->languageFamily($languageCode)) {
+            'ar' => 'مرحبا، شكرا لاتصالك بالدعم. كيف يمكنني مساعدتك اليوم؟',
+            'fr' => "Bonjour, merci d'avoir appele le support. Comment puis-je vous aider aujourd'hui ?",
+            'es' => 'Hola, gracias por llamar al soporte. Como puedo ayudarle hoy?',
+            default => 'Hi! Thanks for calling support - how can I help today?',
+        };
+    }
+
+    private function knownCallerSuffix(?string $contactName, ?string $languageCode = null): string
+    {
+        if (! $contactName) {
+            return '';
+        }
+
+        $shortName = $this->shortContactName($contactName);
+
+        return match ($this->languageFamily($languageCode)) {
+            'ar' => ' من الجيد التحدث معك مرة أخرى يا ' . $shortName . '.',
+            'fr' => ' Ravi de vous reparler, ' . $shortName . '.',
+            'es' => ' Me alegra hablar contigo de nuevo, ' . $shortName . '.',
+            default => ' Nice to speak with you again, ' . $shortName . '.',
+        };
+    }
+
+    private function languageGuardrail(?string $languageCode = null): string
+    {
+        $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode($languageCode);
+
+        return $languageCode
+            ? "\n\n[SYSTEM NOTE: Keep caller-facing replies in {$languageCode} unless the caller clearly switches language and the business supports that change.]"
+            : '';
+    }
+
+    private function languageFamily(?string $languageCode = null): string
+    {
+        $languageCode = strtolower((string) RegionalPilotStackCatalog::normalizeLanguageCode($languageCode));
+
+        return explode('-', $languageCode)[0] ?: 'en';
     }
 
     /**
@@ -394,9 +615,10 @@ class VapiWebhookController extends Controller
         $name = strtolower((string) (data_get($toolCall, 'function.name') ?? $toolCall['name'] ?? ''));
 
         return match ($name) {
-            'createcase', 'createmaintenanceticket', 'createmortgagelead' => 0,
-            'bookmeeting' => 1,
-            default => 2,
+            'lookupcontact', 'lookupcase' => 0,
+            'createcase', 'createmaintenanceticket', 'createmortgagelead' => 1,
+            'bookmeeting' => 2,
+            default => 3,
         };
     }
 
@@ -438,6 +660,22 @@ class VapiWebhookController extends Controller
         $value = trim($value);
 
         return $value !== '' ? $value : null;
+    }
+
+    private function assistantLimitPayload(string $message): array
+    {
+        return [
+            'assistant' => [
+                'model' => [
+                    'provider' => 'openai',
+                    'model' => 'gpt-4o-mini',
+                    'messages' => [
+                        ['role' => 'system', 'content' => 'Tell the caller the line is unavailable, advise them to contact the business directly, and keep it to one short sentence.'],
+                    ],
+                ],
+                'firstMessage' => $message,
+            ],
+        ];
     }
 
     private function successToolResult(string $toolCallId, ?string $name, array $payload): array
@@ -525,5 +763,49 @@ class VapiWebhookController extends Controller
         $request->attributes->set('workspace', $workspace);
 
         return [$workspace, null];
+    }
+
+    private function resolveWorkspaceForPayload(Request $request, array $payload): array
+    {
+        [$workspace, $authError] = $this->resolveWorkspaceFromHeaders($request);
+
+        if ($workspace) {
+            return [$workspace, null];
+        }
+
+        $phoneNumberId = data_get($payload, 'message.call.phoneNumberId')
+            ?? data_get($payload, 'message.call.phoneNumber.id')
+            ?? data_get($payload, 'message.artifact.variableValues.phoneNumber.id');
+
+        if (is_string($phoneNumberId) && $phoneNumberId !== '') {
+            $workspacePhone = \App\Models\WorkspacePhoneNumber::query()
+                ->with('workspace')
+                ->where('vapi_phone_number_id', $phoneNumberId)
+                ->first();
+
+            if ($workspacePhone?->workspace) {
+                $request->attributes->set('workspace', $workspacePhone->workspace);
+
+                return [$workspacePhone->workspace, null];
+            }
+        }
+
+        $assistantId = data_get($payload, 'message.call.assistantId')
+            ?? data_get($payload, 'message.artifact.variableValues.phoneNumber.assistantId');
+
+        if (is_string($assistantId) && $assistantId !== '') {
+            $assistant = \App\Models\AssistantConfig::query()
+                ->with('workspace')
+                ->where('vapi_assistant_id', $assistantId)
+                ->first();
+
+            if ($assistant?->workspace) {
+                $request->attributes->set('workspace', $assistant->workspace);
+
+                return [$assistant->workspace, null];
+            }
+        }
+
+        return [null, $authError ?? 'Workspace could not be resolved from payload'];
     }
 }

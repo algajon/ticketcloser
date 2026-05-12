@@ -25,7 +25,7 @@ class ExtractSuggestedEvents implements ShouldQueue
 
     public function handle(): void
     {
-        $text = ($this->case->description ?? '') . ' ' . ($this->case->subject ?? '');
+        $text = ($this->case->description ?? '') . ' ' . ($this->case->title ?? '');
 
         $extractions = $this->parseDateTime($text);
 
@@ -33,6 +33,7 @@ class ExtractSuggestedEvents implements ShouldQueue
             SuggestedEvent::create([
                 'workspace_id' => $this->case->workspace_id,
                 'case_id' => $this->case->id,
+                'contact_id' => $this->case->contact_id,
                 'starts_at' => $extraction['starts_at'],
                 'ends_at' => $extraction['ends_at'],
                 'timezone' => 'UTC',
@@ -84,7 +85,7 @@ class ExtractSuggestedEvents implements ShouldQueue
                             'confidence' => $idx === 2 ? 90 : ($idx === 0 ? 75 : 60),
                         ];
                     } catch (\Exception) {
-                        // Carbon couldn't parse — skip
+                        // Carbon couldn't parse - skip
                     }
                 }
             }

@@ -22,7 +22,10 @@ class BillingTest extends TestCase
         parent::setUp();
 
         $this->user = User::factory()->create();
-        $this->workspace = Workspace::factory()->create();
+        $this->workspace = Workspace::factory()->create([
+            'onboarding_step' => 'done',
+            'plan_key' => 'free',
+        ]);
         // Link user via pivot
         \DB::table('workspace_memberships')->insert([
             'user_id' => $this->user->id,
@@ -46,6 +49,25 @@ class BillingTest extends TestCase
     }
 
     /** @test */
+    public function available_workspaces_can_eager_load_latest_subscription_without_ambiguous_columns(): void
+    {
+        Subscription::query()->create([
+            'workspace_id' => $this->workspace->id,
+            'stripe_subscription_id' => 'sub_test_1',
+            'stripe_price_id' => 'price_test_1',
+            'plan_key' => 'pro',
+            'status' => 'active',
+        ]);
+
+        $workspaces = $this->user->fresh()->availableWorkspaces();
+        $workspace = $workspaces->firstWhere('id', $this->workspace->id);
+
+        $this->assertNotNull($workspace);
+        $this->assertTrue($workspace->relationLoaded('subscription'));
+        $this->assertSame('active', $workspace->subscription?->status);
+    }
+
+    /** @test */
     public function subscription_model_is_active_for_active_status(): void
     {
         $sub = new Subscription(['workspace_id' => $this->workspace->id, 'stripe_subscription_id' => 'sub_1', 'plan_key' => 'pro', 'status' => 'active']);
@@ -63,6 +85,6 @@ class BillingTest extends TestCase
     public function subscription_plan_label_returns_correct_labels(): void
     {
         $sub = new Subscription(['plan_key' => 'pro', 'status' => 'active', 'stripe_subscription_id' => 'sub_x', 'workspace_id' => 1]);
-        $this->assertEquals('Pro', $sub->planLabel());
+        $this->assertEquals(config('plans.pro.label'), $sub->planLabel());
     }
 }

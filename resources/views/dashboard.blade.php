@@ -1,195 +1,341 @@
 @extends('layouts.saas')
 
-@section('title')
-    ticketcloser • Dashboard
-@endsection
+@section('title', 'tickIt - Dashboard')
+@section('header_eyebrow', 'Operations overview')
+@section('header', 'Dashboard')
+@section('header_description', 'See what is live, what still needs setup, and what came in most recently.')
 
-@section('header')
-    Dashboard
+@section('header_actions')
+    @if($workspace)
+        <a href="{{ route('app.calls.analytics', $workspace) }}" class="tc-btn-secondary">Analytics</a>
+        <a href="{{ route('app.tickets.index') }}" class="tc-btn-primary">Review tickets</a>
+    @endif
 @endsection
 
 @section('content')
     @php
-        $ws = $workspace;
-        $config = $ws ? \App\Models\AssistantConfig::where('workspace_id', $ws->id)->first() : null;
-        $phone = $ws ? \App\Models\WorkspacePhoneNumber::where('workspace_id', $ws->id)->first() : null;
-
-        $checks = [
-            [
-                'label' => 'Workspace configured',
-                'done' => (bool) $ws?->name && (bool) $ws?->slug,
-                'href' => route('app.onboarding.company')
-            ],
-            [
-                'label' => 'Assistant synced to Vapi',
-                'done' => (bool) $config?->vapi_assistant_id,
-                'href' => $ws ? route('app.assistant.edit', $ws) : '#'
-            ],
-            [
-                'label' => 'Phone number provisioned',
-                'done' => (bool) $phone?->e164,
-                'href' => $ws ? route('app.phone_numbers.index', $ws) : '#'
-            ],
-        ];
-        $setupComplete = collect($checks)->every('done');
-        $nextStep = collect($checks)->first(fn($c) => !$c['done']);
-        $openCount = $ws ? \App\Models\SupportCase::where('workspace_id', $ws->id)->whereNotIn('status', ['resolved', 'closed'])->count() : 0;
-        $latest = $ws ? \App\Models\SupportCase::where('workspace_id', $ws->id)->latest()->first() : null;
-        $recentCases = $ws ? \App\Models\SupportCase::where('workspace_id', $ws->id)->latest()->limit(5)->get() : collect();
-        $assistantCount = $ws ? \App\Models\AssistantConfig::where('workspace_id', $ws->id)->count() : 0;
-        $syncedCount = $ws ? \App\Models\AssistantConfig::where('workspace_id', $ws->id)->whereNotNull('vapi_assistant_id')->count() : 0;
+        $dashboard = $dashboard ?? [];
+        $checks = $dashboard['checks'] ?? [];
+        $setupComplete = $dashboard['setup_complete'] ?? false;
+        $launchReady = $dashboard['launch_ready'] ?? false;
+        $primaryAttention = $dashboard['primary_attention'] ?? null;
+        $secondaryAttention = $dashboard['secondary_attention'] ?? collect();
+        $recentCases = $dashboard['recent_cases'] ?? collect();
+        $recentCalls = $dashboard['recent_calls'] ?? collect();
+        $isPropertyManagement = $dashboard['is_property_management'] ?? false;
+        $maintenanceStats = $dashboard['maintenance_stats'] ?? null;
+        $urgentQueue = $dashboard['urgent_queue'] ?? collect();
+        $nextVisit = $dashboard['next_visit'] ?? null;
+        $openCount = (int) ($dashboard['open_count'] ?? 0);
+        $newToday = (int) ($dashboard['new_today'] ?? 0);
+        $callCountWeek = (int) ($dashboard['call_count_week'] ?? 0);
+        $minutesUsed = (int) ($dashboard['minutes_used'] ?? 0);
+        $setupPercent = (int) ($dashboard['setup_percent'] ?? 0);
+        $completeCount = (int) ($dashboard['complete_count'] ?? 0);
+        $hasSyncedAssistant = (bool) ($dashboard['has_synced_assistant'] ?? false);
+        $livePhoneCount = (int) ($dashboard['live_phone_count'] ?? 0);
+        $hasCalendarConnection = (bool) ($dashboard['has_calendar_connection'] ?? false);
     @endphp
 
-    @if(!$setupComplete)
-        <div class="mb-6">
-            <div class="mb-4 flex items-center justify-between">
-                <div>
-                    <h2 class="text-base font-bold text-slate-900">Get started</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">Complete these tasks to start receiving tickets.</p>
-                </div>
-                <span class="text-xs font-medium text-slate-400">{{ collect($checks)->filter(fn($c) => $c['done'])->count() }} /
-                    {{ count($checks) }} done</span>
-            </div>
-
-            <div class="grid sm:grid-cols-3 gap-3">
-                @php
-                    $taskMeta = [
-                        [
-                            'title' => 'Configure workspace',
-                            'desc' => 'Set your company name, slug, and timezone.',
-                            'action' => 'Edit settings',
-                        ],
-                        [
-                            'title' => 'Create an assistant',
-                            'desc' => 'Build your AI voice agent and sync it to Vapi.',
-                            'action' => 'Create assistant',
-                        ],
-                        [
-                            'title' => 'Add a phone number',
-                            'desc' => 'Provision a US number so callers can reach your assistant.',
-                            'action' => 'Add number',
-                        ],
-                    ];
-                @endphp
-
-                @foreach($checks as $i => $check)
-                    @php $meta = $taskMeta[$i]; @endphp
-                    <div class="relative rounded-2xl border p-4 flex flex-col gap-3 transition-all
-                                                                                                {{ $check['done']
-                        ? 'border-green-200 bg-green-50/60'
-                        : 'border-slate-200 bg-white shadow-sm hover:shadow-md hover:border-slate-300' }}">
-
-                        {{-- Check indicator --}}
-                        @if($check['done'])
-                            <div class="absolute top-3 right-3 w-5 h-5 rounded-full bg-green-500 flex items-center justify-center">
-                                <svg class="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="3">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
-                                </svg>
-                            </div>
-                        @else
-                            <div class="absolute top-3 right-3 w-5 h-5 rounded-full border-2 border-slate-300"></div>
-                        @endif
-
-
-                        <div class="flex-1">
-                            <p
-                                class="text-sm font-semibold {{ $check['done'] ? 'text-green-700 line-through' : 'text-slate-900' }}">
-                                {{ $meta['title'] }}
-                            </p>
-                            <p class="text-xs text-slate-500 mt-1 leading-relaxed">{{ $meta['desc'] }}</p>
-                        </div>
-
-                        @if(!$check['done'])
-                            <a href="{{ $check['href'] }}"
-                                class="w-full text-center text-xs font-semibold py-1.5 rounded-lg transition-colors
-                                                                                                                                    bg-slate-900 text-white hover:bg-slate-700">
-                                {{ $meta['action'] }} →
-                            </a>
-                        @endif
+    <div class="tc-dashboard space-y-10">
+        <div class="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]">
+            <x-ui.panel class="tc-dashboard-panel" title="Workspace pulse" description="See what is live and what the team will feel first.">
+                <div class="tc-dashboard-pulse-grid">
+                    <div class="tc-dashboard-pulse-metric">
+                        <p class="tc-dashboard-pulse-label">Open tickets</p>
+                        <p class="tc-dashboard-pulse-value">{{ $openCount }}</p>
+                        <p class="tc-dashboard-pulse-hint">{{ $newToday }} today</p>
                     </div>
-                @endforeach
-            </div>
-        </div>
-    @endif
 
+                    <div class="tc-dashboard-pulse-metric">
+                        <p class="tc-dashboard-pulse-label">Calls this week</p>
+                        <p class="tc-dashboard-pulse-value">{{ $callCountWeek }}</p>
+                        <p class="tc-dashboard-pulse-hint">{{ $minutesUsed }} minutes used</p>
+                    </div>
 
-    <div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6 shrink-0">
+                    <div class="tc-dashboard-pulse-metric">
+                        <p class="tc-dashboard-pulse-label">Launch progress</p>
+                        <p class="tc-dashboard-pulse-value">{{ $setupPercent }}%</p>
+                        <p class="tc-dashboard-pulse-hint">{{ $completeCount }}/{{ count($checks) }} steps complete</p>
+                    </div>
+                </div>
 
-        {{-- Open cases --}}
-        <div class="tc-card-hover p-4 sm:p-6">
-            <div>
-                <p class="tc-small uppercase tracking-wide font-medium">Open cases</p>
-                <p class="mt-1 text-2xl sm:text-3xl font-bold tabular-nums" x-data="{ count: 0, target: {{ $openCount }} }"
-                    x-init="let start = performance.now(); let dur = 600; (function step(t) { let p = Math.min((t - start) / dur, 1); count = Math.floor(p * target); if(p < 1) requestAnimationFrame(step); else count = target; })(start)"
-                    x-text="count">{{ $openCount }}</p>
-                <p class="mt-0.5 tc-small">{{ $openCount === 1 ? 'case needs' : 'cases need' }} attention</p>
-            </div>
-        </div>
+                <div class="mt-6 flex flex-wrap gap-2.5">
+                    <x-ui.badge tone="{{ $hasSyncedAssistant ? 'success' : 'warning' }}">{{ $hasSyncedAssistant ? 'Assistant live' : 'Assistant pending' }}</x-ui.badge>
+                    <x-ui.badge tone="{{ $livePhoneCount > 0 ? 'success' : 'warning' }}">{{ $livePhoneCount > 0 ? 'Number live' : 'Number pending' }}</x-ui.badge>
+                    <x-ui.badge tone="{{ $hasCalendarConnection ? 'success' : 'slate' }}">{{ $hasCalendarConnection ? 'Calendar connected' : 'Calendar optional' }}</x-ui.badge>
+                </div>
 
-        {{-- Assistants --}}
-        <a href="{{ $ws ? route('app.assistant.edit', $ws) : '#' }}" class="tc-card-hover p-4 sm:p-6 block group">
-            <div>
-                <p class="tc-small uppercase tracking-wide font-medium">Assistants</p>
-                <p class="mt-1 text-2xl sm:text-3xl font-bold tabular-nums">{{ $assistantCount }}</p>
-                <p class="mt-0.5 tc-small">{{ $syncedCount }} synced to Vapi</p>
-            </div>
-        </a>
-
-        {{-- Latest case --}}
-        <div class="tc-card-hover p-4 sm:p-6 overflow-hidden">
-            <div class="min-w-0">
-                <p class="tc-small uppercase tracking-wide font-medium">Latest case</p>
-                @if($latest)
-                    <p class="mt-1 text-sm font-semibold truncate">{{ $latest->case_number }}</p>
-                    <p class="mt-0.5 text-xs text-slate-600 truncate">{{ $latest->title }}</p>
-                    <p class="mt-0.5 tc-small">{{ $latest->created_at->diffForHumans() }}</p>
-                @else
-                    <p class="mt-0.5 tc-small">No cases yet</p>
-                @endif
-            </div>
-        </div>
-    </div>
-
-    <div class="tc-card flex-1 flex flex-col min-h-0">
-        <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
-            <h2 class="tc-h3">Recent cases</h2>
-            <a href="{{ route('app.tickets.index') }}" class="text-xs text-muted hover:text-slate-700 underline">View all
-                →</a>
-        </div>
-
-        @if($recentCases->isEmpty())
-            <div class="flex flex-col flex-1 items-center justify-center py-16 px-4 text-center">
-                <h3 class="tc-h3 text-slate-700">No cases yet</h3>
-                <p class="mt-1.5 text-sm text-muted max-w-sm">Once a caller creates a ticket via your Vapi assistant, it appears
-                    here.</p>
-            </div>
-        @else
-            <div class="divide-y divide-slate-100 overflow-y-auto">
-                @foreach($recentCases as $case)
-                    <a href="{{ route('app.tickets.show', $case->id) }}"
-                        class="block px-6 py-4 hover:bg-slate-50 transition-colors">
-                        <div class="flex items-center justify-between gap-4">
-                            <div class="min-w-0">
-                                <p class="text-xs font-medium text-muted">{{ $case->case_number }}</p>
-                                <p class="text-sm font-semibold mt-0.5 truncate">{{ $case->title }}</p>
-                                <p class="text-xs text-slate-500 mt-0.5">
-                                    {{ $case->requester_phone ?? $case->requester_email ?? $case->source ?? '' }}
+                @if($launchReady && !($dashboard['has_recent_call'] ?? false))
+                    <div class="tc-dashboard-pulse-callout mt-6">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div class="max-w-3xl">
+                                <p class="text-sm font-semibold text-slate-950">Ready for a first proof call.</p>
+                                <p class="mt-2 text-sm leading-6 text-slate-600">
+                                    Your workflow is set to <span class="font-semibold text-slate-900">{{ $dashboard['use_case_label'] ?? 'Customer support' }}</span>,
+                                    at least one assistant is synced, and callers can already reach the line.
+                                    One fresh test call will confirm the full flow end to end.
                                 </p>
                             </div>
-                            <div class="flex items-center gap-2 shrink-0">
-                                <span class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium {{ match ($case->status ?? 'open') {
-                        'open' => 'bg-info-light text-info-fg',
-                        'resolved' => 'bg-success-light text-success-fg',
-                        'closed' => 'bg-slate-100 text-slate-700',
-                        default => 'bg-slate-100 text-slate-700'
-                    } }}">{{ ucfirst($case->status ?? 'open') }}</span>
-                                <span class="text-xs text-muted whitespace-nowrap">{{ $case->created_at->diffForHumans() }}</span>
+                            <div class="flex flex-wrap gap-3">
+                                <a href="{{ route('app.phone_numbers.index', $workspace) }}" class="tc-btn-primary">See live number</a>
+                                <a href="{{ route('app.assistant.edit', $workspace) }}" class="tc-btn-secondary">Review assistant</a>
                             </div>
                         </div>
-                    </a>
-                @endforeach
+                    </div>
+                @endif
+            </x-ui.panel>
+
+            <div class="space-y-6">
+                <x-ui.panel class="tc-dashboard-panel" title="Next move" description="The clearest action from here.">
+                    @if(! $primaryAttention)
+                        <x-ui.empty-state title="Everything looks good" description="Setup is done and there are no urgent blockers right now." />
+                    @else
+                        <div class="tc-dashboard-next-card rounded-[1.35rem] border {{ $primaryAttention['tone'] === 'danger' ? 'border-red-200 bg-red-50/80' : ($primaryAttention['tone'] === 'warning' ? 'border-amber-200 bg-amber-50/80' : ($primaryAttention['tone'] === 'info' ? 'border-blue-200 bg-blue-50/80' : 'tc-accent-surface')) }} p-5">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-semibold text-slate-950">{{ $primaryAttention['title'] }}</div>
+                                    <p class="mt-2 text-sm leading-6 text-slate-600">{{ $primaryAttention['copy'] }}</p>
+                                </div>
+                                <x-ui.badge tone="{{ $primaryAttention['tone'] }}">{{ $primaryAttention['tone'] }}</x-ui.badge>
+                            </div>
+                            <div class="mt-5">
+                                <a href="{{ $primaryAttention['href'] }}" class="tc-btn-secondary !px-3 !py-2 text-xs">{{ $primaryAttention['action'] }}</a>
+                            </div>
+                        </div>
+
+                        @if($secondaryAttention->isNotEmpty())
+                            <div class="mt-4 space-y-3">
+                                @foreach($secondaryAttention as $item)
+                                    <div class="tc-dashboard-next-card-muted p-4">
+                                        <div class="text-sm font-semibold text-slate-950">{{ $item['title'] }}</div>
+                                        <p class="mt-2 text-sm leading-6 text-slate-600">{{ $item['copy'] }}</p>
+                                        <div class="mt-3">
+                                            <a href="{{ $item['href'] }}" class="tc-accent-link text-sm font-semibold">{{ $item['action'] }}</a>
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @endif
+                    @endif
+                </x-ui.panel>
+
+                <x-ui.panel class="tc-dashboard-panel" title="Recent calls" description="Latest activity on the line.">
+                    @if($recentCalls->isEmpty())
+                        <x-ui.empty-state title="No recent calls" description="Place a test call to check the flow." />
+                    @else
+                        <div class="tc-dashboard-call-list">
+                            @foreach($recentCalls as $call)
+                                <a href="{{ route('app.calls.show', [$workspace, $call]) }}" class="tc-dashboard-call-item block rounded-[1.2rem] border border-slate-200 bg-slate-50/80 p-4 transition hover:border-slate-300 hover:bg-white">
+                                    <div class="flex items-start justify-between gap-4">
+                                        <div class="min-w-0">
+                                            <div class="truncate text-sm font-semibold text-slate-950">{{ $call->from_number ?? 'Unknown caller' }}</div>
+                                            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.16em] text-slate-500">
+                                                <span>{{ $call->created_at->format('M j, g:i A') }}</span>
+                                                @if($call->duration_seconds)
+                                                    <span>{{ $call->duration_seconds }}s</span>
+                                                @endif
+                                                @if($call->transcriptLanguageLabel())
+                                                    <span>{{ $call->transcriptLanguageLabel() }}</span>
+                                                @endif
+                                            </div>
+                                            @if($call->transcript)
+                                                <p class="mt-2 text-sm leading-6 text-slate-600">{{ \Illuminate\Support\Str::limit($call->transcript, 110) }}</p>
+                                            @endif
+                                        </div>
+
+                                        @if($call->recording_url)
+                                            <x-ui.badge tone="success">Recording</x-ui.badge>
+                                        @endif
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    <x-slot:actions>
+                        <a href="{{ route('app.calls.index', $workspace) }}" class="tc-btn-ghost !px-3 !py-2 text-xs">Call log</a>
+                        <a href="{{ route('app.calls.analytics', $workspace) }}" class="tc-btn-secondary !px-3 !py-2 text-xs">Analytics</a>
+                    </x-slot:actions>
+                </x-ui.panel>
+            </div>
+        </div>
+
+        @if($isPropertyManagement && $maintenanceStats)
+            <div class="space-y-4">
+                <div class="tc-dashboard-section-heading">
+                    <p class="tc-dashboard-section-label">Maintenance queue</p>
+                    <h2 class="tc-dashboard-section-title">What needs movement today</h2>
+                </div>
+
+                <div class="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+                    <x-ui.stat-card class="tc-dashboard-panel" label="Urgent review" :value="(int) ($maintenanceStats->urgent_review_count ?? 0)" hint="Urgent tickets open" tone="red" />
+                    <x-ui.stat-card class="tc-dashboard-panel" label="Dispatched" :value="(int) ($maintenanceStats->dispatched_count ?? 0)" hint="Assigned now" tone="blue" />
+                    <x-ui.stat-card class="tc-dashboard-panel" label="Scheduled" :value="(int) ($maintenanceStats->scheduled_count ?? 0)" hint="Visits booked" tone="emerald" />
+                    <x-ui.stat-card class="tc-dashboard-panel" label="Waiting on resident" :value="(int) ($maintenanceStats->waiting_on_resident_count ?? 0)" hint="Resident follow-up needed" tone="amber" />
+                </div>
             </div>
         @endif
-    </div>
 
+        @if(! $setupComplete && count($checks) > 0)
+            <x-ui.panel class="tc-dashboard-panel" title="Finish setup" description="These are the next steps between signup and a dependable first live workflow.">
+                <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+                    @foreach($checks as $check)
+                        <div class="rounded-[1.3rem] border {{ $check['done'] ? 'border-emerald-200 bg-emerald-50/80' : 'border-slate-200 bg-slate-50/80' }} p-4">
+                            <div class="flex items-start justify-between gap-3">
+                                <div class="min-w-0">
+                                    <div class="text-sm font-semibold {{ $check['done'] ? 'text-emerald-800' : 'text-slate-900' }}">{{ $check['label'] }}</div>
+                                    <p class="mt-2 text-sm leading-6 {{ $check['done'] ? 'text-emerald-700' : 'text-slate-600' }}">{{ $check['description'] }}</p>
+                                </div>
+                                <x-ui.badge tone="{{ $check['done'] ? 'success' : 'slate' }}">{{ $check['done'] ? 'Done' : 'Pending' }}</x-ui.badge>
+                            </div>
+
+                            @if(! $check['done'])
+                                <div class="mt-4">
+                                    <a href="{{ $check['href'] }}" class="tc-btn-secondary !px-3 !py-2 text-xs">{{ $check['action'] }}</a>
+                                </div>
+                            @endif
+                        </div>
+                    @endforeach
+                </div>
+            </x-ui.panel>
+        @endif
+
+        @if($isPropertyManagement)
+            <div class="grid gap-8 xl:grid-cols-[minmax(0,1.08fr)_minmax(320px,0.92fr)]">
+                <x-ui.panel class="tc-dashboard-panel" title="Maintenance priority queue" description="The work a property team usually wants first.">
+                    @if($urgentQueue->isEmpty())
+                        <x-ui.empty-state title="No urgent maintenance queue" description="Critical and high-priority maintenance tickets will show up here." />
+                    @else
+                        <div class="space-y-3">
+                            @foreach($urgentQueue as $case)
+                                <a href="{{ route('app.tickets.show', $case->id) }}" class="block rounded-[1.25rem] border border-slate-200 bg-slate-50/80 px-4 py-4 transition hover:border-slate-300 hover:bg-white">
+                                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-slate-500">{{ $case->case_number }}</span>
+                                                <x-ui.badge :tone="\App\Models\SupportCase::priorityTone($case->priority)">{{ $case->priority }}</x-ui.badge>
+                                                @if($case->ops_stage)
+                                                    <x-ui.badge :tone="\App\Models\SupportCase::opsStageTone($case->ops_stage)">{{ \App\Models\SupportCase::opsStageLabel($case->ops_stage) }}</x-ui.badge>
+                                                @endif
+                                            </div>
+                                            <div class="mt-3 text-base font-semibold text-slate-950">{{ $case->title }}</div>
+                                            <div class="mt-2 text-sm text-slate-600">
+                                                {{ $case->contact?->name ?: 'Caller on file' }}
+                                                @if($case->contact?->property_code)
+                                                    <span class="text-slate-400">•</span>
+                                                    {{ $case->contact->property_code }}@if($case->contact?->unit), Unit {{ $case->contact->unit }}@endif
+                                                @endif
+                                            </div>
+                                            <div class="mt-3 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                                @if($case->vendor_name)
+                                                    <span>Vendor: {{ $case->vendor_name }}</span>
+                                                @endif
+                                                @if($case->preferred_visit_window)
+                                                    <span>Visit: {{ $case->preferred_visit_window }}</span>
+                                                @endif
+                                                <span>{{ $case->created_at->diffForHumans() }}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    <x-slot:actions>
+                        <a href="{{ route('app.tickets.index', ['ops_stage' => 'urgent_review']) }}" class="tc-btn-ghost !px-3 !py-2 text-xs">Open urgent queue</a>
+                    </x-slot:actions>
+                </x-ui.panel>
+
+                <div class="space-y-6">
+                    <x-ui.panel class="tc-dashboard-panel" title="Next scheduled visit" description="The closest maintenance follow-up on the calendar.">
+                        @if(!$nextVisit)
+                            <x-ui.empty-state title="No scheduled visit yet" description="Visits will show up here once maintenance follow-up is booked." />
+                        @else
+                            <div class="rounded-[1.25rem] border border-emerald-200 bg-emerald-50/80 p-5">
+                                <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-emerald-700">Upcoming visit</div>
+                                <div class="mt-3 text-lg font-semibold text-emerald-950">{{ $nextVisit->supportCase?->title ?? 'Maintenance follow-up' }}</div>
+                                <div class="mt-2 text-sm leading-6 text-emerald-800">
+                                    {{ $nextVisit->starts_at?->format('M j, Y \a\t g:i A') }}
+                                    @if($nextVisit->contact?->property_code)
+                                        <span class="text-emerald-600">•</span>
+                                        {{ $nextVisit->contact->property_code }}@if($nextVisit->contact?->unit), Unit {{ $nextVisit->contact->unit }}@endif
+                                    @endif
+                                </div>
+                                @if($nextVisit->supportCase)
+                                    <div class="mt-4">
+                                        <a href="{{ route('app.tickets.show', $nextVisit->supportCase->id) }}" class="tc-accent-link text-sm font-semibold">Open related ticket</a>
+                                    </div>
+                                @endif
+                            </div>
+                        @endif
+                    </x-ui.panel>
+                </div>
+            </div>
+        @endif
+
+        <div class="space-y-4">
+            <div class="tc-dashboard-section-heading">
+                <p class="tc-dashboard-section-label">Recent activity</p>
+                <h2 class="tc-dashboard-section-title">Newest tickets coming in</h2>
+            </div>
+
+            <x-ui.panel class="tc-dashboard-panel" title="Recent tickets" description="Newest first." bodyClass="p-0">
+                    @if($recentCases->isEmpty())
+                        <div class="p-6">
+                            <x-ui.empty-state title="No tickets yet" description="Tickets will show up here after your first call." actionText="Open assistants" :actionHref="$workspace ? route('app.assistant.edit', $workspace) : '#'" />
+                        </div>
+                    @else
+                        <div class="divide-y divide-slate-100">
+                            @foreach($recentCases as $case)
+                                @php
+                                    $statusTone = match ($case->status) {
+                                        'resolved' => 'success',
+                                        'waiting' => 'warning',
+                                        'in_progress' => 'info',
+                                        'triaged' => 'primary',
+                                        default => 'slate',
+                                    };
+                                    $priorityTone = match ($case->priority) {
+                                        'critical' => 'danger',
+                                        'high' => 'warning',
+                                        default => 'slate',
+                                    };
+                                @endphp
+                                <a href="{{ route('app.tickets.show', $case->id) }}" class="block px-6 py-5 transition hover:bg-slate-50/80">
+                                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ $case->case_number }}</span>
+                                                <x-ui.badge :tone="$statusTone">{{ str_replace('_', ' ', $case->status) }}</x-ui.badge>
+                                                <x-ui.badge :tone="$priorityTone">{{ $case->priority }}</x-ui.badge>
+                                            </div>
+                                            <p class="mt-3 text-base font-semibold text-slate-950">{{ $case->title }}</p>
+                                            <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                                @if($case->requester_phone)
+                                                    <span>{{ $case->requester_phone }}</span>
+                                                @endif
+                                                @if($case->category)
+                                                    <span>{{ $case->category }}</span>
+                                                @endif
+                                                <span>{{ $case->source ?? 'voice' }}</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="shrink-0 text-sm text-slate-500">
+                                            {{ $case->created_at->diffForHumans() }}
+                                        </div>
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    <x-slot:actions>
+                        <a href="{{ route('app.tickets.index') }}" class="tc-btn-ghost !px-3 !py-2 text-xs">View all tickets</a>
+                    </x-slot:actions>
+            </x-ui.panel>
+        </div>
+    </div>
 @endsection

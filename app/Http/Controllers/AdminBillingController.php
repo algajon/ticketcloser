@@ -68,7 +68,7 @@ class AdminBillingController extends Controller
     }
 
     /**
-     * Override workspace plan (admin bypass — no Stripe required).
+     * Override workspace plan (admin bypass - no Stripe required).
      */
     public function changePlan(Request $request, Workspace $workspace)
     {

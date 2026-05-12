@@ -1,26 +1,29 @@
 @extends('layouts.guest')
 
-@section('title')
-    ticketcloser • Confirm Password
-@endsection
+@section('title', 'tickIt - Confirm Password')
+@section('guest_eyebrow', 'Protected action')
+@section('guest_title', 'Confirm your identity before entering this secure area.')
+@section('guest_copy', 'Sensitive account changes and billing controls require a fresh password confirmation so workspace access stays protected.')
 
 @section('content')
-    <div class="mb-6">
-        <h1 class="text-xl font-bold text-white">Confirm password</h1>
-        <p class="text-sm mt-1" style="color:#94a3b8">This is a secure area. Please confirm your password to continue.</p>
+    <div>
+        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-400">Security checkpoint</div>
+        <h1 class="mt-4 text-3xl font-semibold tracking-tight text-white">Confirm password</h1>
+        <p class="mt-3 text-sm leading-6 text-slate-300">This workspace action needs a quick security confirmation before we continue.</p>
     </div>
 
-    <form method="POST" action="{{ route('password.confirm') }}" class="space-y-4">
+    <form method="POST" action="{{ route('password.confirm') }}" class="mt-8 space-y-5">
         @csrf
 
-        <div class="space-y-1.5">
-            <label for="password" class="block text-sm font-medium" style="color:#cbd5e1">Password</label>
+        <div class="tc-field">
+            <label for="password" class="tc-field-label text-slate-200">Password</label>
             <input id="password" type="password" name="password" autofocus autocomplete="current-password"
-                class="tc-input-dark" />
+                class="tc-input-dark" placeholder="Enter your password" />
             @if($errors->first('password'))
-            <p class="text-xs" style="color:#f87171">{{ $errors->first('password') }}</p>@endif
+                <p class="tc-error text-red-300">{{ $errors->first('password') }}</p>
+            @endif
         </div>
 
-        <button type="submit" class="tc-btn-glow w-full" style="padding:0.625rem 1.5rem;font-size:0.875rem">Confirm</button>
+        <button type="submit" class="tc-btn-glow w-full justify-center !py-3 text-base">Confirm</button>
     </form>
 @endsection

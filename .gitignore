@@ -1,4 +1,9 @@
 *.log
+err.txt
+temp_log*.txt
+tmp_logs.txt
+vapi_payload.txt
+tmp_full_deploy_*.zip
 .DS_Store
 .env
 .env.backup
@@ -18,6 +23,7 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/tmp_smoke
 /vendor
 Homestead.json
 Homestead.yaml

@@ -16,6 +16,8 @@ class EnsureWorkspaceIsReady
     protected array $onboardingExcept = [
         'app.workspaces.*',
         'app.onboarding.*',
+        'app.assistant.*',
+        'app.phone_numbers.*',
         'logout',
     ];
 
@@ -34,7 +36,7 @@ class EnsureWorkspaceIsReady
         $workspace = $request->user()->currentWorkspace();
 
         if (! $workspace) {
-            $hasWorkspaces = $request->user()->workspaces()->exists();
+            $hasWorkspaces = $request->user()->availableWorkspaces()->isNotEmpty();
 
             return redirect()
                 ->route($hasWorkspaces ? 'app.workspaces.index' : 'app.workspaces.create')

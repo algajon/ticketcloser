@@ -1,8 +1,8 @@
 @extends('layouts.saas')
 
-@section('title', 'ticketcloser • Admin Billing')
+@section('title', 'tickIt • Admin Billing')
 
-@section('header', 'Admin — Workspace Billing')
+@section('header', 'Admin workspace billing')
 
 @section('content')
     <div class="mb-6">
@@ -38,7 +38,7 @@
                         <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase text-slate-500">Owner</th>
                         <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase text-slate-500">Plan</th>
                         <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase text-slate-500">Credits</th>
-                        <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase text-slate-500">Cases</th>
+                        <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase text-slate-500">Tickets</th>
                         <th scope="col" class="px-6 py-3 text-xs font-semibold uppercase text-slate-500 text-right">Actions
                         </th>
                     </tr>

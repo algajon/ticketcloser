@@ -53,6 +53,7 @@ class MeetingBookingService
                     'starts_at' => $startsAt,
                 ],
                 [
+                    'contact_id' => $case->contact_id,
                     'ends_at' => $endsAt,
                     'timezone' => $timezone,
                     'confidence' => 100,
@@ -117,6 +118,7 @@ class MeetingBookingService
                 ],
                 [
                     'provider_event_id' => $providerEventId,
+                    'contact_id' => $suggestedEvent->contact_id ?? $suggestedEvent->supportCase?->contact_id,
                     'starts_at' => $startsAt,
                     'ends_at' => $endsAt,
                     'timezone' => $suggestedEvent->timezone ?? 'UTC',
@@ -127,6 +129,7 @@ class MeetingBookingService
             );
 
             $suggestedEvent->update([
+                'contact_id' => $suggestedEvent->contact_id ?? $suggestedEvent->supportCase?->contact_id,
                 'starts_at' => $startsAt,
                 'ends_at' => $endsAt,
                 'status' => 'confirmed',

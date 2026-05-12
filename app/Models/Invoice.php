@@ -30,9 +30,18 @@ class Invoice extends Model
         return $this->belongsTo(Workspace::class);
     }
 
-    /** Amount in dollars formatted */
+    /** Amount formatted with the stored invoice currency */
     public function formattedAmount(): string
     {
-        return '$' . number_format($this->amount_due / 100, 2);
+        $currency = strtoupper($this->currency ?: 'EUR');
+
+        $prefix = match ($currency) {
+            'EUR' => '€',
+            'USD' => '$',
+            'GBP' => '£',
+            default => $currency . ' ',
+        };
+
+        return $prefix . number_format($this->amount_due / 100, 2);
     }
 }

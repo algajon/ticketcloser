@@ -40,12 +40,7 @@ class Subscription extends Model
 
     public function planLabel(): string
     {
-        return match ($this->plan_key) {
-            'startup' => 'Startup',
-            'pro' => 'Pro',
-            'enterprise' => 'Enterprise',
-            default => ucfirst($this->plan_key),
-        };
+        return config('plans.' . $this->plan_key . '.label', ucfirst($this->plan_key));
     }
 
     /**
