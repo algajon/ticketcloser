@@ -1,7 +1,7 @@
-# Ticketcloser — Clean Handoff (Stable + Ready for Option A)
+# tickIt — Clean Handoff (Stable + Ready for Option A)
 
-**Status:** ✅ Current Ticketcloser app is working and stable (no known bugs).  
-**Now building next:** **Option A — Managed Vapi** (Ticketcloser owns Vapi org + API key, provisions assistants/tools/phone numbers per workspace, bills via credits).  
+**Status:** ✅ Current tickIt app is working and stable (no known bugs).  
+**Now building next:** **Option A — Managed Vapi** (tickIt owns Vapi org + API key, provisions assistants/tools/phone numbers per workspace, bills via credits).  
 **Stack:** Laravel 11 + Blade + TailwindCSS + MariaDB (InnoDB).  
 **Market:** US only (E.164 US phone numbers).
 
@@ -24,7 +24,7 @@
     - `X-Workspace-Slug: <workspace_slug>`
 
 ### Working Vapi integration pattern (current)
-- Vapi tool calls **hit Ticketcloser** and Ticketcloser creates a SupportCase and returns `{caseNumber}` as tool result.
+- Vapi tool calls **hit tickIt** and tickIt creates a SupportCase and returns `{caseNumber}` as tool result.
 - The “routing” to a workspace is done via `X-Workspace-Slug` + `Authorization` token.
 
 ### Web routes (already set up)
@@ -39,7 +39,7 @@
 
 ## 2) What Option A means (Managed Vapi)
 
-Ticketcloser will:
+tickIt will:
 1) Store **one** Vapi API key in `.env` (our org).
 2) For each workspace, automatically create/update in Vapi:
    - a **Tool** (`createCase`)
@@ -58,7 +58,7 @@ Workspace admin can:
 2) **Connect phone number**
    - “Provision a new Vapi number” (or paste an existing Vapi phone number id for now)
 3) **Test**
-   - call the number → assistant collects info → creates ticket in Ticketcloser → returns case number
+   - call the number → assistant collects info → creates ticket in tickIt → returns case number
 4) **See usage**
    - call logs + cost → credits deducted
 

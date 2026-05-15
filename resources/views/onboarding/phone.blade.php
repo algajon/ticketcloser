@@ -8,12 +8,24 @@
 @section('content')
     @php
         $configs = $configs ?? collect();
+        $existingNumberCountryOptions = collect($existingNumberCountryOptions ?? []);
         $activationCountdownIso = $activationCountdownEndsAt?->toIso8601String();
         $workspaceIsFree = $workspace->isFreePlan() && ! $workspace->bypassesPlanLimits();
         $showDeveloperPhoneIds = ! $workspaceIsFree;
         $provisioningMode = old('provisioning_mode', $phone?->provisioning_mode ?: $workspace->preferredPhoneSetupMode());
         $externalProvider = old('external_provider', $phone?->external_provider ?: $workspace->preferredExternalPhoneProvider());
         $vapiCredentialId = old('vapi_credential_id', $phone?->vapi_credential_id ?: $workspace->default_vapi_credential_id);
+        $existingNumberCountry = old(
+            'existing_number_country',
+            $defaultExistingNumberCountry ?? \App\Support\RegionalPilotStackCatalog::inferExistingNumberCountry(
+                $phone?->forwarding_number,
+                $workspace->primaryMarket()
+            )
+        );
+        $existingNumberCountryCatalog = $existingNumberCountryOptions
+            ->mapWithKeys(fn (array $option) => [$option['value'] => $option])
+            ->all();
+        $workspaceHasDefaultVapiCredential = filled($workspace->default_vapi_credential_id);
         $autoForwardingTarget = old(
             'auto_forwarding_target',
             $workspace->primaryMarket() !== \App\Support\RegionalPilotStackCatalog::UAE && blank($phone?->e164) ? '1' : '0'
@@ -150,8 +162,97 @@
             </div>
         </x-ui.panel>
 
-        <x-ui.panel title="{{ $phone?->vapi_phone_number_id ? 'Update number' : 'Add a number' }}" description="Pick how this assistant should receive live calls, whether that is an instant number or your own local line.">
-            <form method="POST" action="{{ route('app.phone_numbers.store', $workspace) }}" class="space-y-5" x-data="{ loading: false, provisioningMode: @js($provisioningMode), externalProvider: @js($externalProvider), vapiCredentialId: @js($vapiCredentialId), autoForwardingTarget: @js((string) $autoForwardingTarget === '1') }" @submit="loading = true">
+        <x-ui.panel title="{{ $phone?->vapi_phone_number_id ? 'Update number' : 'Add a number' }}" description="Choose whether this assistant should use a new test number, import an existing line, or become the forwarding target for your live number.">
+            <form
+                method="POST"
+                action="{{ route('app.phone_numbers.store', $workspace) }}"
+                class="space-y-5"
+                x-data="{
+                    loading: false,
+                    provisioningMode: @js($provisioningMode),
+                    externalProvider: @js($externalProvider),
+                    vapiCredentialId: @js($vapiCredentialId),
+                    existingNumberCountry: @js($existingNumberCountry),
+                    workspaceHasDefaultVapiCredential: @js($workspaceHasDefaultVapiCredential),
+                    autoForwardingTarget: @js((string) $autoForwardingTarget === '1'),
+                    numberCatalog: @js($existingNumberCountryCatalog),
+                    isInstantMode() {
+                        return this.provisioningMode === 'vapi_instant';
+                    },
+                    isImportMode() {
+                        return this.provisioningMode === 'external_provider';
+                    },
+                    isForwardMode() {
+                        return this.provisioningMode === 'existing_business_number';
+                    },
+                    hasAnyCredential() {
+                        return this.workspaceHasDefaultVapiCredential || String(this.vapiCredentialId || '').trim() !== '';
+                    },
+                    countryConfig() {
+                        return this.numberCatalog[this.existingNumberCountry] || this.numberCatalog.us || Object.values(this.numberCatalog)[0] || {};
+                    },
+                    existingNumberLabel() {
+                        if (this.isImportMode()) {
+                            return 'Number to import';
+                        }
+
+                        if (this.isForwardMode()) {
+                            return 'Current business number';
+                        }
+
+                        return 'Your existing phone number';
+                    },
+                    existingNumberHelp() {
+                        if (this.isImportMode()) {
+                            return this.countryConfig().import_help || 'Paste the exact number you want to import into Vapi.';
+                        }
+
+                        if (this.isForwardMode()) {
+                            return this.countryConfig().forwarding_help || 'Save the number you want to keep so you can forward it later.';
+                        }
+
+                        return 'Optional. We will show you where to forward it.';
+                    },
+                    existingNumberPlaceholder() {
+                        return this.countryConfig().placeholder || '+1 415 555 0123';
+                    },
+                    providerHelp() {
+                        return this.countryConfig().provider_help || 'Use the carrier that already owns this number.';
+                    },
+                    credentialHelp() {
+                        if (this.isImportMode()) {
+                            return this.hasAnyCredential()
+                                ? 'We will use the saved Vapi BYO credential to import this number and attach it to the selected assistant.'
+                                : 'Paste a Vapi BYO credential here, or save one once in workspace settings for one-click imports.';
+                        }
+
+                        return 'Optional. Paste a Vapi BYO credential only if this line is already connected through Vapi and you want to attach it directly.';
+                    },
+                    selectSetup(mode) {
+                        this.provisioningMode = mode;
+
+                        if (mode === 'existing_business_number' && !this.autoForwardingTarget) {
+                            this.autoForwardingTarget = true;
+                        }
+                    },
+                    submitLabel() {
+                        if (this.loading) {
+                            return 'Saving...';
+                        }
+
+                        if (this.isImportMode()) {
+                            return this.hasAnyCredential() ? 'Import number and attach assistant' : 'Save import plan';
+                        }
+
+                        if (this.isForwardMode()) {
+                            return this.autoForwardingTarget ? 'Create forwarding target' : 'Save forwarding plan';
+                        }
+
+                        return @js($phone?->vapi_phone_number_id ? 'Save number' : 'Create test number');
+                    },
+                }"
+                @submit="loading = true"
+            >
                 @csrf
 
                 <div class="tc-field">
@@ -167,11 +268,11 @@
                             <option value="">No assistants available</option>
                         @endforelse
                     </select>
-                    <p class="tc-help">Workspace defaults for language, market, and number setup carry through here automatically.</p>
+                    <p class="tc-help">Choose which assistant should answer this number.</p>
                 </div>
 
                 <div class="tc-field">
-                    <label class="tc-field-label">Phone setup</label>
+                    <label class="tc-field-label">How should this assistant take calls?</label>
                     <input type="hidden" name="provisioning_mode" x-model="provisioningMode" />
                     <div class="mt-2 space-y-2">
                         @foreach($phoneSetupOptions as $option)
@@ -179,7 +280,7 @@
                                 type="button"
                                 class="flex w-full items-start justify-between gap-3 rounded-[1rem] border px-4 py-4 text-left transition"
                                 :class="provisioningMode === '{{ $option['value'] }}' ? 'tc-accent-card-active' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'"
-                                @click="provisioningMode = '{{ $option['value'] }}'">
+                                @click="selectSetup('{{ $option['value'] }}')">
                                 <div class="min-w-0">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <div class="text-sm font-semibold text-slate-950">{{ $option['label'] }}</div>
@@ -198,6 +299,22 @@
                     </div>
                 </div>
 
+                <div class="rounded-[1.25rem] border border-emerald-200 bg-emerald-50/80 px-4 py-4 text-sm leading-6 text-emerald-900" x-show="isImportMode() && hasAnyCredential()" x-transition>
+                    <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-emerald-700">Ready to import</div>
+                    <div class="mt-2">
+                        This assistant can import a US, German, UAE, or other existing number directly into Vapi as soon as you save it.
+                    </div>
+                </div>
+
+                <div class="rounded-[1.25rem] border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm leading-6 text-amber-900" x-show="isImportMode() && !hasAnyCredential()" x-transition>
+                    <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-amber-700">One-click import tip</div>
+                    <div class="mt-2">
+                        Add a workspace Vapi BYO credential once in
+                        <a href="{{ route('app.workspaces.settings', $workspace) }}" class="font-semibold underline decoration-amber-300 underline-offset-2">workspace settings</a>
+                        and future German or US number imports become a single save here.
+                    </div>
+                </div>
+
                 <div class="tc-field" x-show="provisioningMode === 'vapi_instant'" x-transition>
                     <label for="area-code" class="tc-field-label">Preferred area code</label>
                     <input id="area-code" name="area_code" placeholder="e.g. 415" maxlength="3" inputmode="numeric" pattern="[0-9]{3}"
@@ -208,11 +325,32 @@
                     @endif
                 </div>
 
+                <div class="tc-field" x-show="!isInstantMode()" x-transition>
+                    <label class="tc-field-label">Existing number country</label>
+                    <input type="hidden" name="existing_number_country" x-model="existingNumberCountry" />
+                    <div class="mt-2 grid gap-2 sm:grid-cols-2">
+                        @foreach($existingNumberCountryOptions as $countryOption)
+                            <button
+                                type="button"
+                                class="rounded-[1rem] border px-4 py-3 text-left transition"
+                                :class="existingNumberCountry === '{{ $countryOption['value'] }}' ? 'tc-accent-card-active' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'"
+                                @click="existingNumberCountry = '{{ $countryOption['value'] }}'">
+                                <div class="text-sm font-semibold text-slate-950">{{ $countryOption['label'] }}</div>
+                                <div class="mt-1 text-sm text-slate-600">{{ $countryOption['placeholder'] }}</div>
+                            </button>
+                        @endforeach
+                    </div>
+                    @if($errors->first('existing_number_country'))
+                        <p class="tc-error">{{ $errors->first('existing_number_country') }}</p>
+                    @endif
+                </div>
+
                 <div class="tc-field">
-                    <label for="forwarding_number" class="tc-field-label" x-text="provisioningMode === 'vapi_instant' ? 'Your existing phone number' : 'Business phone number'">Your existing phone number</label>
-                    <input id="forwarding_number" name="forwarding_number" placeholder="e.g. +1 555-0199"
+                    <label for="forwarding_number" class="tc-field-label" x-text="existingNumberLabel()">Your existing phone number</label>
+                    <input id="forwarding_number" name="forwarding_number"
+                        :placeholder="existingNumberPlaceholder()"
                         value="{{ old('forwarding_number', $phone?->forwarding_number) }}" class="tc-input" @if(!$config?->vapi_assistant_id) disabled @endif />
-                    <p class="tc-help" x-text="provisioningMode === 'vapi_instant' ? 'Optional. We will show you where to forward it.' : 'Save the line you want to keep. We will use it for your import or forwarding setup.'">Optional. We will show you where to forward it.</p>
+                    <p class="tc-help" x-text="existingNumberHelp()">Optional. We will show you where to forward it.</p>
                     @if($errors->first('forwarding_number'))
                         <p class="tc-error">{{ $errors->first('forwarding_number') }}</p>
                     @endif
@@ -232,34 +370,31 @@
                 </div>
 
                 <div class="tc-field" x-show="provisioningMode === 'external_provider'" x-transition>
-                    <label for="external_provider" class="tc-field-label">Carrier / provider</label>
+                    <label for="external_provider" class="tc-field-label">Current carrier / provider</label>
                     <select id="external_provider" name="external_provider" class="tc-input" x-model="externalProvider" @if(!$config?->vapi_assistant_id) disabled @endif>
                         @foreach($externalProviderOptions as $providerOption)
                             <option value="{{ $providerOption['value'] }}">{{ $providerOption['label'] }}</option>
                         @endforeach
                     </select>
-                    <p class="tc-help">
-                        @if($workspace->primaryMarket() === \App\Support\RegionalPilotStackCatalog::UAE)
-                            For UAE pilots, Telnyx is the cleanest path for a local number you can later import into Vapi.
-                        @else
-                            Pick the carrier you want this workspace to use when you are not creating an instant tickIt number.
-                        @endif
+                    <p class="tc-help" x-text="providerHelp()">
+                        Pick the carrier that owns the number you want to import.
                     </p>
                 </div>
 
                 <div class="tc-field" x-show="provisioningMode !== 'vapi_instant'" x-transition>
-                    <label for="vapi_credential_id" class="tc-field-label">Vapi credential ID <span class="text-slate-500">Optional</span></label>
-                    <input id="vapi_credential_id" name="vapi_credential_id" type="text" class="tc-input" x-model="vapiCredentialId" placeholder="Paste the Vapi BYO credential ID" @if(!$config?->vapi_assistant_id) disabled @endif />
-                    <p class="tc-help" x-text="provisioningMode === 'external_provider'
-                        ? 'If you already created a BYO phone credential in Vapi, paste it here and we will try to import the number automatically.'
-                        : 'If your existing number is already connected through a Vapi BYO credential, paste it here so we can attach it to this assistant.'">Optional import help text.</p>
+                    <label for="vapi_credential_id" class="tc-field-label">Vapi import credential <span class="text-slate-500">Optional</span></label>
+                    <input id="vapi_credential_id" name="vapi_credential_id" type="text" class="tc-input" x-model="vapiCredentialId" placeholder="Paste a Vapi BYO credential ID if you want to override the workspace default" @if(!$config?->vapi_assistant_id) disabled @endif />
+                    <p class="tc-help" x-text="credentialHelp()">Optional import help text.</p>
+                    <p class="tc-help" x-show="workspaceHasDefaultVapiCredential && String(vapiCredentialId || '').trim() === ''" x-cloak>
+                        A saved workspace credential will be used automatically if you leave this blank.
+                    </p>
                     @if($errors->first('vapi_credential_id'))
                         <p class="tc-error">{{ $errors->first('vapi_credential_id') }}</p>
                     @endif
                 </div>
 
                 <button type="submit" class="tc-btn-primary w-full justify-center" x-bind:disabled="loading || {{ $config?->vapi_assistant_id ? 'false' : 'true' }}">
-                    <span x-text="loading ? 'Saving...' : (provisioningMode === 'vapi_instant' ? '{{ $phone?->vapi_phone_number_id ? 'Save number' : 'Add number' }}' : (provisioningMode === 'existing_business_number' && autoForwardingTarget ? 'Create forwarding target' : 'Save setup'))">{{ $phone?->vapi_phone_number_id ? 'Save number' : 'Add number' }}</span>
+                    <span x-text="submitLabel()">{{ $phone?->vapi_phone_number_id ? 'Save number' : 'Create test number' }}</span>
                 </button>
             </form>
         </x-ui.panel>

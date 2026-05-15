@@ -1,4 +1,4 @@
-# Design System — Ticketcloser
+# Design System — tickIt
 
 ## Stack
 Tailwind CSS v3 + custom CSS variables for semantic tokens. Components implemented as Blade components or Blade partials.

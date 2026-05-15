@@ -4,6 +4,7 @@ temp_log*.txt
 tmp_logs.txt
 vapi_payload.txt
 tmp_full_deploy_*.zip
+__remote_backup__*
 .DS_Store
 .env
 .env.backup

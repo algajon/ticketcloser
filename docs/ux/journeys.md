@@ -1,4 +1,4 @@
-# UX Journeys — Ticketcloser
+# UX Journeys — tickIt
 
 ## Journey 1: New User — Workspace Setup to First Ticket
 

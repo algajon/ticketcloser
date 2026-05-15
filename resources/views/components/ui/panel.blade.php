@@ -6,15 +6,11 @@
 ])
 
 <div {{ $attributes->class($muted ? 'tc-panel-muted' : 'tc-panel') }}>
-    @if($title || $description || isset($actions))
+    @if($title || isset($actions))
         <div class="tc-panel-header">
             <div class="min-w-0 max-w-2xl">
                 @if($title)
                     <h2 class="tc-h3 break-words">{{ $title }}</h2>
-                @endif
-
-                @if($description)
-                    <p class="mt-1 break-words text-sm leading-6 text-slate-600">{{ $description }}</p>
                 @endif
             </div>
 

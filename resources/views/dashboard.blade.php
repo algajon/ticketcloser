@@ -38,8 +38,8 @@
     @endphp
 
     <div class="tc-dashboard space-y-10">
-        <div class="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]">
-            <x-ui.panel class="tc-dashboard-panel" title="Workspace pulse" description="See what is live and what the team will feel first.">
+        <div class="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]" style="align-items:start;">
+            <x-ui.panel class="tc-dashboard-panel" style="align-self:start;" title="Workspace pulse" description="See what is live and what the team will feel first.">
                 <div class="tc-dashboard-pulse-grid">
                     <div class="tc-dashboard-pulse-metric">
                         <p class="tc-dashboard-pulse-label">Open tickets</p>
@@ -118,6 +118,71 @@
                             </div>
                         @endif
                     @endif
+                </x-ui.panel>
+            </div>
+        </div>
+
+        <div class="space-y-4">
+            <div class="tc-dashboard-section-heading">
+                <p class="tc-dashboard-section-label">Recent activity</p>
+                <h2 class="tc-dashboard-section-title">Newest tickets and latest calls</h2>
+            </div>
+
+            <div class="grid gap-6 xl:grid-cols-2">
+                <x-ui.panel class="tc-dashboard-panel" title="Recent tickets" description="Newest first." bodyClass="p-0">
+                    @if($recentCases->isEmpty())
+                        <div class="p-6">
+                            <x-ui.empty-state title="No tickets yet" description="Tickets will show up here after your first call." actionText="Open assistants" :actionHref="$workspace ? route('app.assistant.edit', $workspace) : '#'" />
+                        </div>
+                    @else
+                        <div class="divide-y divide-slate-100">
+                            @foreach($recentCases as $case)
+                                @php
+                                    $statusTone = match ($case->status) {
+                                        'resolved' => 'success',
+                                        'waiting' => 'warning',
+                                        'in_progress' => 'info',
+                                        'triaged' => 'primary',
+                                        default => 'slate',
+                                    };
+                                    $priorityTone = match ($case->priority) {
+                                        'critical' => 'danger',
+                                        'high' => 'warning',
+                                        default => 'slate',
+                                    };
+                                @endphp
+                                <a href="{{ route('app.tickets.show', $case->id) }}" class="block px-6 py-5 transition hover:bg-slate-50/80">
+                                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                                        <div class="min-w-0">
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <span class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ $case->case_number }}</span>
+                                                <x-ui.badge :tone="$statusTone">{{ str_replace('_', ' ', $case->status) }}</x-ui.badge>
+                                                <x-ui.badge :tone="$priorityTone">{{ $case->priority }}</x-ui.badge>
+                                            </div>
+                                            <p class="mt-3 text-base font-semibold text-slate-950">{{ $case->title }}</p>
+                                            <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
+                                                @if($case->requester_phone)
+                                                    <span>{{ $case->requester_phone }}</span>
+                                                @endif
+                                                @if($case->category)
+                                                    <span>{{ $case->category }}</span>
+                                                @endif
+                                                <span>{{ $case->source ?? 'voice' }}</span>
+                                            </div>
+                                        </div>
+
+                                        <div class="shrink-0 text-sm text-slate-500">
+                                            {{ $case->created_at->diffForHumans() }}
+                                        </div>
+                                    </div>
+                                </a>
+                            @endforeach
+                        </div>
+                    @endif
+
+                    <x-slot:actions>
+                        <a href="{{ route('app.tickets.index') }}" class="tc-btn-ghost !px-3 !py-2 text-xs">View all tickets</a>
+                    </x-slot:actions>
                 </x-ui.panel>
 
                 <x-ui.panel class="tc-dashboard-panel" title="Recent calls" description="Latest activity on the line.">
@@ -275,67 +340,5 @@
             </div>
         @endif
 
-        <div class="space-y-4">
-            <div class="tc-dashboard-section-heading">
-                <p class="tc-dashboard-section-label">Recent activity</p>
-                <h2 class="tc-dashboard-section-title">Newest tickets coming in</h2>
-            </div>
-
-            <x-ui.panel class="tc-dashboard-panel" title="Recent tickets" description="Newest first." bodyClass="p-0">
-                    @if($recentCases->isEmpty())
-                        <div class="p-6">
-                            <x-ui.empty-state title="No tickets yet" description="Tickets will show up here after your first call." actionText="Open assistants" :actionHref="$workspace ? route('app.assistant.edit', $workspace) : '#'" />
-                        </div>
-                    @else
-                        <div class="divide-y divide-slate-100">
-                            @foreach($recentCases as $case)
-                                @php
-                                    $statusTone = match ($case->status) {
-                                        'resolved' => 'success',
-                                        'waiting' => 'warning',
-                                        'in_progress' => 'info',
-                                        'triaged' => 'primary',
-                                        default => 'slate',
-                                    };
-                                    $priorityTone = match ($case->priority) {
-                                        'critical' => 'danger',
-                                        'high' => 'warning',
-                                        default => 'slate',
-                                    };
-                                @endphp
-                                <a href="{{ route('app.tickets.show', $case->id) }}" class="block px-6 py-5 transition hover:bg-slate-50/80">
-                                    <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                                        <div class="min-w-0">
-                                            <div class="flex flex-wrap items-center gap-2">
-                                                <span class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ $case->case_number }}</span>
-                                                <x-ui.badge :tone="$statusTone">{{ str_replace('_', ' ', $case->status) }}</x-ui.badge>
-                                                <x-ui.badge :tone="$priorityTone">{{ $case->priority }}</x-ui.badge>
-                                            </div>
-                                            <p class="mt-3 text-base font-semibold text-slate-950">{{ $case->title }}</p>
-                                            <div class="mt-2 flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                                                @if($case->requester_phone)
-                                                    <span>{{ $case->requester_phone }}</span>
-                                                @endif
-                                                @if($case->category)
-                                                    <span>{{ $case->category }}</span>
-                                                @endif
-                                                <span>{{ $case->source ?? 'voice' }}</span>
-                                            </div>
-                                        </div>
-
-                                        <div class="shrink-0 text-sm text-slate-500">
-                                            {{ $case->created_at->diffForHumans() }}
-                                        </div>
-                                    </div>
-                                </a>
-                            @endforeach
-                        </div>
-                    @endif
-
-                    <x-slot:actions>
-                        <a href="{{ route('app.tickets.index') }}" class="tc-btn-ghost !px-3 !py-2 text-xs">View all tickets</a>
-                    </x-slot:actions>
-            </x-ui.panel>
-        </div>
     </div>
 @endsection

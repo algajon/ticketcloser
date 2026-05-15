@@ -345,6 +345,143 @@ class VapiWebhookTest extends TestCase
     }
 
     /** @test */
+    public function it_localizes_the_runtime_opening_line_for_supported_languages(): void
+    {
+        $assistant = AssistantConfig::query()->where('workspace_id', $this->workspace->id)->firstOrFail();
+        $assistant->update([
+            'first_message' => null,
+            'language_code' => 'hi-IN',
+            'vapi_tool_id' => 'tool_case_123',
+            'vapi_booking_tool_id' => 'tool_booking_123',
+            'vapi_lookup_tool_id' => 'tool_lookup_123',
+            'vapi_case_lookup_tool_id' => 'tool_case_lookup_123',
+        ]);
+
+        WorkspacePhoneNumber::create([
+            'workspace_id' => $this->workspace->id,
+            'assistant_id' => $assistant->id,
+            'vapi_phone_number_id' => 'pn_known_contact_hi_1',
+            'e164' => '+18005550198',
+            'is_active' => true,
+        ]);
+
+        Contact::create([
+            'workspace_id' => $this->workspace->id,
+            'name' => 'Aarav Singh',
+            'phone_e164' => '+16402298700',
+        ]);
+
+        $response = $this->postJson('/api/webhooks/vapi', [
+            'message' => [
+                'type' => 'assistant-request',
+                'call' => [
+                    'id' => 'call_known_contact_hi_1',
+                    'phoneNumberId' => 'pn_known_contact_hi_1',
+                    'customer' => ['number' => '+16402298700'],
+                ],
+            ],
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('assistantId', 'ast-1234');
+        $response->assertJsonPath(
+            'assistantOverrides.firstMessage',
+            'नमस्ते, सपोर्ट पर कॉल करने के लिए धन्यवाद। आज मैं आपकी कैसे मदद करूँ? आपसे फिर बात करके खुशी हुई, Aarav.'
+        );
+        $response->assertJsonPath(
+            'assistantOverrides.variableValues.knownCallerSuffix',
+            ' आपसे फिर बात करके खुशी हुई, Aarav.'
+        );
+        $this->assertStringContainsString(
+            'Keep caller-facing replies in hi-IN',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+    }
+
+    /** @test */
+    public function it_localizes_runtime_prompt_and_opening_line_to_the_selected_assistant_language(): void
+    {
+        config([
+            'services.openai.api_key' => 'openai-test-key',
+            'services.openai.base_url' => 'https://api.openai.com/v1',
+            'services.openai.model' => 'gpt-4o-mini',
+        ]);
+
+        Http::fake([
+            'https://api.openai.com/v1/chat/completions' => Http::sequence()
+                ->push([
+                    'choices' => [[
+                        'message' => [
+                            'content' => 'Sie sind der Sprachassistent fuer Test Workspace. Stellen Sie jeweils nur eine Frage.',
+                        ],
+                    ]],
+                ], 200)
+                ->push([
+                    'choices' => [[
+                        'message' => [
+                            'content' => 'Danke fuer Ihren Anruf bei Test Workspace. Wie kann ich Ihnen heute helfen?',
+                        ],
+                    ]],
+                ], 200),
+        ]);
+
+        $assistant = AssistantConfig::query()->where('workspace_id', $this->workspace->id)->firstOrFail();
+        $assistant->update([
+            'system_prompt' => 'You are the voice assistant for Test Workspace. Ask one question at a time.',
+            'first_message' => 'Thanks for calling Test Workspace. How can I help today?',
+            'language_code' => 'de-DE',
+            'vapi_tool_id' => 'tool_case_123',
+            'vapi_booking_tool_id' => 'tool_booking_123',
+            'vapi_lookup_tool_id' => 'tool_lookup_123',
+            'vapi_case_lookup_tool_id' => 'tool_case_lookup_123',
+        ]);
+
+        WorkspacePhoneNumber::create([
+            'workspace_id' => $this->workspace->id,
+            'assistant_id' => $assistant->id,
+            'vapi_phone_number_id' => 'pn_known_contact_de_1',
+            'e164' => '+18005550197',
+            'is_active' => true,
+        ]);
+
+        Contact::create([
+            'workspace_id' => $this->workspace->id,
+            'name' => 'Lena Vogel',
+            'phone_e164' => '+16402298701',
+        ]);
+
+        $response = $this->postJson('/api/webhooks/vapi', [
+            'message' => [
+                'type' => 'assistant-request',
+                'call' => [
+                    'id' => 'call_known_contact_de_1',
+                    'phoneNumberId' => 'pn_known_contact_de_1',
+                    'customer' => ['number' => '+16402298701'],
+                ],
+            ],
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('assistantId', 'ast-1234');
+        $this->assertStringStartsWith(
+            'Danke fuer Ihren Anruf bei Test Workspace. Wie kann ich Ihnen heute helfen?',
+            $response->json('assistantOverrides.firstMessage')
+        );
+        $this->assertStringContainsString(
+            'Lena',
+            $response->json('assistantOverrides.variableValues.knownCallerSuffix')
+        );
+        $this->assertStringContainsString(
+            'Sie sind der Sprachassistent fuer Test Workspace. Stellen Sie jeweils nur eine Frage.',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringNotContainsString(
+            'You are the voice assistant for Test Workspace. Ask one question at a time.',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+    }
+
+    /** @test */
     public function it_can_lookup_recent_cases_for_a_contact_as_a_tool_call(): void
     {
         $contact = Contact::create([

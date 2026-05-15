@@ -1,4 +1,4 @@
-# UX Backlog — Ticketcloser
+# UX Backlog — tickIt
 
 Sorted by: **(Impact + Trust + Frequency) / (Effort + Risk)**
 

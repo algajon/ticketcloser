@@ -3,6 +3,7 @@
 @tailwind utilities;
 
 :root {
+    --tc-font-sans: "Inter", system-ui, sans-serif;
     --tc-bg: 248 250 252;
     --tc-bg-strong: 241 245 249;
     --tc-surface: 255 255 255;
@@ -83,6 +84,7 @@ body[data-app-accent='purple'] {
 
     body {
         min-height: 100vh;
+        font-family: var(--tc-font-sans);
         background: linear-gradient(180deg, rgb(var(--tc-bg)) 0%, rgb(var(--tc-surface-muted)) 100%);
         color: rgb(var(--tc-text));
         overflow-x: clip;
@@ -348,10 +350,6 @@ body[data-app-accent='purple'] {
     .tc-kpi-hint {
         @apply mt-2 text-sm;
         color: rgb(var(--tc-muted));
-    }
-
-    .tc-dashboard {
-        font-family: "Manrope", "Inter", system-ui, sans-serif;
     }
 
     .tc-dashboard-panel {

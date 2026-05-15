@@ -1,4 +1,4 @@
-# UX Audit — Ticketcloser
+# UX Audit — tickIt
 
 *Scored 1 (poor) → 5 (excellent)*
 

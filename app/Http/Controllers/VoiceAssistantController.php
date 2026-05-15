@@ -55,7 +55,7 @@ class VoiceAssistantController extends Controller
             'system_prompt' => ['nullable', 'string'],
             'voice_provider' => ['nullable', 'string', 'max:50'],
             'voice_id' => ['nullable', 'string', 'max:120'],
-            'language_code' => ['nullable', 'string', 'max:20'],
+            'language_code' => ['nullable', 'string', Rule::in(collect(RegionalPilotStackCatalog::languageOptions($workspace->primaryMarket()))->pluck('value')->all())],
             'model_name' => ['nullable', 'string', Rule::in(collect(AssistantConfig::modelOptions())->pluck('value')->all())],
             'intake_params' => ['nullable', 'array'],
             'preset_key' => ['nullable', 'string', Rule::in($availablePresetKeys)],
@@ -87,15 +87,23 @@ class VoiceAssistantController extends Controller
         if ($workspace->isFreePlan() && ! $workspace->bypassesPlanLimits()) {
             $incomingModel = AssistantConfig::normalizedModelName($data['model_name'] ?? null);
             $incomingProvider = $data['voice_provider'] ?? null;
-            $incomingLanguage = (string) ($data['language_code'] ?? 'en-US');
-            $freeArabicPath = str_starts_with($incomingLanguage, 'ar-') && $incomingProvider === 'azure';
+            $incomingLanguage = RegionalPilotStackCatalog::normalizeLanguageCode(
+                $data['language_code'] ?? null,
+                $workspace->preferredLanguageCode()
+            ) ?: 'en-US';
+            $recommendedVoice = RegionalPilotStackCatalog::standardVoiceProfile(
+                $incomingLanguage,
+                $data['preset_key'] ?? null,
+                $workspace->primaryMarket()
+            );
+            $allowedProvider = $recommendedVoice['provider'] ?? 'vapi';
 
-            if ($incomingModel !== AssistantConfig::DEFAULT_MODEL || ($incomingProvider && $incomingProvider !== 'vapi' && ! $freeArabicPath)) {
+            if ($incomingModel !== AssistantConfig::DEFAULT_MODEL || ($incomingProvider && $incomingProvider !== $allowedProvider)) {
                 $wasClampedForFreePlan = true;
             }
 
             $data['model_name'] = AssistantConfig::DEFAULT_MODEL;
-            $data['voice_provider'] = $freeArabicPath ? 'azure' : 'vapi';
+            $data['voice_provider'] = $allowedProvider;
         }
 
         try {
@@ -126,7 +134,7 @@ class VoiceAssistantController extends Controller
             ->with('success', 'Assistant + tool synced to Vapi.');
 
         if ($wasClampedForFreePlan) {
-            $redirect->with('warning', 'Free workspaces use the Standard AI engine. Arabic can still use the curated Azure voice path.');
+            $redirect->with('warning', 'Free workspaces use the Standard AI engine. Supported languages can still use the curated regional voice path.');
         }
 
         if ($isCreating) {
@@ -214,6 +222,11 @@ class VoiceAssistantController extends Controller
         $pilotStack = RegionalPilotStackCatalog::forWorkspace($workspace, $config?->language_code ?: $workspace->preferredLanguageCode());
         $phoneSetupOptions = RegionalPilotStackCatalog::phoneSetupOptions($workspace->primaryMarket());
         $externalProviderOptions = RegionalPilotStackCatalog::externalProviderOptions($workspace->primaryMarket());
+        $existingNumberCountryOptions = RegionalPilotStackCatalog::existingNumberCountryOptions($workspace->primaryMarket());
+        $defaultExistingNumberCountry = RegionalPilotStackCatalog::inferExistingNumberCountry(
+            old('forwarding_number', $phone?->forwarding_number),
+            $workspace->primaryMarket()
+        );
 
         return view('onboarding.phone', compact(
             'workspace',
@@ -223,7 +236,9 @@ class VoiceAssistantController extends Controller
             'activationCountdownEndsAt',
             'pilotStack',
             'phoneSetupOptions',
-            'externalProviderOptions'
+            'externalProviderOptions',
+            'existingNumberCountryOptions',
+            'defaultExistingNumberCountry'
         ));
     }
 
@@ -236,12 +251,28 @@ class VoiceAssistantController extends Controller
             'provisioning_mode' => ['nullable', 'string', Rule::in(['vapi_instant', 'existing_business_number', 'external_provider'])],
             'external_provider' => ['nullable', 'string', Rule::in(collect(RegionalPilotStackCatalog::externalProviderOptions())->pluck('value')->all())],
             'vapi_credential_id' => ['nullable', 'string', 'max:120'],
-            'forwarding_number' => ['nullable', 'string', 'max:20'],
+            'forwarding_number' => ['nullable', 'string', 'max:40'],
+            'existing_number_country' => ['nullable', 'string', Rule::in(collect(RegionalPilotStackCatalog::existingNumberCountryOptions($workspace->primaryMarket()))->pluck('value')->all())],
             'auto_forwarding_target' => ['nullable', 'boolean'],
         ]);
 
+        $data['forwarding_number'] = filled($data['forwarding_number'] ?? null)
+            ? trim((string) $data['forwarding_number'])
+            : null;
+
         if ($workspace->hasReachedVoiceMinuteLimit()) {
             return back()->withInput()->with('error', 'This workspace has reached its free voice limit. Upgrade to re-enable calling.');
+        }
+
+        $setupMode = $data['provisioning_mode'] ?? RegionalPilotStackCatalog::defaultPhoneSetupMode($workspace->primary_market);
+
+        if (
+            in_array($setupMode, ['existing_business_number', 'external_provider'], true)
+            && blank($data['forwarding_number'])
+        ) {
+            return back()
+                ->withErrors(['forwarding_number' => 'Enter the existing number you want this assistant to use.'])
+                ->withInput();
         }
 
         try {
@@ -266,13 +297,17 @@ class VoiceAssistantController extends Controller
             return back()->withInput()->with('error', 'Provisioning failed: ' . $e->getMessage());
         }
 
-        $setupMode = $data['provisioning_mode'] ?? RegionalPilotStackCatalog::defaultPhoneSetupMode($workspace->primary_market);
         $successMessage = match (true) {
             $setupMode === 'vapi_instant' => 'Phone number provisioned/synced in Vapi.',
             $setupMode === 'existing_business_number' && filled($record->e164) && filled($record->forwarding_number)
                 => 'Forward your existing number to '.$record->e164.' whenever you are ready to switch calls over.',
-            filled($record->vapi_phone_number_id) => 'External number imported and linked to the assistant.',
-            default => 'Number setup saved. Connect the local number through your provider, then import or forward it when you are ready.',
+            $setupMode === 'existing_business_number'
+                => 'Forwarding plan saved. We will keep this number ready while you finish the routing switch.',
+            $setupMode === 'external_provider' && filled($record->vapi_phone_number_id)
+                => 'Existing number imported and linked to the assistant.',
+            $setupMode === 'external_provider'
+                => 'Import details saved. Add or confirm a Vapi BYO credential when you are ready to attach this number live.',
+            default => 'Number setup saved.',
         };
 
         $redirect = redirect()
@@ -384,15 +419,23 @@ class VoiceAssistantController extends Controller
         if ($workspace->isFreePlan() && ! $workspace->bypassesPlanLimits()) {
             $incomingModel = AssistantConfig::normalizedModelName($input['model_name'] ?? null);
             $incomingProvider = $input['voice_provider'] ?? null;
-            $incomingLanguage = (string) ($input['language_code'] ?? 'en-US');
-            $freeArabicPath = str_starts_with($incomingLanguage, 'ar-') && $incomingProvider === 'azure';
+            $incomingLanguage = RegionalPilotStackCatalog::normalizeLanguageCode(
+                $input['language_code'] ?? null,
+                $workspace->preferredLanguageCode()
+            ) ?: 'en-US';
+            $recommendedVoice = RegionalPilotStackCatalog::standardVoiceProfile(
+                $incomingLanguage,
+                $input['preset_key'] ?? null,
+                $workspace->primaryMarket()
+            );
+            $allowedProvider = $recommendedVoice['provider'] ?? 'vapi';
 
-            if ($incomingModel !== AssistantConfig::DEFAULT_MODEL || ($incomingProvider && $incomingProvider !== 'vapi' && ! $freeArabicPath)) {
+            if ($incomingModel !== AssistantConfig::DEFAULT_MODEL || ($incomingProvider && $incomingProvider !== $allowedProvider)) {
                 $wasClampedForFreePlan = true;
             }
 
             $input['model_name'] = AssistantConfig::DEFAULT_MODEL;
-            $input['voice_provider'] = $freeArabicPath ? 'azure' : 'vapi';
+            $input['voice_provider'] = $allowedProvider;
         }
 
         try {
@@ -424,7 +467,7 @@ class VoiceAssistantController extends Controller
             ->with('success', 'Assistant duplicated successfully.');
 
         if ($wasClampedForFreePlan) {
-            $redirect->with('warning', 'Free workspaces use the Standard AI engine. Arabic can still use the curated Azure voice path.');
+            $redirect->with('warning', 'Free workspaces use the Standard AI engine. Supported languages can still use the curated regional voice path.');
         }
 
         return $redirect;
@@ -435,30 +478,7 @@ class VoiceAssistantController extends Controller
      */
     private static function vapiVoices(): array
     {
-        return [
-            ['voiceId' => 'Emma', 'name' => 'Emma', 'provider' => 'vapi', 'language' => 'en-US'],
-            ['voiceId' => 'Clara', 'name' => 'Clara', 'provider' => 'vapi', 'language' => 'en-US'],
-            ['voiceId' => 'Savannah', 'name' => 'Savannah', 'provider' => 'vapi', 'language' => 'en-US'],
-            ['voiceId' => 'Rohan', 'name' => 'Rohan', 'provider' => 'vapi', 'language' => 'en-US'],
-            ['voiceId' => 'Elliot', 'name' => 'Elliot', 'provider' => 'vapi', 'language' => 'en-US'],
-            ['voiceId' => 'Kai', 'name' => 'Kai', 'provider' => 'vapi', 'language' => 'en-US'],
-            ['voiceId' => 'Nico', 'name' => 'Nico', 'provider' => 'vapi', 'language' => 'en-US'],
-            ['voiceId' => 'Neil', 'name' => 'Neil', 'provider' => 'vapi', 'language' => 'en-US'],
-            ['voiceId' => 'Godfrey', 'name' => 'Godfrey', 'provider' => 'vapi', 'language' => 'en-US'],
-            ['voiceId' => 'marin', 'name' => 'Marin', 'provider' => 'openai', 'language' => 'en-US'],
-            ['voiceId' => 'cedar', 'name' => 'Cedar', 'provider' => 'openai', 'language' => 'en-US'],
-            ['voiceId' => 'echo', 'name' => 'Echo', 'provider' => 'openai', 'language' => 'en-US'],
-            ['voiceId' => 'alloy', 'name' => 'Alloy', 'provider' => 'openai', 'language' => 'en-US'],
-            ['voiceId' => 'shimmer', 'name' => 'Shimmer', 'provider' => 'openai', 'language' => 'en-US'],
-            ['voiceId' => 'en-US-AriaNeural', 'name' => 'Aria Neural', 'provider' => 'azure', 'language' => 'en-US'],
-            ['voiceId' => 'en-GB-SoniaNeural', 'name' => 'Sonia Neural', 'provider' => 'azure', 'language' => 'en-GB'],
-            ['voiceId' => 'en-GB-RyanNeural', 'name' => 'Ryan Neural', 'provider' => 'azure', 'language' => 'en-GB'],
-            ['voiceId' => 'ar-AE-FatimaNeural', 'name' => 'Fatima Neural', 'provider' => 'azure', 'language' => 'ar-AE'],
-            ['voiceId' => 'ar-AE-HamdanNeural', 'name' => 'Hamdan Neural', 'provider' => 'azure', 'language' => 'ar-AE'],
-            ['voiceId' => 'es-ES-ElviraNeural', 'name' => 'Elvira Neural', 'provider' => 'azure', 'language' => 'es-ES'],
-            ['voiceId' => 'fr-FR-DeniseNeural', 'name' => 'Denise Neural', 'provider' => 'azure', 'language' => 'fr-FR'],
-            ['voiceId' => 'fr-CA-SylvieNeural', 'name' => 'Sylvie Neural', 'provider' => 'azure', 'language' => 'fr-CA'],
-        ];
+        return RegionalPilotStackCatalog::voiceCatalog();
     }
 
     private function nextDuplicateAssistantName(Workspace $workspace, string $name): string

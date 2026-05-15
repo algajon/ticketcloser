@@ -85,7 +85,7 @@
                                 <span class="whitespace-nowrap">{{ $assistant->voice_id ?? 'Automatic' }}</span>
                                 @if($assistant->language_code)
                                     <span class="whitespace-nowrap text-slate-400">/</span>
-                                    <span class="whitespace-nowrap">{{ strtoupper($assistant->language_code) }}</span>
+                                    <span class="whitespace-nowrap">{{ \App\Support\RegionalPilotStackCatalog::languageLabel($assistant->language_code) ?? strtoupper($assistant->language_code) }}</span>
                                 @endif
                             </div>
                         </div>

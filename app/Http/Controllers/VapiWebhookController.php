@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Contact;
 use App\Models\SupportCase;
 use App\Models\Workspace;
+use App\Services\Assistants\AssistantScriptLocalizer;
 use App\Services\Contacts\ContactLinkingService;
 use App\Services\Meetings\MeetingBookingService;
 use App\Services\Tickets\TicketCreationService;
@@ -124,6 +125,10 @@ class VapiWebhookController extends Controller
                             if (empty($basePrompt)) {
                                 $basePrompt = 'You are a helpful customer support assistant for ' . $workspace->name . '.';
                             }
+                            $basePrompt = $this->assistantScriptLocalizer()->localizePrompt($basePrompt, $workspacePhone->assistant->language_code, [
+                                'workspace_name' => $workspace->name,
+                                'assistant_name' => $workspacePhone->assistant->name,
+                            ]);
                             $languageGuardrail = $this->languageGuardrail($workspacePhone->assistant->language_code);
                             $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference.]";
                             $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Use any caller context already provided in the system note before deciding whether to call lookupContact or lookupCase.\n- If the system note already gives you the caller's identity or recent case context, do not call lookupContact or lookupCase at the start of the call.\n- Use lookupContact only if the existing caller context is missing, unclear, or the caller asks what details are on file.\n- Use lookupCase only if recent case history would genuinely help and it was not already provided in the system note.\n- Never narrate lookupContact or lookupCase with phrases like 'Just a sec', 'One moment', 'Give me a moment', or 'Hold on a sec'.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
@@ -183,6 +188,8 @@ class VapiWebhookController extends Controller
                                     $workspacePhone->assistant->first_message,
                                     $contact->name,
                                     $workspacePhone->assistant->language_code,
+                                    $workspace->name,
+                                    $workspacePhone->assistant->name,
                                 );
                                 $overrides['variableValues'] = [
                                     'knownCallerSuffix' => $knownCallerSuffix,
@@ -510,12 +517,23 @@ class VapiWebhookController extends Controller
         return $parts[0] ?? trim((string) $name);
     }
 
-    private function runtimeFirstMessage(?string $baseMessage, ?string $contactName, ?string $languageCode = null): string
+    private function runtimeFirstMessage(
+        ?string $baseMessage,
+        ?string $contactName,
+        ?string $languageCode = null,
+        ?string $workspaceName = null,
+        ?string $assistantName = null,
+    ): string
     {
         $baseMessage = trim((string) $baseMessage);
 
         if ($baseMessage === '') {
             $baseMessage = $this->defaultFirstMessage($languageCode);
+        } else {
+            $baseMessage = $this->assistantScriptLocalizer()->localizeOpeningLine($baseMessage, $languageCode, [
+                'workspace_name' => $workspaceName,
+                'assistant_name' => $assistantName,
+            ]);
         }
 
         if (! $contactName) {
@@ -527,6 +545,8 @@ class VapiWebhookController extends Controller
 
     private function defaultFirstMessage(?string $languageCode = null): string
     {
+        return RegionalPilotStackCatalog::defaultFirstMessage($languageCode, 'support');
+
         return match ($this->languageFamily($languageCode)) {
             'ar' => 'مرحبا، شكرا لاتصالك بالدعم. كيف يمكنني مساعدتك اليوم؟',
             'fr' => "Bonjour, merci d'avoir appele le support. Comment puis-je vous aider aujourd'hui ?",
@@ -537,6 +557,8 @@ class VapiWebhookController extends Controller
 
     private function knownCallerSuffix(?string $contactName, ?string $languageCode = null): string
     {
+        return RegionalPilotStackCatalog::knownCallerSuffix($contactName, $languageCode);
+
         if (! $contactName) {
             return '';
         }
@@ -565,6 +587,11 @@ class VapiWebhookController extends Controller
         $languageCode = strtolower((string) RegionalPilotStackCatalog::normalizeLanguageCode($languageCode));
 
         return explode('-', $languageCode)[0] ?: 'en';
+    }
+
+    private function assistantScriptLocalizer(): AssistantScriptLocalizer
+    {
+        return app(AssistantScriptLocalizer::class);
     }
 
     /**

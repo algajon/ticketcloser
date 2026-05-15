@@ -512,6 +512,8 @@ class WorkspaceUseCaseCatalog
 
     protected static function preferredFirstMessage(Workspace $workspace, array $definition, string $languageCode): string
     {
+        return self::defaultFirstMessage($workspace, $definition, $languageCode);
+
         $languageCode = strtolower($languageCode);
         $primaryMarket = $workspace->primaryMarket();
 
@@ -528,6 +530,10 @@ class WorkspaceUseCaseCatalog
 
     protected static function defaultFirstMessage(Workspace $workspace, array $definition, string $languageCode): string
     {
+        $context = $definition['key'] === 'property_management' ? 'maintenance' : 'support';
+
+        return RegionalPilotStackCatalog::defaultFirstMessage($languageCode, $context);
+
         $languageCode = strtolower($languageCode);
         $primaryMarket = $workspace->primaryMarket();
 

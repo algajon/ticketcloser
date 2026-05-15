@@ -89,10 +89,17 @@
         $fallbackPhoneValue = old('fallback_phone', $config->fallback_phone ?? '');
         $promptTextValue = old('system_prompt', $config->system_prompt ?? $defaultPromptText);
         $selectedLanguageValue = old('language_code', $config->language_code ?? data_get($defaultAssistantDraft, 'language_code', 'en-US'));
-        $selectedProviderValue = $workspaceIsFree
-            ? (str_starts_with($selectedLanguageValue, 'ar-') ? old('voice_provider', $config->voice_provider ?? 'azure') : 'vapi')
-            : old('voice_provider', $config->voice_provider ?? 'vapi');
+        $freeWorkspaceDefaultVoice = \App\Support\RegionalPilotStackCatalog::standardVoiceProfile(
+            $selectedLanguageValue,
+            $selectedPresetKey,
+            $workspace->primaryMarket()
+        );
+        $selectedProviderValue = old(
+            'voice_provider',
+            $config->voice_provider ?? ($freeWorkspaceDefaultVoice['provider'] ?? 'vapi')
+        );
         $selectedVoiceValue = old('voice_id', $config->voice_id ?? '');
+        $languageOptionsJson = \App\Support\RegionalPilotStackCatalog::languageOptions($workspace->primaryMarket());
         $pilotStack = \App\Support\RegionalPilotStackCatalog::forWorkspace($workspace, $selectedLanguageValue);
         $pilotPlaybook = data_get($defaultAssistantDraft, 'regional_playbook')
             ?? \App\Support\RegionalPilotStackCatalog::forWorkspacePlaybook($workspace, $selectedLanguageValue);
@@ -109,6 +116,7 @@
                 'name' => $v['name'] ?? $v['voiceId'] ?? 'Unknown',
                 'provider' => $v['provider'] ?? 'unknown',
                 'language' => $v['language'] ?? $v['accent'] ?? '',
+                'role' => $v['role'] ?? 'default',
             ];
         })->values()->all();
     @endphp
@@ -621,14 +629,8 @@
             const billingPlansUrl = @js($billingPlansUrlValue);
             const editingAssistantId = @js($editingAssistantId);
             const aiWriterAvailable = @js($aiWriterAvailable);
-            const languageLabels = {
-                'en-US': 'English (US)',
-                'en-GB': 'English (UK)',
-                'ar-AE': 'Arabic (UAE)',
-                'es-ES': 'Spanish (Spain)',
-                'fr-FR': 'French (France)',
-                'fr-CA': 'French (Canada)',
-            };
+            const languageOptionsCatalog = @json($languageOptionsJson);
+            const languageLabels = Object.fromEntries(languageOptionsCatalog.map((option) => [option.value, option.label]));
             const modelOptions = @json($modelOptions);
             const providerLabels = {
                 vapi: 'Vapi curated',
@@ -644,6 +646,7 @@
 
             return {
                 voices: allVoices,
+                allLanguageOptions: languageOptionsCatalog,
                 name: @js($assistantNameValue),
                 workflowDraft: @js($workflowDraftJson),
                 fallbackPhone: @js($fallbackPhoneValue),
@@ -718,6 +721,13 @@
                 languageLabel(language) {
                     return languageLabels[language] || language;
                 },
+                standardLanguageVoice() {
+                    return this.voices.find((voice) =>
+                        voice.provider === 'azure'
+                        && voice.language === this.selectedLanguageCode
+                        && (voice.role === 'default' || voice.role === 'operator')
+                    ) || null;
+                },
                 providerAllowedOnFree(provider) {
                     if (!freeWorkspace) {
                         return true;
@@ -727,7 +737,11 @@
                         return true;
                     }
 
-                    return provider === 'azure' && this.selectedLanguageCode.startsWith('ar-');
+                    if (provider !== 'azure') {
+                        return false;
+                    }
+
+                    return Boolean(this.standardLanguageVoice());
                 },
                 get providerOptions() {
                     return Array.from(new Set(this.voices.map((voice) => voice.provider))).map((provider) => ({
@@ -745,16 +759,14 @@
                     return this.voices.filter((voice) => voice.provider === 'openai' && ['alloy', 'echo', 'shimmer', 'marin', 'cedar'].includes(voice.id));
                 },
                 get languageOptions() {
-                    const relevant = this.compatibleVoices.filter((voice) => !this.selectedProvider || voice.provider === this.selectedProvider);
-                    return Array.from(new Map(relevant.map((voice) => [voice.language, {
-                        value: voice.language,
-                        label: this.languageLabel(voice.language),
-                    }])).values());
+                    return this.allLanguageOptions;
                 },
                 get filteredVoices() {
                     return this.compatibleVoices.filter((voice) => {
                         const providerMatches = !this.selectedProvider || voice.provider === this.selectedProvider;
-                        const languageMatches = !this.selectedLanguageCode || voice.language === this.selectedLanguageCode;
+                        const languageMatches = !this.selectedLanguageCode
+                            || voice.language === this.selectedLanguageCode
+                            || voice.language === 'multi';
                         return providerMatches && languageMatches;
                     });
                 },
@@ -762,7 +774,7 @@
                     if (this.selectedModel.voiceMode === 'realtime') {
                         this.selectedProvider = 'openai';
                     } else if (!this.providerAllowedOnFree(this.selectedProvider)) {
-                        this.selectedProvider = 'vapi';
+                        this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
                     }
 
                     if (shouldAdjustVoice) {
@@ -770,10 +782,15 @@
                     }
                 },
                 handleProviderChange() {
-                    const availableLanguages = this.languageOptions.map((language) => language.value);
-                    if (!availableLanguages.includes(this.selectedLanguageCode)) {
-                        this.selectedLanguageCode = availableLanguages[0] || '';
+                    const providerHasLanguage = this.compatibleVoices.some((voice) =>
+                        voice.provider === this.selectedProvider
+                        && (voice.language === this.selectedLanguageCode || voice.language === 'multi')
+                    );
+
+                    if (!providerHasLanguage) {
+                        this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
                     }
+
                     this.promptWriter.language = this.selectedLanguageCode || this.promptWriter.language;
                     this.ensureVoiceSelection();
                 },
@@ -840,7 +857,10 @@
                 handleLanguageChange() {
                     this.promptWriter.language = this.selectedLanguageCode;
                     const recommended = this.recommendedVoiceForCurrentState();
-                    const providerHasLanguage = this.compatibleVoices.some((voice) => voice.provider === this.selectedProvider && voice.language === this.selectedLanguageCode);
+                    const providerHasLanguage = this.compatibleVoices.some((voice) =>
+                        voice.provider === this.selectedProvider
+                        && (voice.language === this.selectedLanguageCode || voice.language === 'multi')
+                    );
 
                     if (!providerHasLanguage && this.providerAllowedOnFree(recommended.provider)) {
                         this.selectedProvider = recommended.provider;
@@ -865,43 +885,25 @@
                 },
                 recommendedVoiceForCurrentState() {
                     if (this.selectedModel.voiceMode === 'realtime') {
-                        if (this.selectedPresetKey === 'premium_concierge') {
-                            return { provider: 'openai', id: 'shimmer' };
-                        }
-
-                        if (this.selectedPresetKey === 'bright_guide') {
-                            return { provider: 'openai', id: 'shimmer' };
-                        }
-
-                        if (this.selectedPresetKey === 'steady_operator') {
-                            return { provider: 'openai', id: 'alloy' };
-                        }
-
-                        if (this.selectedPresetKey === 'confident_closer') {
-                            return { provider: 'openai', id: 'alloy' };
-                        }
-
-                        return { provider: 'openai', id: 'shimmer' };
+                        return ['steady_operator', 'confident_closer'].includes(this.selectedPresetKey)
+                            ? { provider: 'openai', id: 'alloy' }
+                            : { provider: 'openai', id: 'shimmer' };
                     }
 
-                    if (this.selectedLanguageCode === 'es-ES') {
-                        return { provider: 'azure', id: 'es-ES-ElviraNeural' };
-                    }
+                    const prefersOperatorVoice = ['steady_operator', 'confident_closer'].includes(this.selectedPresetKey);
+                    const localizedStandardVoices = this.voices.filter((voice) =>
+                        voice.provider === 'azure' && voice.language === this.selectedLanguageCode
+                    );
 
-                    if (this.selectedLanguageCode === 'ar-AE') {
-                        if (['steady_operator', 'confident_closer'].includes(this.selectedPresetKey)) {
-                            return { provider: 'azure', id: 'ar-AE-HamdanNeural' };
-                        }
+                    if (localizedStandardVoices.length) {
+                        const preferredLocalizedVoice = localizedStandardVoices.find((voice) =>
+                            voice.role === (prefersOperatorVoice ? 'operator' : 'default')
+                        );
 
-                        return { provider: 'azure', id: 'ar-AE-FatimaNeural' };
-                    }
-
-                    if (this.selectedLanguageCode === 'fr-FR') {
-                        return { provider: 'azure', id: 'fr-FR-DeniseNeural' };
-                    }
-
-                    if (this.selectedLanguageCode === 'fr-CA') {
-                        return { provider: 'azure', id: 'fr-CA-SylvieNeural' };
+                        return {
+                            provider: 'azure',
+                            id: preferredLocalizedVoice?.id || localizedStandardVoices[0].id,
+                        };
                     }
 
                     if (this.selectedPresetKey === 'bright_guide') {

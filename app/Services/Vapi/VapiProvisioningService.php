@@ -7,6 +7,7 @@ use App\Models\AssistantPreset;
 use App\Models\VoiceConfig;
 use App\Models\Workspace;
 use App\Models\WorkspacePhoneNumber;
+use App\Services\Assistants\AssistantScriptLocalizer;
 use App\Support\RegionalPilotStackCatalog;
 use Illuminate\Support\Facades\DB;
 
@@ -14,6 +15,7 @@ class VapiProvisioningService
 {
     public function __construct(
         private readonly VapiClient $vapi,
+        private readonly ?AssistantScriptLocalizer $scriptLocalizer = null,
     ) {
     }
 
@@ -179,6 +181,8 @@ class VapiProvisioningService
             'workspace_id' => $workspace->id,
             'assistant_id' => $assistantConfig->id,
         ]);
+        $previousProvisioningMode = $record->provisioning_mode;
+        $previousCredentialId = $record->vapi_credential_id;
         $record->assistant_id = $assistantConfig->id;
         $record->provisioning_mode = $input['provisioning_mode'] ?? $record->provisioning_mode ?? $workspace->preferredPhoneSetupMode();
         $record->external_provider = $input['external_provider'] ?? $record->external_provider ?? $workspace->preferredExternalPhoneProvider();
@@ -190,7 +194,7 @@ class VapiProvisioningService
 
         if ($record->provisioning_mode !== 'vapi_instant') {
             if (array_key_exists('forwarding_number', $input)) {
-                $record->forwarding_number = $input['forwarding_number'];
+                $record->forwarding_number = $this->normalizeStoredPhoneNumber($input['forwarding_number']);
             }
 
             if (filled($record->vapi_credential_id)) {
@@ -207,14 +211,17 @@ class VapiProvisioningService
                     $payload['number'] = $routingNumber;
                 }
 
-                if ($record->vapi_phone_number_id) {
-                    $pn = $this->vapi->updatePhoneNumber($record->vapi_phone_number_id, $payload);
-                } else {
-                    $pn = $this->vapi->createPhoneNumber($payload);
-                }
+                $pn = $this->syncImportedPhoneNumber(
+                    $record,
+                    $payload,
+                    $routingNumber,
+                    filled($previousCredentialId) && $previousProvisioningMode !== 'vapi_instant',
+                );
 
                 $record->vapi_phone_number_id = $pn['id'] ?? $record->vapi_phone_number_id;
                 $record->e164 = $pn['number'] ?? $pn['sipUri'] ?? $routingNumber ?: $record->e164;
+                $record->assistant_id = $assistantConfig->id;
+                $record->save();
             } elseif (
                 $record->provisioning_mode === 'existing_business_number'
                 && ! empty($input['auto_forwarding_target'])
@@ -269,7 +276,7 @@ class VapiProvisioningService
         }
 
         if (array_key_exists('forwarding_number', $input)) {
-            $record->forwarding_number = $input['forwarding_number'];
+            $record->forwarding_number = $this->normalizeStoredPhoneNumber($input['forwarding_number']);
             $record->save();
         }
 
@@ -355,6 +362,64 @@ class VapiProvisioningService
         $record->save();
 
         return $pn;
+    }
+
+    private function syncImportedPhoneNumber(
+        WorkspacePhoneNumber $record,
+        array $payload,
+        string $routingNumber,
+        bool $canUpdateExistingImportedPhone
+    ): array {
+        if (! $record->vapi_phone_number_id) {
+            return $this->vapi->createPhoneNumber($payload);
+        }
+
+        if (! $canUpdateExistingImportedPhone) {
+            $this->deleteRemotePhoneNumberQuietly($record->vapi_phone_number_id);
+
+            $record->vapi_phone_number_id = null;
+            $record->e164 = null;
+            $record->save();
+
+            return $this->vapi->createPhoneNumber($payload);
+        }
+
+        try {
+            return $this->vapi->updatePhoneNumber($record->vapi_phone_number_id, $payload);
+        } catch (\Illuminate\Http\Client\RequestException) {
+            $this->deleteRemotePhoneNumberQuietly($record->vapi_phone_number_id);
+
+            $record->vapi_phone_number_id = null;
+            $record->e164 = null;
+            $record->save();
+
+            $createPayload = $payload;
+            if ($routingNumber !== '') {
+                $createPayload['number'] = $routingNumber;
+            }
+
+            return $this->vapi->createPhoneNumber($createPayload);
+        }
+    }
+
+    private function deleteRemotePhoneNumberQuietly(?string $phoneNumberId): void
+    {
+        if (! filled($phoneNumberId)) {
+            return;
+        }
+
+        try {
+            $this->vapi->deletePhoneNumber($phoneNumberId);
+        } catch (\Throwable) {
+            // Ignore missing phone numbers in Vapi when we are rebuilding the binding.
+        }
+    }
+
+    private function normalizeStoredPhoneNumber(?string $phoneNumber): ?string
+    {
+        $normalized = trim((string) $phoneNumber);
+
+        return $normalized !== '' ? $normalized : null;
     }
 
     private function buildCreateCaseToolPayload(string $workspaceSlug, string $integrationToken): array
@@ -515,6 +580,10 @@ class VapiProvisioningService
 
         $systemPrompt = $config->system_prompt ?: ($presetData['systemPrompt'] ?? $this->defaultPromptTemplate());
         $systemPrompt = str_replace('{{company_name}}', $workspace->name, $systemPrompt);
+        $systemPrompt = $this->scriptLocalizer()->localizePrompt($systemPrompt, $config->language_code, [
+            'workspace_name' => $workspace->name,
+            'assistant_name' => $config->name,
+        ]);
         $systemPrompt .= "\n\n" . $this->toolExecutionGuardrailsPrompt();
         $systemPrompt .= "\n\n" . $this->knownCallerGuardrailsPrompt();
 
@@ -567,7 +636,7 @@ class VapiProvisioningService
             $model['messages'][0]['content'] .= "\n\n[SYSTEM NOTE: If the caller is exceptionally frustrated, demands a human, or reports a high-severity emergency, immediately use the transferCall tool. Do not keep troubleshooting in those situations.]";
         }
 
-        $firstMessage = $this->buildFirstMessage($config);
+        $firstMessage = $this->buildFirstMessage($config, $workspace);
 
         $payload = [
             'name' => $config->name,
@@ -809,17 +878,18 @@ PROMPT);
 
     private function defaultVoiceProfile(AssistantConfig $config, Workspace $workspace): array
     {
-        $languageCode = strtolower((string) ($config->language_code ?: 'en-US'));
+        $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode(
+            $config->language_code,
+            $workspace->preferredLanguageCode()
+        ) ?: 'en-US';
         $presetKey = AssistantPreset::normalizeKey($config->preset_key);
         $isRealtimeModel = AssistantConfig::isRealtimeModelName($config->model_name);
         $primaryMarket = $workspace->primaryMarket();
+        $standardVoice = RegionalPilotStackCatalog::standardVoiceProfile($languageCode, $presetKey, $primaryMarket);
 
         if ($workspace->isFreePlan() && ! $workspace->bypassesPlanLimits()) {
-            if (str_starts_with($languageCode, 'ar-')) {
-                return match ($presetKey) {
-                    'confident_closer', 'steady_operator' => ['provider' => 'azure', 'voiceId' => 'ar-AE-HamdanNeural', 'speed' => 1.04],
-                    default => ['provider' => 'azure', 'voiceId' => 'ar-AE-FatimaNeural', 'speed' => 1.08],
-                };
+            if ($standardVoice) {
+                return $standardVoice;
             }
 
             return match ($presetKey) {
@@ -840,30 +910,8 @@ PROMPT);
             };
         }
 
-        if (str_starts_with($languageCode, 'es')) {
-            return ['provider' => 'azure', 'voiceId' => 'es-ES-ElviraNeural', 'speed' => 1.1];
-        }
-
-        if (str_starts_with($languageCode, 'ar-')) {
-            return match ($presetKey) {
-                'confident_closer', 'steady_operator' => ['provider' => 'azure', 'voiceId' => 'ar-AE-HamdanNeural', 'speed' => 1.04],
-                default => ['provider' => 'azure', 'voiceId' => 'ar-AE-FatimaNeural', 'speed' => 1.08],
-            };
-        }
-
-        if ($primaryMarket === RegionalPilotStackCatalog::UAE && str_starts_with($languageCode, 'en-')) {
-            return match ($presetKey) {
-                'confident_closer', 'steady_operator' => ['provider' => 'azure', 'voiceId' => 'en-GB-RyanNeural', 'speed' => 1.05],
-                default => ['provider' => 'azure', 'voiceId' => 'en-GB-SoniaNeural', 'speed' => 1.08],
-            };
-        }
-
-        if (str_starts_with($languageCode, 'fr-ca')) {
-            return ['provider' => 'azure', 'voiceId' => 'fr-CA-SylvieNeural', 'speed' => 1.08];
-        }
-
-        if (str_starts_with($languageCode, 'fr')) {
-            return ['provider' => 'azure', 'voiceId' => 'fr-FR-DeniseNeural', 'speed' => 1.08];
+        if ($standardVoice) {
+            return $standardVoice;
         }
 
         return match ($presetKey) {
@@ -884,33 +932,34 @@ PROMPT);
         return in_array($voiceId, ['alloy', 'echo', 'shimmer', 'marin', 'cedar'], true);
     }
 
-    private function buildFirstMessage(AssistantConfig $config): string
+    private function buildFirstMessage(AssistantConfig $config, Workspace $workspace): string
     {
         $base = trim((string) $config->first_message);
 
         if ($base === '') {
-            $base = 'Hi! Thanks for calling support - how can I help today?';
+            $base = RegionalPilotStackCatalog::defaultFirstMessage($config->language_code, 'support');
+        } else {
+            $base = $this->scriptLocalizer()->localizeOpeningLine($base, $config->language_code, [
+                'workspace_name' => $workspace->name,
+                'assistant_name' => $config->name,
+            ]);
         }
 
         return rtrim($base) . '{{ knownCallerSuffix | default: "" }}';
     }
 
+    private function scriptLocalizer(): AssistantScriptLocalizer
+    {
+        return $this->scriptLocalizer ?? app(AssistantScriptLocalizer::class);
+    }
+
     private function normalizeLanguageCode(?string $languageCode, ?string $voiceId, Workspace $workspace): string
     {
         $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode($languageCode);
-        $voiceId = trim((string) $voiceId);
+        $voiceLanguageCode = RegionalPilotStackCatalog::languageCodeForVoiceId($voiceId);
 
-        foreach ([
-            'ar-AE-' => 'ar-AE',
-            'en-US-' => 'en-US',
-            'en-GB-' => 'en-GB',
-            'es-ES-' => 'es-ES',
-            'fr-CA-' => 'fr-CA',
-            'fr-FR-' => 'fr-FR',
-        ] as $voicePrefix => $resolvedLanguageCode) {
-            if (str_starts_with($voiceId, $voicePrefix)) {
-                return $resolvedLanguageCode;
-            }
+        if ($voiceLanguageCode && $voiceLanguageCode !== 'multi') {
+            return $voiceLanguageCode;
         }
 
         if ($languageCode) {
@@ -936,26 +985,10 @@ PROMPT);
             $workspace,
         );
 
-        $allowArabicFreeVoice = str_starts_with((string) $config->language_code, 'ar-');
-
         $config->forceFill([
             'model_name' => $defaultModel,
             'voice_provider' => $defaultVoice['provider'],
             'voice_id' => $defaultVoice['voiceId'],
         ])->save();
-
-        if (! $allowArabicFreeVoice && $defaultVoice['provider'] !== 'vapi') {
-            $config->forceFill([
-                'voice_provider' => 'vapi',
-                'voice_id' => $this->defaultVoiceProfile(
-                    new AssistantConfig([
-                        'preset_key' => $config->preset_key,
-                        'language_code' => 'en-US',
-                        'model_name' => $defaultModel,
-                    ]),
-                    $workspace,
-                )['voiceId'],
-            ])->save();
-        }
     }
 }
