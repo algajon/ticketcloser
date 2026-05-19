@@ -18,6 +18,8 @@ use App\Http\Controllers\AdminPresetController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\WorkspaceFeedbackController;
 use App\Http\Controllers\WorkspaceHelperController;
+use App\Http\Controllers\MarketingPageController;
+use App\Support\MarketingPageCatalog;
 
 /*
 |--------------------------------------------------------------------------
@@ -25,17 +27,15 @@ use App\Http\Controllers\WorkspaceHelperController;
 |--------------------------------------------------------------------------
 */
 
-Route::get('/', function () {
-    // If logged in, send to the auth/workspace gate
-    if (auth()->check()) {
-        return redirect()->route('dashboard');
-    }
-
-    return view('index');
-})->name('home');
+Route::get('/', [MarketingPageController::class, 'home'])->name('home');
 
 Route::view('/terms', 'legal.terms')->name('terms');
-Route::view('/docs', 'docs.index')->name('docs');
+Route::get('/docs', [MarketingPageController::class, 'docs'])->name('docs');
+Route::get('/features', [MarketingPageController::class, 'featuresIndex'])->name('features.index');
+Route::get('/features/{page}', [MarketingPageController::class, 'feature'])->name('features.show');
+Route::get('/industries', [MarketingPageController::class, 'industriesIndex'])->name('industries.index');
+Route::get('/industries/{page}', [MarketingPageController::class, 'industry'])->name('industries.show');
+Route::get('/llms.txt', [MarketingPageController::class, 'llms'])->name('llms');
 
 Route::get('/robots.txt', function () {
     $appUrl = rtrim(config('app.url') ?: url('/'), '/');
@@ -76,7 +76,37 @@ Route::get('/sitemap.xml', function () {
             'changefreq' => 'monthly',
             'priority' => '0.6',
         ],
+        [
+            'loc' => route('features.index'),
+            'lastmod' => now()->toDateString(),
+            'changefreq' => 'monthly',
+            'priority' => '0.8',
+        ],
+        [
+            'loc' => route('industries.index'),
+            'lastmod' => now()->toDateString(),
+            'changefreq' => 'monthly',
+            'priority' => '0.8',
+        ],
     ];
+
+    foreach (MarketingPageCatalog::features() as $page) {
+        $urls[] = [
+            'loc' => route('features.show', ['page' => $page['slug']]),
+            'lastmod' => now()->toDateString(),
+            'changefreq' => 'monthly',
+            'priority' => '0.7',
+        ];
+    }
+
+    foreach (MarketingPageCatalog::industries() as $page) {
+        $urls[] = [
+            'loc' => route('industries.show', ['page' => $page['slug']]),
+            'lastmod' => now()->toDateString(),
+            'changefreq' => 'monthly',
+            'priority' => '0.7',
+        ];
+    }
 
     return response()
         ->view('sitemap', ['urls' => $urls])

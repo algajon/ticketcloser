@@ -5,6 +5,14 @@ tmp_logs.txt
 vapi_payload.txt
 tmp_full_deploy_*.zip
 __remote_backup__*
+migration_output.txt
+render_error.json
+tmp_*.json
+tmp_*.php
+vapi_*log*.txt
+readthis.md
+*_resume.md
+database/*.sqlite
 .DS_Store
 .env
 .env.backup

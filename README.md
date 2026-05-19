@@ -306,14 +306,9 @@ php artisan view:cache
 
 ## Documentation In This Repo
 
-Additional docs live in the `docs/` folder, including:
+This README is intended to be the main operational reference for the repo.
 
-- UX audit and backlog notes
-- design-system and journey documents
-- commercialization planning
-- workspace personalization planning
-
-These are planning and product-direction documents, while this README is the operational project overview.
+The goal is to keep source control focused on product code, tests, and a single up-to-date project overview instead of accumulating temporary planning handoff files.
 
 ## Testing and Quality Notes
 
