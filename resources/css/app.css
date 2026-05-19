@@ -868,6 +868,48 @@ body[data-app-accent='purple'] {
         transition-duration: 980ms;
     }
 
+    .tc-landing-hero-brand {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        margin-bottom: 0.15rem;
+        font-size: clamp(0.9rem, 1.6vw, 1.1rem);
+        font-weight: 800;
+        letter-spacing: 0.62em;
+        text-transform: uppercase;
+        color: rgba(255, 255, 255, 0.76);
+        text-shadow:
+            0 0 18px rgba(255, 255, 255, 0.14),
+            0 18px 48px rgba(2, 6, 23, 0.88);
+    }
+
+    .tc-landing-hero-brand span {
+        position: relative;
+        display: inline-block;
+        padding: 0.2rem 0 0.2rem 0.62em;
+    }
+
+    .tc-landing-hero-brand span::before,
+    .tc-landing-hero-brand span::after {
+        content: '';
+        position: absolute;
+        top: 50%;
+        width: clamp(2.4rem, 4vw, 4rem);
+        height: 1px;
+        background: linear-gradient(90deg, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.3));
+        transform: translateY(-50%);
+        opacity: 0.82;
+    }
+
+    .tc-landing-hero-brand span::before {
+        right: calc(100% + 1rem);
+    }
+
+    .tc-landing-hero-brand span::after {
+        left: calc(100% + 0.38rem);
+        transform: translateY(-50%) scaleX(-1);
+    }
+
     .tc-landing-hero-copy {
         transition-duration: 900ms;
     }

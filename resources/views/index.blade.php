@@ -61,6 +61,10 @@
             <section
                 class="flex min-h-[calc(100vh-5.5rem+4rem)] items-center px-4 py-12 sm:min-h-[calc(100vh-5.5rem+5rem)] sm:px-5 sm:py-16 lg:min-h-[calc(100vh-5.75rem+5rem)] lg:px-8 lg:py-20">
                 <div class="mx-auto flex max-w-6xl flex-col items-center justify-center text-center">
+                    <div class="tc-landing-motion-stage tc-landing-hero-brand" style="--tc-delay: 35ms;">
+                        <span>tickIt</span>
+                    </div>
+
                     <h1
                         class="tc-landing-motion-stage tc-landing-hero-title mt-5 max-w-4xl text-5xl font-bold tracking-[-0.05em] text-white sm:text-6xl lg:text-[5.4rem] lg:leading-[0.94]"
                         style="--tc-delay: 90ms;">
