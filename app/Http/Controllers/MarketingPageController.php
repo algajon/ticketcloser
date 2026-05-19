@@ -62,6 +62,26 @@ class MarketingPageController extends Controller
                                 'audienceType' => 'Property management teams, reception teams, support teams, and service businesses',
                             ],
                         ],
+                        [
+                            '@type' => 'CollectionPage',
+                            'name' => 'tickIt Features',
+                            'url' => route('features.index'),
+                            'hasPart' => collect($featureCards)->map(fn (array $card) => [
+                                '@type' => 'WebPage',
+                                'name' => $card['card_title'],
+                                'url' => $card['url'],
+                            ])->values()->all(),
+                        ],
+                        [
+                            '@type' => 'CollectionPage',
+                            'name' => 'tickIt Industries',
+                            'url' => route('industries.index'),
+                            'hasPart' => collect($industryCards)->map(fn (array $card) => [
+                                '@type' => 'WebPage',
+                                'name' => $card['card_title'],
+                                'url' => $card['url'],
+                            ])->values()->all(),
+                        ],
                     ],
                 ],
                 $this->faqSchema($faqItems),
