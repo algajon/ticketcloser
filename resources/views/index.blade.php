@@ -88,40 +88,59 @@
 
             <section id="platform" class="px-5 pb-10 pt-28 lg:px-8 lg:pb-14 lg:pt-32">
                 <div class="mx-auto max-w-7xl">
-                    <div class="grid gap-5 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.05fr)]">
-                        <div class="tc-landing-panel tc-landing-card tc-landing-motion-stage p-8" style="--tc-delay: 60ms;">
-                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
-                                What you get</div>
-                            <h2 class="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Stop losing details between the phone call and the work queue.</h2>
-                            <p class="mt-5 max-w-2xl text-base leading-7 text-slate-300">
-                                tickIt is built for teams that still run on inbound calls. It captures the caller, the issue, the urgency, and the next step so your team can act from a complete ticket instead of a voicemail and a sticky note.
-                            </p>
-                        </div>
+                    <div class="tc-landing-motion-stage tc-landing-story-shell" style="--tc-delay: 60ms;">
+                        <div class="tc-landing-story-grid">
+                            <div class="tc-landing-story-intro">
+                                <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
+                                    From first ring to next move</div>
+                                <h2 class="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Every call should leave your team with a clear next step.</h2>
+                                <p class="mt-5 max-w-2xl text-base leading-7 text-slate-300">
+                                    Most teams do not lose the call. They lose the handoff. tickIt keeps the caller, the issue, the urgency, and the transcript attached so the next person can act without piecing the story back together.
+                                </p>
 
-                        <div class="grid gap-5 sm:grid-cols-2">
-                            <div class="tc-landing-panel tc-landing-card tc-landing-motion-stage p-6" style="--tc-delay: 120ms;">
-                                <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
-                                    Call intake</div>
-                                <h3 class="mt-4 text-xl font-semibold text-white">Answer the call</h3>
-                                <p class="mt-3 text-sm leading-6 text-slate-300">Greet callers and collect the details your team needs before anyone has to call back.</p>
+                                <div class="tc-landing-story-signals">
+                                    <span>Caller details captured</span>
+                                    <span>Transcript attached</span>
+                                    <span>Follow-up already moving</span>
+                                </div>
                             </div>
-                            <div class="tc-landing-panel tc-landing-card tc-landing-motion-stage p-6" style="--tc-delay: 190ms;">
-                                <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
-                                    Ticket creation</div>
-                                <h3 class="mt-4 text-xl font-semibold text-white">Create the ticket</h3>
-                                <p class="mt-3 text-sm leading-6 text-slate-300">Turn every call into a ready-to-work ticket with the summary, urgency, transcript, and contact attached.</p>
-                            </div>
-                            <div class="tc-landing-panel tc-landing-card tc-landing-motion-stage p-6" style="--tc-delay: 260ms;">
-                                <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
-                                    Review</div>
-                                <h3 class="mt-4 text-xl font-semibold text-white">Review the transcript</h3>
-                                <p class="mt-3 text-sm leading-6 text-slate-300">Keep the recording and transcript beside the ticket so the next person has the full story.</p>
-                            </div>
-                            <div class="tc-landing-panel tc-landing-card tc-landing-motion-stage p-6" style="--tc-delay: 330ms;">
-                                <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
-                                    Follow-up</div>
-                                <h3 class="mt-4 text-xl font-semibold text-white">Book the next step</h3>
-                                <p class="mt-3 text-sm leading-6 text-slate-300">Keep the request moving by scheduling the follow-up after the work is already logged.</p>
+
+                            <div class="tc-landing-story-flow">
+                                <article class="tc-landing-story-step">
+                                    <div class="tc-landing-story-step-number">01</div>
+                                    <div class="tc-landing-story-step-copy">
+                                        <div class="tc-landing-story-step-label">Answer the call</div>
+                                        <h3>Capture the details while the caller is still on the line.</h3>
+                                        <p>Get the issue, urgency, and callback context before anyone has to call back or decode a voicemail.</p>
+                                    </div>
+                                </article>
+
+                                <article class="tc-landing-story-step">
+                                    <div class="tc-landing-story-step-number">02</div>
+                                    <div class="tc-landing-story-step-copy">
+                                        <div class="tc-landing-story-step-label">Create the ticket</div>
+                                        <h3>Turn the conversation into a record the team can work from.</h3>
+                                        <p>Save the summary, contact, urgency, and transcript in one ticket instead of scattering the handoff across tools.</p>
+                                    </div>
+                                </article>
+
+                                <article class="tc-landing-story-step">
+                                    <div class="tc-landing-story-step-number">03</div>
+                                    <div class="tc-landing-story-step-copy">
+                                        <div class="tc-landing-story-step-label">Review the context</div>
+                                        <h3>Give the next person the full story, not just the headline.</h3>
+                                        <p>Recordings and transcripts stay beside the ticket so support, maintenance, or front-desk staff can step in with context.</p>
+                                    </div>
+                                </article>
+
+                                <article class="tc-landing-story-step">
+                                    <div class="tc-landing-story-step-number">04</div>
+                                    <div class="tc-landing-story-step-copy">
+                                        <div class="tc-landing-story-step-label">Move the work forward</div>
+                                        <h3>Schedule what happens next after the request is already logged.</h3>
+                                        <p>Book the callback, visit, or follow-up without losing the original call details in the process.</p>
+                                    </div>
+                                </article>
                             </div>
                         </div>
                     </div>
