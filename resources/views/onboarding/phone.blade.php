@@ -8,6 +8,7 @@
 @section('content')
     @php
         $configs = $configs ?? collect();
+        $phoneNumbersLockedForFreePlan = $phoneNumbersLockedForFreePlan ?? false;
         $existingNumberCountryOptions = collect($existingNumberCountryOptions ?? []);
         $activationCountdownIso = $activationCountdownEndsAt?->toIso8601String();
         $workspaceIsFree = $workspace->isFreePlan() && ! $workspace->bypassesPlanLimits();
@@ -163,12 +164,25 @@
         </x-ui.panel>
 
         <x-ui.panel title="{{ $phone?->vapi_phone_number_id ? 'Update number' : 'Add a number' }}" description="Choose whether this assistant should use a new test number, import an existing line, or become the forwarding target for your live number.">
+            @if($phoneNumbersLockedForFreePlan)
+                <div class="mb-5 rounded-[1.25rem] border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm leading-6 text-amber-900">
+                    <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-amber-700">Upgrade required</div>
+                    <div class="mt-2">
+                        Free workspaces cannot assign a live phone number to an assistant. Upgrade first, then connect, import, or forward a number here.
+                    </div>
+                    <div class="mt-4">
+                        <a href="{{ route('app.billing.plans') }}" class="tc-btn-primary !px-4 !py-2 text-sm">Upgrade to connect a number</a>
+                    </div>
+                </div>
+            @endif
+
             <form
                 method="POST"
                 action="{{ route('app.phone_numbers.store', $workspace) }}"
                 class="space-y-5"
                 x-data="{
                     loading: false,
+                    phoneNumbersLocked: @js($phoneNumbersLockedForFreePlan),
                     provisioningMode: @js($provisioningMode),
                     externalProvider: @js($externalProvider),
                     vapiCredentialId: @js($vapiCredentialId),
@@ -236,6 +250,10 @@
                         }
                     },
                     submitLabel() {
+                        if (this.phoneNumbersLocked) {
+                            return 'Upgrade to connect a number';
+                        }
+
                         if (this.loading) {
                             return 'Saving...';
                         }
@@ -259,7 +277,7 @@
                     <label for="assistant_id" class="tc-field-label">Assistant</label>
                     <select id="assistant_id" name="assistant_id" class="tc-input"
                         onchange="window.location.href = '{{ route('app.phone_numbers.index', $workspace) }}?assistant_id=' + this.value"
-                        @disabled($configs->isEmpty())>
+                        @disabled($configs->isEmpty() || $phoneNumbersLockedForFreePlan)>
                         @forelse($configs as $assistantOption)
                             <option value="{{ $assistantOption->id }}" @selected((string) old('assistant_id', $config?->id) === (string) $assistantOption->id)>
                                 {{ $assistantOption->name }}
@@ -280,7 +298,8 @@
                                 type="button"
                                 class="flex w-full items-start justify-between gap-3 rounded-[1rem] border px-4 py-4 text-left transition"
                                 :class="provisioningMode === '{{ $option['value'] }}' ? 'tc-accent-card-active' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'"
-                                @click="selectSetup('{{ $option['value'] }}')">
+                                @click="if (!phoneNumbersLocked) selectSetup('{{ $option['value'] }}')"
+                                @disabled($phoneNumbersLockedForFreePlan)>
                                 <div class="min-w-0">
                                     <div class="flex flex-wrap items-center gap-2">
                                         <div class="text-sm font-semibold text-slate-950">{{ $option['label'] }}</div>
@@ -318,7 +337,7 @@
                 <div class="tc-field" x-show="provisioningMode === 'vapi_instant'" x-transition>
                     <label for="area-code" class="tc-field-label">Preferred area code</label>
                     <input id="area-code" name="area_code" placeholder="e.g. 415" maxlength="3" inputmode="numeric" pattern="[0-9]{3}"
-                        value="{{ old('area_code') }}" class="tc-input" @if(!$config?->vapi_assistant_id) disabled @endif />
+                        value="{{ old('area_code') }}" class="tc-input" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
                     <p class="tc-help">Optional. Leave blank to use any available US number.</p>
                     @if($errors->first('area_code'))
                         <p class="tc-error">{{ $errors->first('area_code') }}</p>
@@ -334,7 +353,8 @@
                                 type="button"
                                 class="rounded-[1rem] border px-4 py-3 text-left transition"
                                 :class="existingNumberCountry === '{{ $countryOption['value'] }}' ? 'tc-accent-card-active' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'"
-                                @click="existingNumberCountry = '{{ $countryOption['value'] }}'">
+                                @click="if (!phoneNumbersLocked) existingNumberCountry = '{{ $countryOption['value'] }}'"
+                                @disabled($phoneNumbersLockedForFreePlan)>
                                 <div class="text-sm font-semibold text-slate-950">{{ $countryOption['label'] }}</div>
                                 <div class="mt-1 text-sm text-slate-600">{{ $countryOption['placeholder'] }}</div>
                             </button>
@@ -349,7 +369,7 @@
                     <label for="forwarding_number" class="tc-field-label" x-text="existingNumberLabel()">Your existing phone number</label>
                     <input id="forwarding_number" name="forwarding_number"
                         :placeholder="existingNumberPlaceholder()"
-                        value="{{ old('forwarding_number', $phone?->forwarding_number) }}" class="tc-input" @if(!$config?->vapi_assistant_id) disabled @endif />
+                        value="{{ old('forwarding_number', $phone?->forwarding_number) }}" class="tc-input" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
                     <p class="tc-help" x-text="existingNumberHelp()">Optional. We will show you where to forward it.</p>
                     @if($errors->first('forwarding_number'))
                         <p class="tc-error">{{ $errors->first('forwarding_number') }}</p>
@@ -359,7 +379,7 @@
                 <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 px-4 py-4" x-show="provisioningMode === 'existing_business_number'" x-transition>
                     <input type="hidden" name="auto_forwarding_target" value="0" />
                     <label class="flex items-start gap-3">
-                        <input type="checkbox" name="auto_forwarding_target" value="1" class="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400" x-model="autoForwardingTarget" @if(!$config?->vapi_assistant_id) disabled @endif>
+                        <input type="checkbox" name="auto_forwarding_target" value="1" class="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400" x-model="autoForwardingTarget" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan)>
                         <span>
                             <span class="text-sm font-semibold text-slate-950">Create the forwarding destination now</span>
                             <span class="mt-1 block text-sm leading-6 text-slate-600">
@@ -371,7 +391,7 @@
 
                 <div class="tc-field" x-show="provisioningMode === 'external_provider'" x-transition>
                     <label for="external_provider" class="tc-field-label">Current carrier / provider</label>
-                    <select id="external_provider" name="external_provider" class="tc-input" x-model="externalProvider" @if(!$config?->vapi_assistant_id) disabled @endif>
+                    <select id="external_provider" name="external_provider" class="tc-input" x-model="externalProvider" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan)>
                         @foreach($externalProviderOptions as $providerOption)
                             <option value="{{ $providerOption['value'] }}">{{ $providerOption['label'] }}</option>
                         @endforeach
@@ -383,7 +403,7 @@
 
                 <div class="tc-field" x-show="provisioningMode !== 'vapi_instant'" x-transition>
                     <label for="vapi_credential_id" class="tc-field-label">Vapi import credential <span class="text-slate-500">Optional</span></label>
-                    <input id="vapi_credential_id" name="vapi_credential_id" type="text" class="tc-input" x-model="vapiCredentialId" placeholder="Paste a Vapi BYO credential ID if you want to override the workspace default" @if(!$config?->vapi_assistant_id) disabled @endif />
+                    <input id="vapi_credential_id" name="vapi_credential_id" type="text" class="tc-input" x-model="vapiCredentialId" placeholder="Paste a Vapi BYO credential ID if you want to override the workspace default" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
                     <p class="tc-help" x-text="credentialHelp()">Optional import help text.</p>
                     <p class="tc-help" x-show="workspaceHasDefaultVapiCredential && String(vapiCredentialId || '').trim() === ''" x-cloak>
                         A saved workspace credential will be used automatically if you leave this blank.
@@ -393,7 +413,7 @@
                     @endif
                 </div>
 
-                <button type="submit" class="tc-btn-primary w-full justify-center" x-bind:disabled="loading || {{ $config?->vapi_assistant_id ? 'false' : 'true' }}">
+                <button type="submit" class="tc-btn-primary w-full justify-center" x-bind:disabled="loading || phoneNumbersLocked || {{ $config?->vapi_assistant_id ? 'false' : 'true' }}">
                     <span x-text="submitLabel()">{{ $phone?->vapi_phone_number_id ? 'Save number' : 'Create test number' }}</span>
                 </button>
             </form>

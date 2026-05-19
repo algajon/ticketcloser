@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\AssistantConfig;
+use App\Models\Subscription;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
@@ -26,6 +27,20 @@ class PhoneNumbersPageTest extends TestCase
             'workspace_id' => $workspace->id,
             'user_id' => $user->id,
             'role' => WorkspaceMembership::ROLE_OWNER,
+        ]);
+
+        Subscription::create([
+            'workspace_id' => $workspace->id,
+            'stripe_subscription_id' => 'sub_phone_redirect_live',
+            'plan_key' => 'startup',
+            'status' => 'active',
+        ]);
+
+        Subscription::create([
+            'workspace_id' => $workspace->id,
+            'stripe_subscription_id' => 'sub_phone_redirect',
+            'plan_key' => 'startup',
+            'status' => 'active',
         ]);
 
         AssistantConfig::create([
@@ -55,12 +70,14 @@ class PhoneNumbersPageTest extends TestCase
             ->assertOk()
             ->assertSee('+14155550123')
             ->assertSee('Live Assistant')
+            ->assertSee('Upgrade required')
+            ->assertSee('Upgrade to connect a number')
             ->assertSee('Import my current number')
             ->assertSee('Germany')
             ->assertSee('US / Canada');
     }
 
-    public function test_store_phone_number_redirects_back_to_the_selected_assistant(): void
+    public function test_free_workspaces_cannot_assign_phone_numbers(): void
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create(['plan_key' => 'free']);
@@ -69,6 +86,47 @@ class PhoneNumbersPageTest extends TestCase
             'workspace_id' => $workspace->id,
             'user_id' => $user->id,
             'role' => WorkspaceMembership::ROLE_OWNER,
+        ]);
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Live Assistant',
+            'vapi_assistant_id' => 'asst_live_123',
+        ]);
+
+        $service = $this->createMock(VapiProvisioningService::class);
+        $service->expects($this->never())->method('provisionPhoneNumber');
+        $this->app->instance(VapiProvisioningService::class, $service);
+
+        $response = $this
+            ->actingAs($user)
+            ->from(route('app.phone_numbers.index', $workspace))
+            ->post(route('app.phone_numbers.store', $workspace), [
+                'assistant_id' => $assistant->id,
+                'area_code' => '415',
+            ]);
+
+        $response
+            ->assertRedirect(route('app.phone_numbers.index', $workspace, false))
+            ->assertSessionHas('error', 'Free workspaces cannot connect a live phone number. Upgrade to assign a number to this assistant.');
+    }
+
+    public function test_store_phone_number_redirects_back_to_the_selected_assistant(): void
+    {
+        $user = User::factory()->create();
+        $workspace = Workspace::factory()->create(['plan_key' => 'startup']);
+
+        WorkspaceMembership::create([
+            'workspace_id' => $workspace->id,
+            'user_id' => $user->id,
+            'role' => WorkspaceMembership::ROLE_OWNER,
+        ]);
+
+        Subscription::create([
+            'workspace_id' => $workspace->id,
+            'stripe_subscription_id' => 'sub_phone_redirect_live',
+            'plan_key' => 'startup',
+            'status' => 'active',
         ]);
 
         $assistant = AssistantConfig::create([
@@ -113,12 +171,19 @@ class PhoneNumbersPageTest extends TestCase
 
         try {
             $user = User::factory()->create();
-            $workspace = Workspace::factory()->create(['plan_key' => 'free']);
+            $workspace = Workspace::factory()->create(['plan_key' => 'startup']);
 
             WorkspaceMembership::create([
                 'workspace_id' => $workspace->id,
                 'user_id' => $user->id,
                 'role' => WorkspaceMembership::ROLE_OWNER,
+            ]);
+
+            Subscription::create([
+                'workspace_id' => $workspace->id,
+                'stripe_subscription_id' => 'sub_phone_countdown',
+                'plan_key' => 'startup',
+                'status' => 'active',
             ]);
 
             $assistant = AssistantConfig::create([
@@ -169,6 +234,13 @@ class PhoneNumbersPageTest extends TestCase
             'role' => WorkspaceMembership::ROLE_OWNER,
         ]);
 
+        Subscription::create([
+            'workspace_id' => $workspace->id,
+            'stripe_subscription_id' => 'sub_phone_forwarding',
+            'plan_key' => 'startup',
+            'status' => 'active',
+        ]);
+
         $assistant = AssistantConfig::create([
             'workspace_id' => $workspace->id,
             'name' => 'Fresh Assistant',
@@ -207,7 +279,7 @@ class PhoneNumbersPageTest extends TestCase
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create([
-            'plan_key' => 'free',
+            'plan_key' => 'startup',
             'primary_market' => 'global',
         ]);
 
@@ -215,6 +287,13 @@ class PhoneNumbersPageTest extends TestCase
             'workspace_id' => $workspace->id,
             'user_id' => $user->id,
             'role' => WorkspaceMembership::ROLE_OWNER,
+        ]);
+
+        Subscription::create([
+            'workspace_id' => $workspace->id,
+            'stripe_subscription_id' => 'sub_phone_import_plan',
+            'plan_key' => 'startup',
+            'status' => 'active',
         ]);
 
         $assistant = AssistantConfig::create([
@@ -268,7 +347,7 @@ class PhoneNumbersPageTest extends TestCase
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create([
-            'plan_key' => 'free',
+            'plan_key' => 'startup',
             'primary_market' => 'global',
         ]);
 
@@ -276,6 +355,13 @@ class PhoneNumbersPageTest extends TestCase
             'workspace_id' => $workspace->id,
             'user_id' => $user->id,
             'role' => WorkspaceMembership::ROLE_OWNER,
+        ]);
+
+        Subscription::create([
+            'workspace_id' => $workspace->id,
+            'stripe_subscription_id' => 'sub_phone_import_live',
+            'plan_key' => 'startup',
+            'status' => 'active',
         ]);
 
         $assistant = AssistantConfig::create([
@@ -316,7 +402,7 @@ class PhoneNumbersPageTest extends TestCase
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create([
-            'plan_key' => 'free',
+            'plan_key' => 'startup',
             'primary_market' => 'global',
             'default_vapi_credential_id' => 'cred_saved_123',
         ]);
@@ -325,6 +411,13 @@ class PhoneNumbersPageTest extends TestCase
             'workspace_id' => $workspace->id,
             'user_id' => $user->id,
             'role' => WorkspaceMembership::ROLE_OWNER,
+        ]);
+
+        Subscription::create([
+            'workspace_id' => $workspace->id,
+            'stripe_subscription_id' => 'sub_phone_import_rebuild',
+            'plan_key' => 'startup',
+            'status' => 'active',
         ]);
 
         $assistant = AssistantConfig::create([

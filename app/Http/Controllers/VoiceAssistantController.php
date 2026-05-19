@@ -153,6 +153,7 @@ class VoiceAssistantController extends Controller
     public function phoneNumbers(Request $request, Workspace $workspace)
     {
         $this->authorizeWorkspaceRole($request, $workspace, ['owner', 'admin', 'manager'], 'Only workspace managers can manage phone numbers.');
+        $phoneNumbersLockedForFreePlan = $workspace->isFreePlan() && ! $workspace->bypassesPlanLimits();
 
         $configs = AssistantConfig::where('workspace_id', $workspace->id)->get();
 
@@ -233,6 +234,7 @@ class VoiceAssistantController extends Controller
             'phone',
             'configs',
             'config',
+            'phoneNumbersLockedForFreePlan',
             'activationCountdownEndsAt',
             'pilotStack',
             'phoneSetupOptions',
@@ -245,6 +247,13 @@ class VoiceAssistantController extends Controller
     public function storePhoneNumber(Request $request, Workspace $workspace, VapiProvisioningService $provisioner)
     {
         $this->authorizeWorkspaceRole($request, $workspace, ['owner', 'admin', 'manager'], 'Only workspace managers can manage phone numbers.');
+
+        if ($workspace->isFreePlan() && ! $workspace->bypassesPlanLimits()) {
+            return redirect()
+                ->route('app.phone_numbers.index', $workspace)
+                ->with('error', 'Free workspaces cannot connect a live phone number. Upgrade to assign a number to this assistant.');
+        }
+
         $data = $request->validate([
             'area_code' => ['nullable', 'string', 'max:10'],
             'assistant_id' => ['nullable', 'integer'],
