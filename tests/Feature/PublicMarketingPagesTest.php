@@ -11,7 +11,7 @@ class PublicMarketingPagesTest extends TestCase
         $response = $this->get('/');
 
         $response->assertOk();
-        $response->assertSee('AI phone answering that turns calls into tickets and booked follow-up.');
+        $response->assertSee('Answer business calls and turn them into tickets your team can act on.');
         $response->assertSee(route('features.index'), false);
         $response->assertSee(route('industries.index'), false);
     }

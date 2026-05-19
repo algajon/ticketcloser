@@ -60,20 +60,16 @@
         <main class="relative z-10">
             <section
                 class="flex min-h-[calc(100vh-5.5rem+4rem)] items-center px-4 py-12 sm:min-h-[calc(100vh-5.5rem+5rem)] sm:px-5 sm:py-16 lg:min-h-[calc(100vh-5.75rem+5rem)] lg:px-8 lg:py-20">
-                <div class="mx-auto flex max-w-6xl flex-col items-center justify-center text-center">
-                    <div class="tc-landing-motion-stage tc-landing-hero-brand" style="--tc-delay: 35ms;">
-                        <span>tickIt</span>
-                    </div>
-
+                <div class="mx-auto flex max-w-6xl -translate-y-4 flex-col items-center justify-center text-center sm:-translate-y-6 lg:-translate-y-10">
                     <h1
-                        class="tc-landing-motion-stage tc-landing-hero-title mt-5 max-w-4xl text-5xl font-bold tracking-[-0.05em] text-white sm:text-6xl lg:text-[5.4rem] lg:leading-[0.94]"
+                        class="tc-landing-motion-stage tc-landing-hero-title max-w-4xl text-5xl font-bold tracking-[-0.05em] text-white sm:text-6xl lg:text-[5.4rem] lg:leading-[0.94]"
                         style="--tc-delay: 90ms;">
-                        <span class="tc-landing-readable-copy">AI phone answering that turns calls into tickets and booked follow-up.</span>
+                        <span class="tc-landing-readable-copy">Answer business calls and turn them into tickets your team can act on.</span>
                     </h1>
 
                     <p class="tc-landing-motion-stage tc-landing-hero-copy mt-5 max-w-2xl text-[15px] leading-7 text-[#cbd5e1] md:text-[17px]"
                         style="--tc-delay: 180ms;">
-                        <span class="tc-landing-readable-copy-subtle">tickIt answers business calls, captures the issue, saves the transcript, creates the ticket, and helps your team schedule what should happen next.</span>
+                        <span class="tc-landing-readable-copy-subtle">tickIt answers the call, captures the issue and urgency, saves the transcript, and keeps follow-up moving without manual note-taking.</span>
                     </p>
 
                     <div class="tc-landing-motion-stage tc-landing-hero-actions mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row"
@@ -96,9 +92,9 @@
                         <div class="tc-landing-panel tc-landing-card tc-landing-motion-stage p-8" style="--tc-delay: 60ms;">
                             <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
                                 What you get</div>
-                            <h2 class="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">The phone line should create momentum, not admin work.</h2>
+                            <h2 class="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Stop losing details between the phone call and the work queue.</h2>
                             <p class="mt-5 max-w-2xl text-base leading-7 text-slate-300">
-                                tickIt is AI phone answering software for businesses that need more than a greeting. It captures the caller, issue, urgency, and next action so the team can work from a clear ticket instead of a vague voicemail.
+                                tickIt is built for teams that still run on inbound calls. It captures the caller, the issue, the urgency, and the next step so your team can act from a complete ticket instead of a voicemail and a sticky note.
                             </p>
                         </div>
 
@@ -107,25 +103,25 @@
                                 <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
                                     Call intake</div>
                                 <h3 class="mt-4 text-xl font-semibold text-white">Answer the call</h3>
-                                <p class="mt-3 text-sm leading-6 text-slate-300">Use AI phone answering to greet callers and ask the right intake questions.</p>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">Greet callers and collect the details your team needs before anyone has to call back.</p>
                             </div>
                             <div class="tc-landing-panel tc-landing-card tc-landing-motion-stage p-6" style="--tc-delay: 190ms;">
                                 <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
                                     Ticket creation</div>
                                 <h3 class="mt-4 text-xl font-semibold text-white">Create the ticket</h3>
-                                <p class="mt-3 text-sm leading-6 text-slate-300">Turn the call into a ticket with the summary, urgency, transcript, and contact attached.</p>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">Turn every call into a ready-to-work ticket with the summary, urgency, transcript, and contact attached.</p>
                             </div>
                             <div class="tc-landing-panel tc-landing-card tc-landing-motion-stage p-6" style="--tc-delay: 260ms;">
                                 <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
                                     Review</div>
                                 <h3 class="mt-4 text-xl font-semibold text-white">Review the transcript</h3>
-                                <p class="mt-3 text-sm leading-6 text-slate-300">Keep the recording and transcript beside the ticket so the team can review what happened.</p>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">Keep the recording and transcript beside the ticket so the next person has the full story.</p>
                             </div>
                             <div class="tc-landing-panel tc-landing-card tc-landing-motion-stage p-6" style="--tc-delay: 330ms;">
                                 <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
                                     Follow-up</div>
                                 <h3 class="mt-4 text-xl font-semibold text-white">Book the next step</h3>
-                                <p class="mt-3 text-sm leading-6 text-slate-300">Save or confirm follow-up booking after the request is already logged.</p>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">Keep the request moving by scheduling the follow-up after the work is already logged.</p>
                             </div>
                         </div>
                     </div>
