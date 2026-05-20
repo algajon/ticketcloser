@@ -11,7 +11,7 @@ class PublicMarketingPagesTest extends TestCase
         $response = $this->get('/');
 
         $response->assertOk();
-        $response->assertSee('Answer business calls and turn them into tickets your team can act on.');
+        $response->assertSee('tickIt');
         $response->assertSee(route('features.index'), false);
         $response->assertSee(route('industries.index'), false);
     }

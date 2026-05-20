@@ -64,7 +64,7 @@
                     <h1
                         class="tc-landing-motion-stage tc-landing-hero-title max-w-4xl text-5xl font-bold tracking-[-0.05em] text-white sm:text-6xl lg:text-[5.4rem] lg:leading-[0.94]"
                         style="--tc-delay: 90ms;">
-                        <span class="tc-landing-readable-copy">Answer business calls and turn them into tickets your team can act on.</span>
+                        <span class="tc-landing-readable-copy">tickIt</span>
                     </h1>
 
                     <p class="tc-landing-motion-stage tc-landing-hero-copy mt-5 max-w-2xl text-[15px] leading-7 text-[#cbd5e1] md:text-[17px]"
