@@ -1,6 +1,15 @@
 <?php
 
+use App\Support\DatabaseUrlResolver;
 use Illuminate\Support\Str;
+
+$databaseUrl = env('DB_URL');
+$fallbackDatabaseUrl = env('DATABASE_URL');
+$defaultConnection = DatabaseUrlResolver::defaultConnection(
+    env('DB_CONNECTION'),
+    $databaseUrl,
+    $fallbackDatabaseUrl,
+);
 
 return [
 
@@ -16,7 +25,7 @@ return [
     |
     */
 
-    'default' => env('DB_CONNECTION', 'sqlite'),
+    'default' => $defaultConnection,
 
     /*
     |--------------------------------------------------------------------------
@@ -33,7 +42,7 @@ return [
 
         'sqlite' => [
             'driver' => 'sqlite',
-            'url' => env('DB_URL'),
+            'url' => DatabaseUrlResolver::connectionUrlForDriver('sqlite', $databaseUrl, $fallbackDatabaseUrl),
             'database' => env('DB_DATABASE', database_path('database.sqlite')),
             'prefix' => '',
             'foreign_key_constraints' => env('DB_FOREIGN_KEYS', true),
@@ -45,7 +54,7 @@ return [
 
         'mysql' => [
             'driver' => 'mysql',
-            'url' => env('DB_URL'),
+            'url' => DatabaseUrlResolver::connectionUrlForDriver('mysql', $databaseUrl, $fallbackDatabaseUrl),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),
             'database' => env('DB_DATABASE', 'laravel'),
@@ -65,7 +74,7 @@ return [
 
         'mariadb' => [
             'driver' => 'mariadb',
-            'url' => env('DB_URL'),
+            'url' => DatabaseUrlResolver::connectionUrlForDriver('mariadb', $databaseUrl, $fallbackDatabaseUrl),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '3306'),
             'database' => env('DB_DATABASE', 'laravel'),
@@ -85,7 +94,7 @@ return [
 
         'pgsql' => [
             'driver' => 'pgsql',
-            'url' => env('DB_URL'),
+            'url' => DatabaseUrlResolver::connectionUrlForDriver('pgsql', $databaseUrl, $fallbackDatabaseUrl),
             'host' => env('DB_HOST', '127.0.0.1'),
             'port' => env('DB_PORT', '5432'),
             'database' => env('DB_DATABASE', 'laravel'),
@@ -100,7 +109,7 @@ return [
 
         'sqlsrv' => [
             'driver' => 'sqlsrv',
-            'url' => env('DB_URL'),
+            'url' => DatabaseUrlResolver::connectionUrlForDriver('sqlsrv', $databaseUrl, $fallbackDatabaseUrl),
             'host' => env('DB_HOST', 'localhost'),
             'port' => env('DB_PORT', '1433'),
             'database' => env('DB_DATABASE', 'laravel'),
