@@ -207,7 +207,7 @@
     @stack('head')
 </head>
 
-    <body class="tc-shell-body bg-slate-100 font-[Inter,system-ui,sans-serif]"
+    <body class="tc-shell-body tc-shell-rhythm bg-slate-100 font-[Inter,system-ui,sans-serif]"
     :data-app-accent="currentAccent"
     x-data="{
         sidebarOpen: false,
@@ -413,7 +413,7 @@
         <div class="min-w-0 flex-1">
             <header class="tc-app-header" x-cloak :class="headerHidden ? 'tc-app-header-hidden' : 'tc-app-header-visible'" :aria-hidden="headerHidden.toString()">
                 <div class="tc-app-header-fade"></div>
-                <div class="px-4 pt-6 pb-6 sm:px-6 sm:pt-6 sm:pb-6 lg:px-8 lg:pt-8 lg:pb-8">
+                <div class="tc-shell-header-wrap px-4 sm:px-6 lg:px-8">
                     <div class="tc-page-frame">
                         <div class="tc-app-topbar tc-app-topbar-rest">
                             <div class="flex w-full items-center gap-3 sm:items-center">
