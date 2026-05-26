@@ -56,7 +56,7 @@
                     </div>
 
                     <div x-show="confirm" x-cloak class="space-y-4">
-                        <div class="rounded-[1.35rem] border border-red-200 bg-red-50/80 px-4 py-4 text-sm leading-6 text-red-800">
+                        <div class="tc-meta-card-strong border-red-200 bg-red-50/80 text-sm leading-6 text-red-800">
                             This action permanently deletes your account, workspaces, assistants, and related data. There is no undo.
                         </div>
 
@@ -138,10 +138,10 @@
 
                     <div class="tc-field">
                         <label for="ws-logo" class="tc-field-label">Company logo <span class="text-slate-500">Optional</span></label>
-                        <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4">
+                        <div class="tc-meta-card">
                             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                 <div class="flex items-center gap-4">
-                                    <div class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[1rem] border border-slate-200 bg-white shadow-sm">
+                                    <div class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-sm">
                                         @if($workspace?->logoUrl())
                                             <img src="{{ $workspace->logoUrl() }}" alt="{{ $workspace->name }} logo" class="h-full w-full object-contain">
                                         @else
@@ -179,16 +179,16 @@
 
             <x-ui.panel title="Workspace details" description="Basic details for this workspace.">
                 <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                    <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Slug</div>
+                    <div class="tc-meta-card">
+                        <div class="tc-label-eyebrow">Slug</div>
                         <div class="mt-2 font-mono text-sm text-slate-900">{{ $workspace->slug ?? 'N/A' }}</div>
                     </div>
-                    <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Plan</div>
+                    <div class="tc-meta-card">
+                        <div class="tc-label-eyebrow">Plan</div>
                         <div class="mt-2 text-sm font-medium text-slate-900">{{ $workspace->planLabel() ?? 'Free' }}</div>
                     </div>
-                    <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Created</div>
+                    <div class="tc-meta-card">
+                        <div class="tc-label-eyebrow">Created</div>
                         <div class="mt-2 text-sm font-medium text-slate-900">{{ $workspace->created_at?->format('M d, Y') ?? 'N/A' }}</div>
                     </div>
                 </div>
@@ -196,8 +196,8 @@
         @elseif($tab === 'integrations')
             <x-ui.panel title="API integration token" description="Use this token when another system connects to tickIt.">
                 <div class="space-y-5">
-                    <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Bearer token</div>
+                    <div class="tc-meta-card">
+                        <div class="tc-label-eyebrow">Bearer token</div>
                         <div class="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
                             <code class="min-w-0 flex-1 break-all text-xs text-slate-700">{{ $integrationToken ?? 'N/A' }}</code>
                             <button type="button" class="tc-btn-ghost w-full !px-3 !py-2 text-xs sm:w-auto" onclick="navigator.clipboard.writeText('{{ $integrationToken ?? '' }}')">Copy</button>
@@ -207,7 +207,7 @@
                     @if($workspace)
                         <form method="POST" action="{{ route('app.integrations.token.regenerate', $workspace) }}" onsubmit="return confirm('Regenerate token? Existing integrations using the old token will stop working immediately.')">
                             @csrf
-                            <div class="mb-4 rounded-[1.25rem] border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm leading-6 text-amber-800">
+                            <div class="mb-4 tc-meta-card border-amber-200 bg-amber-50/80 text-sm leading-6 text-amber-800">
                                 Regenerating the token breaks any active Vapi tool connections and API clients using the previous value.
                             </div>
                             <button type="submit" class="tc-btn-danger">Regenerate token</button>
@@ -218,15 +218,15 @@
 
             <x-ui.panel title="Provider health" description="Current connection status for core platform providers.">
                 <div class="grid gap-4 lg:grid-cols-2">
-                    <div class="rounded-[1.3rem] border border-slate-200 bg-slate-50/80 p-5">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Vapi webhook</div>
+                    <div class="tc-meta-card-strong">
+                        <div class="tc-label-eyebrow">Vapi webhook</div>
                         <div class="mt-3 text-sm leading-6 text-slate-700">{{ $vapiWebhookUrl ?? 'Not configured' }}</div>
                         <div class="mt-4">
                             <x-ui.badge tone="{{ config('services.vapi.key') ? 'success' : 'warning' }}">{{ config('services.vapi.key') ? 'Connected' : 'Not configured' }}</x-ui.badge>
                         </div>
                     </div>
-                    <div class="rounded-[1.3rem] border border-slate-200 bg-slate-50/80 p-5">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Workspace API</div>
+                    <div class="tc-meta-card-strong">
+                        <div class="tc-label-eyebrow">Workspace API</div>
                         <div class="mt-3 text-sm leading-6 text-slate-700">Use <code class="rounded bg-slate-200 px-1.5 py-0.5 text-xs">Authorization: Bearer &lt;token&gt;</code> and your workspace slug on API requests.</div>
                         <div class="mt-4">
                             <x-ui.badge tone="info">Ready for integrations</x-ui.badge>

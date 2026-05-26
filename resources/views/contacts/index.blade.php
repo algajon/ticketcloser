@@ -45,26 +45,26 @@
                                     <div class="flex flex-wrap items-center gap-2">
                                         <span class="break-words text-sm font-semibold text-slate-900">{{ $contact->name ?? 'Unknown Caller' }}</span>
                                         @if($contact->cases_count > 0)
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-50 text-indigo-700 uppercase tracking-widest">{{ $contact->cases_count }} {{ Str::plural('Ticket', $contact->cases_count) }}</span>
+                                            <span class="tc-pill-mini bg-indigo-50 text-indigo-700">{{ $contact->cases_count }} {{ Str::plural('Ticket', $contact->cases_count) }}</span>
                                         @endif
                                         @if($contact->calendar_events_count > 0)
-                                            <span class="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-50 text-emerald-700 uppercase tracking-widest">{{ $contact->calendar_events_count }} {{ Str::plural('Meeting', $contact->calendar_events_count) }}</span>
+                                            <span class="tc-pill-mini bg-emerald-50 text-emerald-700">{{ $contact->calendar_events_count }} {{ Str::plural('Meeting', $contact->calendar_events_count) }}</span>
                                         @endif
                                     </div>
                                     <div class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
                                         <span class="flex min-w-0 flex-wrap items-center gap-1.5">
-                                            <span class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-400">Phone</span>
+                                            <span class="tc-label-eyebrow-tight">Phone</span>
                                             <span class="break-all">{{ $contact->phone_e164 ?? 'No phone' }}</span>
                                         </span>
                                         @if($contact->email)
                                             <span class="flex min-w-0 flex-wrap items-center gap-1.5">
-                                                <span class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-400">Email</span>
+                                                <span class="tc-label-eyebrow-tight">Email</span>
                                                 <span class="break-all">{{ $contact->email }}</span>
                                             </span>
                                         @endif
                                         @if($contact->property_code || $contact->unit)
                                             <span class="flex min-w-0 flex-wrap items-center gap-1.5">
-                                                <span class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-400">Location</span>
+                                                <span class="tc-label-eyebrow-tight">Location</span>
                                                 <span class="break-words">{{ trim($contact->property_code . ' ' . $contact->unit) }}</span>
                                             </span>
                                         @endif
@@ -73,10 +73,10 @@
                                 <div class="mt-1 min-w-0 flex flex-col gap-2 sm:hidden">
                                     <span class="tc-small">Added {{ $contact->created_at->format('M j, Y') }}</span>
                                     <div class="flex min-w-0 flex-col gap-2">
-                                        <a href="{{ route('app.contacts.show', [$workspace, $contact]) }}" class="pointer-events-auto inline-flex w-full items-center justify-center gap-1.5 rounded-[0.9rem] border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors shadow-sm hover:bg-slate-50">
+                                        <a href="{{ route('app.contacts.show', [$workspace, $contact]) }}" class="pointer-events-auto tc-btn-compact w-full">
                                             View contact
                                         </a>
-                                        <a href="{{ route('app.contacts.edit', [$workspace, $contact]) }}" class="pointer-events-auto relative z-20 inline-flex w-full items-center justify-center gap-1.5 rounded-[0.9rem] border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 transition-colors shadow-sm hover:bg-slate-50">
+                                        <a href="{{ route('app.contacts.edit', [$workspace, $contact]) }}" class="pointer-events-auto tc-btn-compact relative z-20 w-full">
                                             Edit
                                         </a>
                                     </div>

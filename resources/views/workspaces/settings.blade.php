@@ -72,7 +72,7 @@
 
                 <section class="space-y-5">
                     <div>
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Basics</div>
+                        <div class="tc-label-eyebrow">Basics</div>
                         <p class="mt-2 text-sm leading-6 text-slate-600">These details show up across the workspace and on the ticket side of the product.</p>
                     </div>
 
@@ -104,14 +104,14 @@
 
                     <div class="tc-field">
                         <label for="workspace-logo" class="tc-field-label">Company logo <span class="text-slate-500">Optional</span></label>
-                        <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/70 p-4">
+                        <div class="tc-meta-card">
                             <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
                                 <div class="flex items-center gap-4">
-                                    <div class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[1rem] border border-slate-200 bg-white shadow-sm">
+                                    <div class="flex h-16 w-16 items-center justify-center overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white shadow-sm">
                                         @if($workspace->logoUrl())
                                             <img src="{{ $workspace->logoUrl() }}" alt="{{ $workspace->name }} logo" class="h-full w-full object-contain">
                                         @else
-                                            <span class="text-lg font-semibold uppercase tracking-[0.16em] text-slate-400">
+                                            <span class="text-lg font-semibold uppercase tracking-[0.14em] text-slate-400">
                                                 {{ \Illuminate\Support\Str::of($workspace->name)->substr(0, 2)->upper() }}
                                             </span>
                                         @endif
@@ -142,7 +142,7 @@
 
                 <section class="space-y-5 border-t border-slate-200 pt-6">
                     <div>
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Regional call setup</div>
+                        <div class="tc-label-eyebrow">Regional call setup</div>
                         <p class="mt-2 text-sm leading-6 text-slate-600">Set the market, language, and number strategy once here. New assistants and phone setups will start from these defaults.</p>
                     </div>
 
@@ -217,43 +217,43 @@
 
         <x-ui.panel title="Current pilot stack" description="This is the strategy the workspace is currently optimized around.">
             <div class="space-y-4">
-                <div class="rounded-[1.1rem] border border-slate-200 bg-slate-50/85 px-4 py-4">
-                    <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">{{ $pilotStack['title'] }}</div>
+                <div class="tc-meta-card">
+                    <div class="tc-label-eyebrow">{{ $pilotStack['title'] }}</div>
                     <p class="mt-3 text-sm leading-6 text-slate-600">{{ $pilotStack['note'] }}</p>
                 </div>
 
-                <div class="rounded-[1rem] border border-slate-200 bg-white px-4 py-4">
-                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">Telephony</div>
+                <div class="tc-meta-card-white">
+                    <div class="tc-label-eyebrow-tight">Telephony</div>
                     <p class="mt-2 text-sm leading-6 text-slate-600">{{ $pilotStack['telephony'] }}</p>
                 </div>
 
-                <div class="rounded-[1rem] border border-slate-200 bg-white px-4 py-4">
-                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">Speech stack</div>
+                <div class="tc-meta-card-white">
+                    <div class="tc-label-eyebrow-tight">Speech stack</div>
                     <p class="mt-2 text-sm leading-6 text-slate-600">{{ $pilotStack['transcriber'] }} + {{ $pilotStack['voice'] }}</p>
                 </div>
 
-                <div class="rounded-[1rem] border border-slate-200 bg-white px-4 py-4">
-                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">Model layer</div>
+                <div class="tc-meta-card-white">
+                    <div class="tc-label-eyebrow-tight">Model layer</div>
                     <p class="mt-2 text-sm leading-6 text-slate-600">{{ $pilotStack['llm'] }}</p>
                 </div>
 
-                <div class="rounded-[1rem] border border-slate-200 bg-white px-4 py-4">
-                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">{{ $pilotPlaybook['title'] }}</div>
+                <div class="tc-meta-card-white">
+                    <div class="tc-label-eyebrow-tight">{{ $pilotPlaybook['title'] }}</div>
                     <p class="mt-2 text-sm leading-6 text-slate-600">{{ $pilotPlaybook['summary'] }}</p>
                     <div class="mt-4 grid gap-3 sm:grid-cols-2">
                         <div>
-                            <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">Recommended preset</div>
+                            <div class="tc-label-eyebrow-tight">Recommended preset</div>
                             <p class="mt-2 text-sm leading-6 text-slate-600">{{ $pilotPlaybook['recommended_preset'] }}</p>
                         </div>
                         <div>
-                            <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">Voice path</div>
+                            <div class="tc-label-eyebrow-tight">Voice path</div>
                             <p class="mt-2 text-sm leading-6 text-slate-600">{{ $pilotPlaybook['recommended_voice_path'] }}</p>
                         </div>
                     </div>
                 </div>
 
-                <div class="rounded-[1rem] border border-slate-200 bg-white px-4 py-4">
-                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">Best demo calls</div>
+                <div class="tc-meta-card-white">
+                    <div class="tc-label-eyebrow-tight">Best demo calls</div>
                     <ul class="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                         @foreach($pilotPlaybook['demo_calls'] as $scenario)
                             <li class="flex gap-3">
@@ -264,8 +264,8 @@
                     </ul>
                 </div>
 
-                <div class="rounded-[1rem] border border-slate-200 bg-white px-4 py-4">
-                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">Rollout path</div>
+                <div class="tc-meta-card-white">
+                    <div class="tc-label-eyebrow-tight">Rollout path</div>
                     <ul class="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                         @foreach($pilotPlaybook['rollout_steps'] as $step)
                             <li class="flex gap-3">
@@ -276,8 +276,8 @@
                     </ul>
                 </div>
 
-                <div class="rounded-[1rem] border border-slate-200 bg-slate-50/80 px-4 py-4">
-                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">What inherits these defaults</div>
+                <div class="tc-meta-card">
+                    <div class="tc-label-eyebrow-tight">What inherits these defaults</div>
                     <ul class="mt-3 space-y-2 text-sm leading-6 text-slate-600">
                         <li>New assistants start from the workspace language and regional voice path.</li>
                         <li>Phone setup screens default to the workspace number strategy and carrier.</li>

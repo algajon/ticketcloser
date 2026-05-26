@@ -63,12 +63,12 @@
                     </div>
 
                     <div class="grid gap-4 sm:grid-cols-3">
-                        <div class="rounded-[1.2rem] border border-slate-200 bg-slate-50/80 p-4">
-                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Included minutes</div>
+                        <div class="tc-meta-card">
+                            <div class="tc-label-eyebrow">Included minutes</div>
                             <div class="mt-2 text-xl font-semibold text-slate-950">{{ $hasUnlimitedMinutes ? 'Unlimited' : number_format($includedMinutes) }}</div>
                         </div>
-                        <div class="rounded-[1.2rem] border border-slate-200 bg-slate-50/80 p-4">
-                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Overage</div>
+                        <div class="tc-meta-card">
+                            <div class="tc-label-eyebrow">Overage</div>
                             <div class="mt-2 text-xl font-semibold text-slate-950">
                                 @if($overageRate !== null)
                                     {{ $currencySymbol }}{{ number_format($overageRate, 2) }}<span class="text-sm font-medium text-slate-500">/ min</span>
@@ -77,8 +77,8 @@
                                 @endif
                             </div>
                         </div>
-                        <div class="rounded-[1.2rem] border border-slate-200 bg-slate-50/80 p-4">
-                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Cycle ends</div>
+                        <div class="tc-meta-card">
+                            <div class="tc-label-eyebrow">Cycle ends</div>
                             <div class="mt-2 text-xl font-semibold text-slate-950">{{ \Carbon\Carbon::parse($cycleEndsOn)->format('M d') }}</div>
                         </div>
                     </div>
@@ -116,8 +116,8 @@
                     </div>
 
                     <div class="grid gap-4 sm:grid-cols-2">
-                        <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Extra minutes</div>
+                        <div class="tc-meta-card">
+                            <div class="tc-label-eyebrow">Extra minutes</div>
                             <div class="mt-2 text-2xl font-semibold text-slate-950">{{ number_format($extraMinutes, 1) }}</div>
                             <div class="mt-1 text-sm text-slate-500">
                                 @if($overageRate !== null)
@@ -127,20 +127,20 @@
                                 @endif
                             </div>
                         </div>
-                        <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Projected total</div>
+                        <div class="tc-meta-card">
+                            <div class="tc-label-eyebrow">Projected total</div>
                             <div class="mt-2 text-2xl font-semibold text-slate-950">{{ $currencySymbol }}{{ number_format($estimatedCycleTotal, 2) }}</div>
                             <div class="mt-1 text-sm text-slate-500">Base fee plus current usage for this cycle</div>
                         </div>
                     </div>
 
                     <div class="grid gap-4 sm:grid-cols-2">
-                        <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Calls</div>
+                        <div class="tc-meta-card">
+                            <div class="tc-label-eyebrow">Calls</div>
                             <div class="mt-2 text-2xl font-semibold text-slate-950">{{ number_format($usageCalls) }}</div>
                         </div>
-                        <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Credits</div>
+                        <div class="tc-meta-card">
+                            <div class="tc-label-eyebrow">Credits</div>
                             <div class="mt-2 text-2xl font-semibold text-slate-950">{{ number_format($creditsBalance) }}</div>
                         </div>
                     </div>
@@ -151,20 +151,20 @@
         <div class="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,0.9fr)]">
             <x-ui.panel title="Included every month" description="What this plan gives you before overage starts.">
                 <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                    <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Included minutes</div>
+                    <div class="tc-meta-card">
+                        <div class="tc-label-eyebrow">Included minutes</div>
                         <div class="mt-2 text-xl font-semibold text-slate-950">{{ $hasUnlimitedMinutes ? 'Unlimited' : number_format($includedMinutes) }}</div>
                     </div>
-                    <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Assistants</div>
+                    <div class="tc-meta-card">
+                        <div class="tc-label-eyebrow">Assistants</div>
                         <div class="mt-2 text-xl font-semibold text-slate-950">{{ $plan['max_assistants'] == -1 ? 'Unlimited' : $plan['max_assistants'] }}</div>
                     </div>
-                    <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Phone numbers</div>
+                    <div class="tc-meta-card">
+                        <div class="tc-label-eyebrow">Phone numbers</div>
                         <div class="mt-2 text-xl font-semibold text-slate-950">{{ $plan['max_phone_numbers'] == -1 ? 'Unlimited' : $plan['max_phone_numbers'] }}</div>
                     </div>
-                    <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 p-4">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Tickets</div>
+                    <div class="tc-meta-card">
+                        <div class="tc-label-eyebrow">Tickets</div>
                         <div class="mt-2 text-xl font-semibold text-slate-950">{{ $plan['max_cases'] == -1 ? 'Unlimited' : number_format($plan['max_cases']) }}</div>
                     </div>
                 </div>
@@ -173,7 +173,7 @@
             <x-ui.panel title="Why teams choose this tier" description="{{ $plan['recommended_for'] ?? 'Built for growing teams.' }}">
                 <div class="space-y-3">
                     @foreach($featureHighlights as $highlight)
-                        <div class="flex items-start gap-3 rounded-[1.1rem] border border-slate-200 bg-slate-50/80 px-4 py-3">
+                        <div class="tc-meta-card flex items-start gap-3">
                             <span class="tc-accent-fill mt-2 inline-block h-2 w-2 flex-shrink-0 rounded-full"></span>
                             <span class="text-sm leading-6 text-slate-700">{{ $highlight }}</span>
                         </div>

@@ -37,20 +37,20 @@
         <nav class="tc-landing-nav relative z-50 w-full border-b border-slate-200 bg-white px-6 py-5">
             <div class="relative mx-auto flex max-w-7xl items-center justify-between gap-6">
                 <a href="{{ route('home') }}" class="flex items-center gap-2">
-                    <span class="text-[17px] font-bold tracking-tight text-slate-950">tickIt</span>
+                    <span class="text-lg font-bold tracking-tight text-slate-950">tickIt</span>
                 </a>
 
                 <div class="absolute left-1/2 hidden -translate-x-1/2 items-center gap-8 lg:flex">
                     <a href="{{ route('features.index') }}"
-                        class="text-[13px] {{ $navCurrent === 'features' ? 'font-semibold text-slate-950' : 'font-medium text-slate-600 hover:text-slate-900' }} transition-colors">
+                        class="text-sm {{ $navCurrent === 'features' ? 'font-semibold text-slate-950' : 'font-medium text-slate-600 hover:text-slate-900' }} transition-colors">
                         Features
                     </a>
                     <a href="{{ route('industries.index') }}"
-                        class="text-[13px] {{ $navCurrent === 'industries' ? 'font-semibold text-slate-950' : 'font-medium text-slate-600 hover:text-slate-900' }} transition-colors">
+                        class="text-sm {{ $navCurrent === 'industries' ? 'font-semibold text-slate-950' : 'font-medium text-slate-600 hover:text-slate-900' }} transition-colors">
                         Industries
                     </a>
                     <a href="{{ route('docs') }}"
-                        class="text-[13px] {{ $navCurrent === 'docs' ? 'font-semibold text-slate-950' : 'font-medium text-slate-600 hover:text-slate-900' }} transition-colors">
+                        class="text-sm {{ $navCurrent === 'docs' ? 'font-semibold text-slate-950' : 'font-medium text-slate-600 hover:text-slate-900' }} transition-colors">
                         Docs
                     </a>
                 </div>
@@ -58,13 +58,13 @@
                 <div class="flex items-center gap-6">
                     @auth
                         <a href="{{ url('/dashboard') }}"
-                            class="text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900">Dashboard</a>
+                            class="text-sm font-medium text-slate-600 transition-colors hover:text-slate-900">Dashboard</a>
                     @else
                         <a href="{{ route('login') }}"
-                            class="text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900">Sign
+                            class="text-sm font-medium text-slate-600 transition-colors hover:text-slate-900">Sign
                             in</a>
                         <a href="{{ route('register') }}"
-                            class="rounded-lg bg-[#f97316] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#ea580c]">
+                            class="tc-btn-primary !px-4 !py-2.5 text-sm">
                             Try for Free
                         </a>
                     @endauth
@@ -91,7 +91,7 @@
                     </div>
 
                     <div>
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-400">Features</div>
+                        <div class="tc-label-eyebrow text-slate-400">Features</div>
                         <div class="mt-4 space-y-3">
                             <a href="{{ route('features.index') }}" class="block text-sm text-slate-300 transition hover:text-white">All features</a>
                             @foreach($footerFeatures as $item)
@@ -103,7 +103,7 @@
                     </div>
 
                     <div>
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-400">Industries</div>
+                        <div class="tc-label-eyebrow text-slate-400">Industries</div>
                         <div class="mt-4 space-y-3">
                             <a href="{{ route('industries.index') }}" class="block text-sm text-slate-300 transition hover:text-white">All industries</a>
                             @foreach($footerIndustries as $item)
@@ -115,7 +115,7 @@
                     </div>
 
                     <div>
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-400">Resources</div>
+                        <div class="tc-label-eyebrow text-slate-400">Resources</div>
                         <div class="mt-4 space-y-3">
                             <a href="{{ route('home') }}" class="block text-sm text-slate-300 transition hover:text-white">Homepage</a>
                             <a href="{{ route('docs') }}" class="block text-sm text-slate-300 transition hover:text-white">Docs</a>

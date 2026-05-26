@@ -91,7 +91,7 @@
                     @if(! $primaryAttention)
                         <x-ui.empty-state title="Everything looks good" description="Setup is done and there are no urgent blockers right now." />
                     @else
-                        <div class="tc-dashboard-next-card rounded-[1.35rem] border {{ $primaryAttention['tone'] === 'danger' ? 'border-red-200 bg-red-50/80' : ($primaryAttention['tone'] === 'warning' ? 'border-amber-200 bg-amber-50/80' : ($primaryAttention['tone'] === 'info' ? 'border-blue-200 bg-blue-50/80' : 'tc-accent-surface')) }} p-5">
+                        <div class="tc-dashboard-next-card tc-meta-card-strong {{ $primaryAttention['tone'] === 'danger' ? 'border-red-200 bg-red-50/80' : ($primaryAttention['tone'] === 'warning' ? 'border-amber-200 bg-amber-50/80' : ($primaryAttention['tone'] === 'info' ? 'border-blue-200 bg-blue-50/80' : 'tc-accent-surface')) }}">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0">
                                     <div class="text-sm font-semibold text-slate-950">{{ $primaryAttention['title'] }}</div>
@@ -107,7 +107,7 @@
                         @if($secondaryAttention->isNotEmpty())
                             <div class="mt-4 space-y-3">
                                 @foreach($secondaryAttention as $item)
-                                    <div class="tc-dashboard-next-card-muted p-4">
+                                    <div class="tc-dashboard-next-card-muted tc-meta-card">
                                         <div class="text-sm font-semibold text-slate-950">{{ $item['title'] }}</div>
                                         <p class="mt-2 text-sm leading-6 text-slate-600">{{ $item['copy'] }}</p>
                                         <div class="mt-3">
@@ -155,7 +155,7 @@
                                     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                         <div class="min-w-0">
                                             <div class="flex flex-wrap items-center gap-2">
-                                                <span class="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">{{ $case->case_number }}</span>
+                                                <span class="tc-label-eyebrow-tight">{{ $case->case_number }}</span>
                                                 <x-ui.badge :tone="$statusTone">{{ str_replace('_', ' ', $case->status) }}</x-ui.badge>
                                                 <x-ui.badge :tone="$priorityTone">{{ $case->priority }}</x-ui.badge>
                                             </div>
@@ -191,11 +191,11 @@
                     @else
                         <div class="tc-dashboard-call-list">
                             @foreach($recentCalls as $call)
-                                <a href="{{ route('app.calls.show', [$workspace, $call]) }}" class="tc-dashboard-call-item block rounded-[1.2rem] border border-slate-200 bg-slate-50/80 p-4 transition hover:border-slate-300 hover:bg-white">
+                                <a href="{{ route('app.calls.show', [$workspace, $call]) }}" class="tc-dashboard-call-item tc-meta-card block transition hover:border-slate-300 hover:bg-white">
                                     <div class="flex items-start justify-between gap-4">
                                         <div class="min-w-0">
                                             <div class="truncate text-sm font-semibold text-slate-950">{{ $call->from_number ?? 'Unknown caller' }}</div>
-                                            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.16em] text-slate-500">
+                                            <div class="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                                                 <span>{{ $call->created_at->format('M j, g:i A') }}</span>
                                                 @if($call->duration_seconds)
                                                     <span>{{ $call->duration_seconds }}s</span>
@@ -246,7 +246,7 @@
             <x-ui.panel class="tc-dashboard-panel" title="Finish setup" description="These are the next steps between signup and a dependable first live workflow.">
                 <div class="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
                     @foreach($checks as $check)
-                        <div class="rounded-[1.3rem] border {{ $check['done'] ? 'border-emerald-200 bg-emerald-50/80' : 'border-slate-200 bg-slate-50/80' }} p-4">
+                        <div class="tc-meta-card-strong {{ $check['done'] ? 'border-emerald-200 bg-emerald-50/80' : 'border-slate-200 bg-slate-50/80' }}">
                             <div class="flex items-start justify-between gap-3">
                                 <div class="min-w-0">
                                     <div class="text-sm font-semibold {{ $check['done'] ? 'text-emerald-800' : 'text-slate-900' }}">{{ $check['label'] }}</div>
@@ -274,11 +274,11 @@
                     @else
                         <div class="space-y-3">
                             @foreach($urgentQueue as $case)
-                                <a href="{{ route('app.tickets.show', $case->id) }}" class="block rounded-[1.25rem] border border-slate-200 bg-slate-50/80 px-4 py-4 transition hover:border-slate-300 hover:bg-white">
+                                <a href="{{ route('app.tickets.show', $case->id) }}" class="tc-meta-card block transition hover:border-slate-300 hover:bg-white">
                                     <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                                         <div class="min-w-0">
                                             <div class="flex flex-wrap items-center gap-2">
-                                                <span class="text-[0.7rem] font-semibold uppercase tracking-[0.2em] text-slate-500">{{ $case->case_number }}</span>
+                                                <span class="tc-label-eyebrow-tight">{{ $case->case_number }}</span>
                                                 <x-ui.badge :tone="\App\Models\SupportCase::priorityTone($case->priority)">{{ $case->priority }}</x-ui.badge>
                                                 @if($case->ops_stage)
                                                     <x-ui.badge :tone="\App\Models\SupportCase::opsStageTone($case->ops_stage)">{{ \App\Models\SupportCase::opsStageLabel($case->ops_stage) }}</x-ui.badge>
@@ -318,8 +318,8 @@
                         @if(!$nextVisit)
                             <x-ui.empty-state title="No scheduled visit yet" description="Visits will show up here once maintenance follow-up is booked." />
                         @else
-                            <div class="rounded-[1.25rem] border border-emerald-200 bg-emerald-50/80 p-5">
-                                <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-emerald-700">Upcoming visit</div>
+                            <div class="tc-meta-card-strong border-emerald-200 bg-emerald-50/80">
+                                <div class="tc-label-eyebrow text-emerald-700">Upcoming visit</div>
                                 <div class="mt-3 text-lg font-semibold text-emerald-950">{{ $nextVisit->supportCase?->title ?? 'Maintenance follow-up' }}</div>
                                 <div class="mt-2 text-sm leading-6 text-emerald-800">
                                     {{ $nextVisit->starts_at?->format('M j, Y \a\t g:i A') }}

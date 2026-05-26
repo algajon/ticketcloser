@@ -48,18 +48,18 @@
                                     $contact = $ticket?->contact;
                                 @endphp
 
-                                <div class="rounded-[1.35rem] border border-amber-200 bg-amber-50/70 p-5">
+                                <div class="tc-meta-card-strong border-amber-200 bg-amber-50/70">
                                     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                         <div class="flex min-w-0 gap-5 sm:gap-6">
-                                            <div class="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-[1.05rem] bg-amber-100/80 text-amber-700">
-                                                <span class="text-[0.62rem] font-semibold uppercase tracking-[0.16em]">{{ $event->starts_at->format('M') }}</span>
+                                            <div class="tc-meta-icon-tile bg-amber-100/80 text-amber-700">
+                                                <span class="tc-label-eyebrow-tight">{{ $event->starts_at->format('M') }}</span>
                                                 <span class="text-lg font-semibold leading-none">{{ $event->starts_at->format('d') }}</span>
                                             </div>
 
                                             <div class="min-w-0">
                                                 <div class="flex flex-wrap items-center gap-2">
                                                     <x-ui.badge tone="warning">Pending</x-ui.badge>
-                                                    <span class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-amber-800">
+                                                    <span class="tc-label-eyebrow-tight text-amber-800">
                                                         {{ $event->starts_at->format('g:i A') }} to {{ $event->ends_at->format('g:i A') }}
                                                     </span>
                                                 </div>
@@ -73,7 +73,7 @@
                                                 </div>
 
                                                 <div class="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                                                    <span class="rounded-full border border-amber-200 bg-white px-2.5 py-1 font-semibold uppercase tracking-[0.14em] text-amber-700">
+                                                    <span class="tc-pill-mini border border-amber-200 bg-white text-amber-700">
                                                         {{ $bookableProvider }}
                                                     </span>
                                                     @if($ticketLabel)
@@ -130,18 +130,18 @@
                                     $ticketLabel = $ticket?->case_number ?: $ticket?->id;
                                 @endphp
 
-                                <div class="rounded-[1.35rem] border border-slate-200 bg-slate-50/70 p-5 transition hover:border-slate-300 hover:bg-white">
+                                <div class="tc-meta-card-strong border-slate-200 bg-slate-50/70 transition hover:border-slate-300 hover:bg-white">
                                     <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                                         <div class="flex min-w-0 gap-5 sm:gap-6">
-                                            <div class="flex h-14 w-14 shrink-0 flex-col items-center justify-center rounded-[1.05rem] bg-slate-100 text-slate-700">
-                                                <span class="text-[0.62rem] font-semibold uppercase tracking-[0.16em]">{{ $event->starts_at->format('M') }}</span>
+                                            <div class="tc-meta-icon-tile bg-slate-100 text-slate-700">
+                                                <span class="tc-label-eyebrow-tight">{{ $event->starts_at->format('M') }}</span>
                                                 <span class="text-lg font-semibold leading-none">{{ $event->starts_at->format('d') }}</span>
                                             </div>
 
                                             <div class="min-w-0">
                                                 <div class="flex flex-wrap items-center gap-2">
                                                     <x-ui.badge tone="info">{{ ucfirst($event->provider) }}</x-ui.badge>
-                                                    <span class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                                                    <span class="tc-label-eyebrow-tight">
                                                         {{ $event->starts_at->format('g:i A') }} to {{ $event->ends_at->format('g:i A') }}
                                                     </span>
                                                 </div>
@@ -159,7 +159,7 @@
                                                         <span>Linked to ticket {{ $ticketLabel }}</span>
                                                     @endif
                                                     @if($event->url)
-                                                        <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 font-semibold uppercase tracking-[0.14em] text-slate-500">
+                                                        <span class="tc-pill-mini border border-slate-200 bg-white text-slate-500">
                                                             Join link ready
                                                         </span>
                                                     @endif
@@ -189,7 +189,7 @@
             <div class="space-y-6 xl:sticky xl:top-6 xl:self-start">
                 <x-ui.panel title="Calendar status" description="At-a-glance readiness before you rely on live scheduling.">
                     <div class="space-y-3">
-                        <div class="rounded-[1.25rem] border {{ $googleConnected ? 'border-emerald-200 bg-emerald-50/70' : 'border-slate-200 bg-slate-50/70' }} p-4">
+                        <div class="tc-meta-card {{ $googleConnected ? 'border-emerald-200 bg-emerald-50/70' : 'border-slate-200 bg-slate-50/70' }}">
                             <div class="flex items-center justify-between gap-3">
                                 <div>
                                     <div class="text-sm font-semibold text-slate-950">Google Calendar</div>
@@ -201,7 +201,7 @@
                             </div>
                         </div>
 
-                        <div class="rounded-[1.25rem] border {{ $calendlyConnected ? 'border-emerald-200 bg-emerald-50/70' : 'border-slate-200 bg-slate-50/70' }} p-4">
+                        <div class="tc-meta-card {{ $calendlyConnected ? 'border-emerald-200 bg-emerald-50/70' : 'border-slate-200 bg-slate-50/70' }}">
                             <div class="flex items-center justify-between gap-3">
                                 <div>
                                     <div class="text-sm font-semibold text-slate-950">Calendly handoff</div>
@@ -213,8 +213,8 @@
                             </div>
                         </div>
 
-                        <div class="rounded-[1.25rem] border border-slate-200 bg-white p-4">
-                            <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">This week</div>
+                        <div class="tc-meta-card-white">
+                            <div class="tc-label-eyebrow-tight">This week</div>
                             <div class="mt-2 text-2xl font-semibold text-slate-950">{{ $nextSevenDaysCount }}</div>
                             <div class="mt-1 text-sm text-slate-600">Booked meetings in the next 7 days.</div>
                         </div>
@@ -238,12 +238,12 @@
                             :actionHref="route('app.calendar.settings')"
                         />
                     @elseif($pendingCount > 0)
-                        <div class="rounded-[1.25rem] border border-amber-200 bg-amber-50/70 p-4">
+                        <div class="tc-meta-card border-amber-200 bg-amber-50/70">
                             <div class="text-sm font-semibold text-slate-950">You have {{ $pendingCount }} request{{ $pendingCount === 1 ? '' : 's' }} waiting.</div>
                             <div class="mt-2 text-sm text-slate-600">Start with the oldest pending request above and confirm or dismiss it.</div>
                         </div>
                     @else
-                        <div class="rounded-[1.25rem] border border-emerald-200 bg-emerald-50/70 p-4">
+                        <div class="tc-meta-card border-emerald-200 bg-emerald-50/70">
                             <div class="text-sm font-semibold text-slate-950">Calendar is in a good state.</div>
                             <div class="mt-2 text-sm text-slate-600">There are no pending meeting requests waiting for review right now.</div>
                         </div>

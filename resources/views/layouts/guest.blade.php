@@ -40,16 +40,15 @@
             <div class="mx-auto flex max-w-7xl items-center justify-between">
                 <a href="{{ route('home') }}" class="flex items-center gap-2">
                     <span
-                        class="text-[17px] font-bold tracking-tight text-white transition-opacity hover:opacity-80">tickIt</span>
+                        class="text-lg font-bold tracking-tight text-white transition-opacity hover:opacity-80">tickIt</span>
                 </a>
                 <div class="flex items-center gap-6">
                     @if($routeName === 'register')
                         <a href="{{ route('login') }}"
-                            class="text-[13px] font-medium text-slate-300 transition-colors hover:text-white">Sign in</a>
+                            class="text-sm font-medium text-slate-300 transition-colors hover:text-white">Sign in</a>
                     @elseif($routeName === 'login')
                         <a href="{{ route('register') }}"
-                            class="rounded-lg bg-[#f97316] px-4 py-2 text-[13px] font-medium text-white transition-colors hover:bg-[#ea580c]"
-                            style="box-shadow: 0 0 15px rgba(249, 115, 22, 0.4);">Try for Free</a>
+                            class="tc-btn-primary !rounded-[0.95rem] !px-4 !py-2 text-sm">Try for Free</a>
                     @endif
                 </div>
             </div>
@@ -59,7 +58,7 @@
             @if($guestLayout !== 'centered')
                 <section class="tc-auth-aside">
                     <div>
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.28em] text-orange-300/80">{{ $guestEyebrow }}</div>
+                        <div class="tc-label-eyebrow text-orange-300/80">{{ $guestEyebrow }}</div>
                         <h1 class="mt-6 max-w-xl text-4xl font-semibold leading-tight tracking-tight text-white">
                             {{ $guestTitle }}
                         </h1>
@@ -76,11 +75,11 @@
                         <div class="tc-landing-panel tc-landing-glow p-7">
                             <div class="grid gap-5 sm:grid-cols-2">
                                 <div>
-                                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">Capture</div>
+                                    <div class="tc-label-eyebrow-tight text-slate-400">Capture</div>
                                     <p class="mt-2 text-sm leading-6 text-slate-200">Turn calls into clean records, transcripts, and ticket-ready intake.</p>
                                 </div>
                                 <div>
-                                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">Coordinate</div>
+                                    <div class="tc-label-eyebrow-tight text-slate-400">Coordinate</div>
                                     <p class="mt-2 text-sm leading-6 text-slate-200">Route follow-up, scheduling, and ownership from the same control layer.</p>
                                 </div>
                             </div>

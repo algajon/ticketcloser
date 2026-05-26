@@ -36,24 +36,24 @@
     <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(340px,0.9fr)]">
         <x-ui.panel title="Phone number" description="This is the number callers reach.">
             @if(!$config?->vapi_assistant_id)
-                <div class="mb-5 rounded-[1.25rem] border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm leading-6 text-amber-800">
+                <div class="mb-5 tc-meta-card border-amber-200 bg-amber-50/80 text-sm leading-6 text-amber-800">
                     Create and sync an assistant first.
                 </div>
             @endif
 
-            <div class="mb-5 rounded-[1.25rem] border border-slate-200 bg-slate-50/85 p-4">
-                <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">{{ $pilotStack['title'] }}</div>
+                <div class="mb-5 tc-meta-card">
+                    <div class="tc-label-eyebrow">{{ $pilotStack['title'] }}</div>
                 <div class="mt-3 grid gap-3 md:grid-cols-3">
-                    <div class="rounded-[1rem] border border-slate-200 bg-white px-3 py-3">
-                        <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">Telephony</div>
+                    <div class="tc-meta-card-white px-3 py-3">
+                        <div class="tc-label-eyebrow-tight">Telephony</div>
                         <p class="mt-2 text-sm leading-6 text-slate-600">{{ $pilotStack['telephony'] }}</p>
                     </div>
-                    <div class="rounded-[1rem] border border-slate-200 bg-white px-3 py-3">
-                        <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">Speech stack</div>
+                    <div class="tc-meta-card-white px-3 py-3">
+                        <div class="tc-label-eyebrow-tight">Speech stack</div>
                         <p class="mt-2 text-sm leading-6 text-slate-600">{{ $pilotStack['transcriber'] }} + {{ $pilotStack['voice'] }}</p>
                     </div>
-                    <div class="rounded-[1rem] border border-slate-200 bg-white px-3 py-3">
-                        <div class="text-[0.68rem] font-semibold uppercase tracking-[0.16em] text-slate-500">Model layer</div>
+                    <div class="tc-meta-card-white px-3 py-3">
+                        <div class="tc-label-eyebrow-tight">Model layer</div>
                         <p class="mt-2 text-sm leading-6 text-slate-600">{{ $pilotStack['llm'] }}</p>
                     </div>
                 </div>
@@ -83,8 +83,8 @@
                 @endif
             >
                 @if($phone?->e164)
-                    <div class="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-5">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Live number</div>
+                    <div class="tc-meta-card-strong">
+                        <div class="tc-label-eyebrow">Live number</div>
                         <div class="mt-3 text-3xl font-semibold tracking-tight text-slate-950">{{ $phone->e164 }}</div>
 
                         <div class="mt-4 flex flex-wrap items-center gap-2">
@@ -97,8 +97,8 @@
                         </div>
 
                         @if($showDeveloperPhoneIds && $phone->vapi_phone_number_id)
-                            <div x-data="{ copied: false }" class="mt-5 rounded-[1.2rem] border border-slate-200 bg-white p-4">
-                                <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Vapi phone ID</div>
+                            <div x-data="{ copied: false }" class="mt-5 tc-meta-card-white">
+                                <div class="tc-label-eyebrow">Vapi phone ID</div>
                                 <div class="mt-3 flex items-center gap-3">
                                     <code class="min-w-0 flex-1 truncate text-xs text-slate-700">{{ $phone->vapi_phone_number_id }}</code>
                                     <button type="button" class="tc-btn-ghost !px-3 !py-2 text-xs" @click="navigator.clipboard.writeText('{{ $phone->vapi_phone_number_id }}').then(() => { copied = true; setTimeout(() => copied = false, 1800) })">
@@ -111,8 +111,8 @@
                     </div>
 
                     @if($activationCountdownIso)
-                        <div class="mt-4 rounded-[1.25rem] border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm leading-6 text-amber-800">
-                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-amber-700">Activation countdown</div>
+                        <div class="mt-4 tc-meta-card border-amber-200 bg-amber-50/80 text-sm leading-6 text-amber-800">
+                            <div class="tc-label-eyebrow text-amber-700">Activation countdown</div>
                             <div class="mt-2">
                             This number was just added. Give it up to
                             <span class="font-semibold tabular-nums" x-text="formatted()">03:00</span>
@@ -122,15 +122,15 @@
                     @endif
 
                     @if($phone->forwarding_number)
-                        <div class="mt-4 rounded-[1.25rem] border border-slate-200 bg-white px-4 py-4">
-                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Forwarding path</div>
+                        <div class="mt-4 tc-meta-card-white">
+                            <div class="tc-label-eyebrow">Forwarding path</div>
                             <div class="mt-3 grid gap-3 md:grid-cols-2">
                                 <div>
-                                    <div class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Current business line</div>
+                                    <div class="tc-label-eyebrow-tight">Current business line</div>
                                     <div class="mt-1 text-sm font-semibold text-slate-950">{{ $phone->forwarding_number }}</div>
                                 </div>
                                 <div>
-                                    <div class="text-xs font-semibold uppercase tracking-[0.16em] text-slate-500">Forward to tickIt</div>
+                                    <div class="tc-label-eyebrow-tight">Forward to tickIt</div>
                                     <div class="mt-1 text-sm font-semibold text-slate-950">{{ $phone->e164 }}</div>
                                 </div>
                             </div>
@@ -138,13 +138,13 @@
                     @endif
 
                     @if($phone->e164 && preg_match('/^\+?\d{10,}$/', $phone->e164))
-                        <div class="mt-4 rounded-[1.25rem] border border-slate-200 bg-slate-50/80 px-4 py-4 text-sm leading-6 text-slate-700">
+                        <div class="mt-4 tc-meta-card text-sm leading-6 text-slate-700">
                             Want to keep your current number? Forward it to <span class="font-semibold text-slate-950">{{ $phone->e164 }}</span> once the assistant is live.
                         </div>
                     @endif
                 @elseif($phone?->forwarding_number)
-                    <div class="rounded-[1.35rem] border border-slate-200 bg-slate-50/80 p-5">
-                        <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Saved line</div>
+                    <div class="tc-meta-card-strong">
+                        <div class="tc-label-eyebrow">Saved line</div>
                         <div class="mt-3 text-2xl font-semibold tracking-tight text-slate-950">{{ $phone->forwarding_number }}</div>
                         <div class="mt-4 flex flex-wrap items-center gap-2">
                             <x-ui.badge tone="warning">Needs import or forwarding</x-ui.badge>
@@ -165,8 +165,8 @@
 
         <x-ui.panel title="{{ $phone?->vapi_phone_number_id ? 'Update number' : 'Add a number' }}" description="Choose whether this assistant should use a new test number, import an existing line, or become the forwarding target for your live number.">
             @if($phoneNumbersLockedForFreePlan)
-                <div class="mb-5 rounded-[1.25rem] border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm leading-6 text-amber-900">
-                    <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-amber-700">Upgrade required</div>
+                <div class="mb-5 tc-meta-card border-amber-200 bg-amber-50/80 text-sm leading-6 text-amber-900">
+                    <div class="tc-label-eyebrow text-amber-700">Upgrade required</div>
                     <div class="mt-2">
                         Free workspaces cannot assign a live phone number to an assistant. Upgrade first, then connect, import, or forward a number here.
                     </div>
@@ -296,7 +296,7 @@
                         @foreach($phoneSetupOptions as $option)
                             <button
                                 type="button"
-                                class="flex w-full items-start justify-between gap-3 rounded-[1rem] border px-4 py-4 text-left transition"
+                                class="tc-meta-card flex w-full items-start justify-between gap-3 text-left transition"
                                 :class="provisioningMode === '{{ $option['value'] }}' ? 'tc-accent-card-active' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'"
                                 @click="if (!phoneNumbersLocked) selectSetup('{{ $option['value'] }}')"
                                 @disabled($phoneNumbersLockedForFreePlan)>
@@ -309,7 +309,7 @@
                                     </div>
                                     <p class="mt-1 text-sm leading-6 text-slate-600">{{ $option['description'] }}</p>
                                 </div>
-                                <span class="shrink-0 rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em]"
+                                <span class="tc-pill-mini shrink-0 border"
                                     :class="provisioningMode === '{{ $option['value'] }}' ? 'tc-accent-badge-strong' : 'border-slate-200 bg-white text-slate-500'">
                                     <span x-text="provisioningMode === '{{ $option['value'] }}' ? 'Selected' : 'Choose'"></span>
                                 </span>
@@ -318,15 +318,15 @@
                     </div>
                 </div>
 
-                <div class="rounded-[1.25rem] border border-emerald-200 bg-emerald-50/80 px-4 py-4 text-sm leading-6 text-emerald-900" x-show="isImportMode() && hasAnyCredential()" x-transition>
-                    <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-emerald-700">Ready to import</div>
+                <div class="tc-meta-card border-emerald-200 bg-emerald-50/80 text-sm leading-6 text-emerald-900" x-show="isImportMode() && hasAnyCredential()" x-transition>
+                    <div class="tc-label-eyebrow text-emerald-700">Ready to import</div>
                     <div class="mt-2">
                         This assistant can import a US, German, UAE, or other existing number directly into Vapi as soon as you save it.
                     </div>
                 </div>
 
-                <div class="rounded-[1.25rem] border border-amber-200 bg-amber-50/80 px-4 py-4 text-sm leading-6 text-amber-900" x-show="isImportMode() && !hasAnyCredential()" x-transition>
-                    <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-amber-700">One-click import tip</div>
+                <div class="tc-meta-card border-amber-200 bg-amber-50/80 text-sm leading-6 text-amber-900" x-show="isImportMode() && !hasAnyCredential()" x-transition>
+                    <div class="tc-label-eyebrow text-amber-700">One-click import tip</div>
                     <div class="mt-2">
                         Add a workspace Vapi BYO credential once in
                         <a href="{{ route('app.workspaces.settings', $workspace) }}" class="font-semibold underline decoration-amber-300 underline-offset-2">workspace settings</a>
@@ -351,7 +351,7 @@
                         @foreach($existingNumberCountryOptions as $countryOption)
                             <button
                                 type="button"
-                                class="rounded-[1rem] border px-4 py-3 text-left transition"
+                                class="tc-meta-card text-left transition"
                                 :class="existingNumberCountry === '{{ $countryOption['value'] }}' ? 'tc-accent-card-active' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'"
                                 @click="if (!phoneNumbersLocked) existingNumberCountry = '{{ $countryOption['value'] }}'"
                                 @disabled($phoneNumbersLockedForFreePlan)>
@@ -376,7 +376,7 @@
                     @endif
                 </div>
 
-                <div class="rounded-[1.25rem] border border-slate-200 bg-slate-50/80 px-4 py-4" x-show="provisioningMode === 'existing_business_number'" x-transition>
+                <div class="tc-meta-card" x-show="provisioningMode === 'existing_business_number'" x-transition>
                     <input type="hidden" name="auto_forwarding_target" value="0" />
                     <label class="flex items-start gap-3">
                         <input type="checkbox" name="auto_forwarding_target" value="1" class="mt-1 h-4 w-4 rounded border-slate-300 text-slate-900 focus:ring-slate-400" x-model="autoForwardingTarget" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan)>
