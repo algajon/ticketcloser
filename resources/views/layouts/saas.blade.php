@@ -413,9 +413,10 @@
         <div class="min-w-0 flex-1">
             <header class="tc-app-header" x-cloak :class="headerHidden ? 'tc-app-header-hidden' : 'tc-app-header-visible'" :aria-hidden="headerHidden.toString()">
                 <div class="tc-app-header-fade"></div>
-                <div class="tc-page-frame px-4 pt-2 pb-1 sm:px-6 sm:pt-2.5 sm:pb-1 lg:px-8 lg:pt-3 lg:pb-1.5">
-                    <div class="tc-app-topbar tc-app-topbar-rest">
-                        <div class="flex w-full items-center gap-3 sm:items-center">
+                <div class="px-4 pt-2 pb-1 sm:px-6 sm:pt-2.5 sm:pb-1 lg:px-8 lg:pt-3 lg:pb-1.5">
+                    <div class="tc-page-frame">
+                        <div class="tc-app-topbar tc-app-topbar-rest">
+                            <div class="flex w-full items-center gap-3 sm:items-center">
                             <div class="tc-mobile-topbar-strip flex min-w-0 flex-1 items-stretch overflow-hidden rounded-[1rem] border border-slate-200/80 bg-slate-50/70 shadow-[0_18px_38px_-28px_rgba(15,23,42,0.18)] md:hidden">
                                 <button type="button" class="tc-mobile-topbar-segment inline-flex min-w-0 flex-1 basis-0 items-center justify-center px-3 py-2.5 text-center text-[0.68rem] font-semibold uppercase tracking-[0.2em] transition" @click="sidebarOpen = true" aria-label="Open navigation">
                                     <span class="block leading-none">Menu</span>
@@ -444,7 +445,7 @@
                                 @endif
                             </div>
 
-                            <nav class="hidden min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:gap-x-2 sm:gap-y-1.5 sm:overflow-visible sm:whitespace-normal sm:pb-0 md:flex" aria-label="Page breadcrumb">
+                                <nav class="hidden min-w-0 flex-nowrap items-center gap-1.5 overflow-x-auto whitespace-nowrap pb-1 [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:flex-wrap sm:gap-x-2 sm:gap-y-1.5 sm:overflow-visible sm:whitespace-normal sm:pb-0 md:flex" aria-label="Page breadcrumb">
                                 @if($workspaceBreadcrumbUrl)
                                     <a href="{{ $workspaceBreadcrumbUrl }}"
                                         class="max-w-[38vw] shrink-0 truncate rounded-full px-2 py-1 text-[0.62rem] font-semibold uppercase tracking-[0.22em] text-slate-400 transition hover:bg-slate-100 hover:text-slate-600 sm:max-w-full sm:text-[0.7rem] sm:tracking-[0.24em]">
@@ -469,7 +470,8 @@
                                     </span>
                                 @endif
 
-                            </nav>
+                                </nav>
+                            </div>
                         </div>
                     </div>
                 </div>
