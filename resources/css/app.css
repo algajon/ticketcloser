@@ -137,6 +137,7 @@ body[data-app-accent='purple'] {
 
     .tc-shell-rhythm {
         --tc-shell-gap: 1.5rem;
+        --tc-shell-top-offset: 0.75rem;
     }
 
     .tc-app-header {
@@ -224,7 +225,7 @@ body[data-app-accent='purple'] {
     }
 
     .tc-shell-header-wrap {
-        padding-top: var(--tc-shell-gap);
+        padding-top: calc(var(--tc-shell-gap) + var(--tc-shell-top-offset));
         padding-bottom: var(--tc-shell-gap);
     }
 
@@ -303,12 +304,14 @@ body[data-app-accent='purple'] {
     @media (min-width: 640px) {
         .tc-shell-rhythm {
             --tc-shell-gap: 1.75rem;
+            --tc-shell-top-offset: 0.875rem;
         }
     }
 
     @media (min-width: 1024px) {
         .tc-shell-rhythm {
             --tc-shell-gap: 2rem;
+            --tc-shell-top-offset: 1rem;
         }
     }
 
