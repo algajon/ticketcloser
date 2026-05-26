@@ -413,7 +413,7 @@
         <div class="min-w-0 flex-1">
             <header class="tc-app-header" x-cloak :class="headerHidden ? 'tc-app-header-hidden' : 'tc-app-header-visible'" :aria-hidden="headerHidden.toString()">
                 <div class="tc-app-header-fade"></div>
-                <div class="px-4 pt-4 pb-1 sm:px-6 sm:pt-5 sm:pb-1 lg:px-8 lg:pt-6 lg:pb-1.5">
+                <div class="px-4 pt-4 pb-6 sm:px-6 sm:pt-5 sm:pb-6 lg:px-8 lg:pt-6 lg:pb-8">
                     <div class="tc-page-frame">
                         <div class="tc-app-topbar tc-app-topbar-rest">
                             <div class="flex w-full items-center gap-3 sm:items-center">
@@ -477,7 +477,7 @@
                 </div>
             </header>
 
-            <main id="main-content" class="px-4 pb-24 pt-0 sm:px-6 sm:pb-28 sm:pt-0 lg:px-8 lg:pb-32 lg:pt-0.5">
+            <main id="main-content" class="px-4 pb-24 pt-0 sm:px-6 sm:pb-28 sm:pt-0 lg:px-8 lg:pb-32 lg:pt-0">
                 <div class="tc-page-frame tc-page-stack">
                     @if($browserNotificationConfig)
                         <div x-data="browserNotifications(@js($browserNotificationConfig))" x-init="init()">
