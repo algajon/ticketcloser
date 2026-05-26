@@ -344,6 +344,8 @@ class VapiProvisioningService
         AssistantConfig $assistantConfig,
         ?string $areaCode
     ): array {
+        $resolvedAreaCode = $areaCode ?: $this->inferInstantProvisioningAreaCode($record);
+
         $payload = [
             'provider' => 'vapi',
             'name' => $workspace->name . ' Support',
@@ -351,8 +353,8 @@ class VapiProvisioningService
             'assistantId' => $assistantConfig->vapi_assistant_id,
         ];
 
-        if ($areaCode && strlen($areaCode) === 3) {
-            $payload['numberDesiredAreaCode'] = $areaCode;
+        if ($resolvedAreaCode && strlen($resolvedAreaCode) === 3) {
+            $payload['numberDesiredAreaCode'] = $resolvedAreaCode;
         }
 
         $pn = $this->vapi->createPhoneNumber($payload);
@@ -420,6 +422,25 @@ class VapiProvisioningService
         $normalized = trim((string) $phoneNumber);
 
         return $normalized !== '' ? $normalized : null;
+    }
+
+    private function inferInstantProvisioningAreaCode(WorkspacePhoneNumber $record): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $record->e164);
+
+        if ($digits === '') {
+            return null;
+        }
+
+        if (strlen($digits) === 11 && str_starts_with($digits, '1')) {
+            return substr($digits, 1, 3);
+        }
+
+        if (strlen($digits) === 10) {
+            return substr($digits, 0, 3);
+        }
+
+        return null;
     }
 
     private function buildCreateCaseToolPayload(string $workspaceSlug, string $integrationToken): array
