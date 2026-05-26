@@ -413,7 +413,7 @@
         <div class="min-w-0 flex-1">
             <header class="tc-app-header" x-cloak :class="headerHidden ? 'tc-app-header-hidden' : 'tc-app-header-visible'" :aria-hidden="headerHidden.toString()">
                 <div class="tc-app-header-fade"></div>
-                <div class="px-4 pt-3 pb-1 sm:px-6 sm:pt-3.5 sm:pb-1 lg:px-8 lg:pt-4 lg:pb-1.5">
+                <div class="px-4 pt-4 pb-1 sm:px-6 sm:pt-5 sm:pb-1 lg:px-8 lg:pt-6 lg:pb-1.5">
                     <div class="tc-page-frame">
                         <div class="tc-app-topbar tc-app-topbar-rest">
                             <div class="flex w-full items-center gap-3 sm:items-center">
