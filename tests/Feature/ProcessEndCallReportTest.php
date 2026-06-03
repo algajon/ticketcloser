@@ -237,6 +237,113 @@ class ProcessEndCallReportTest extends TestCase
     }
 
     /** @test */
+    public function it_does_not_save_a_system_prompt_as_the_transcript_when_vapi_returns_only_system_messages(): void
+    {
+        $workspace = Workspace::factory()->create();
+
+        $case = SupportCase::create([
+            'workspace_id' => $workspace->id,
+            'case_number' => 'TC-ENDCALL-PROMPT',
+            'title' => 'New ticket',
+            'description' => 'New case, no description',
+            'status' => SupportCase::STATUS_NEW,
+            'priority' => SupportCase::PRIORITY_NORMAL,
+            'source' => SupportCase::SOURCE_VOICE,
+            'external_call_id' => 'call_prompt_only',
+        ]);
+
+        $payload = [
+            'message' => [
+                'type' => 'end-of-call-report',
+                'call' => [
+                    'id' => 'call_prompt_only',
+                    'customer' => [
+                        'number' => '+15550001111',
+                    ],
+                ],
+                'artifact' => [
+                    'transcript' => '',
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'message' => "You are a property maintenance intake assistant.\n\nHow to sound:\n- Calm.\n\n[SYSTEM NOTE: Keep replies in de-DE.]",
+                        ],
+                    ],
+                    'messagesOpenAIFormatted' => [
+                        [
+                            'role' => 'system',
+                            'content' => "You are a property maintenance intake assistant.\n\nHow to sound:\n- Calm.\n\n[SYSTEM NOTE: Keep replies in de-DE.]",
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        (new ProcessEndCallReport($workspace, $payload))->handle(app(\App\Services\Vapi\VapiCallSyncService::class));
+
+        $callEvent = CallEvent::query()->where('vapi_call_id', 'call_prompt_only')->firstOrFail();
+        $case->refresh();
+
+        $this->assertNull($callEvent->transcript);
+        $this->assertNull($case->transcript);
+    }
+
+    /** @test */
+    public function it_clears_existing_prompt_pollution_when_the_latest_call_artifact_has_no_real_transcript(): void
+    {
+        $workspace = Workspace::factory()->create();
+
+        $promptTranscript = "Assistant: You are a property maintenance intake assistant.\n\nHow to sound:\n- Calm.\n\n[SYSTEM NOTE: Keep replies in de-DE.]";
+
+        $case = SupportCase::create([
+            'workspace_id' => $workspace->id,
+            'case_number' => 'TC-ENDCALL-CLEAR',
+            'title' => 'New ticket',
+            'description' => 'New case, no description',
+            'status' => SupportCase::STATUS_NEW,
+            'priority' => SupportCase::PRIORITY_NORMAL,
+            'source' => SupportCase::SOURCE_VOICE,
+            'external_call_id' => 'call_prompt_cleanup',
+            'transcript' => $promptTranscript,
+        ]);
+
+        CallEvent::create([
+            'workspace_id' => $workspace->id,
+            'vapi_call_id' => 'call_prompt_cleanup',
+            'transcript' => $promptTranscript,
+        ]);
+
+        $payload = [
+            'message' => [
+                'type' => 'end-of-call-report',
+                'call' => [
+                    'id' => 'call_prompt_cleanup',
+                    'customer' => [
+                        'number' => '+15550002222',
+                    ],
+                ],
+                'artifact' => [
+                    'transcript' => '',
+                    'messages' => [
+                        [
+                            'role' => 'system',
+                            'message' => "You are a property maintenance intake assistant.\n\nHow to sound:\n- Calm.\n\n[SYSTEM NOTE: Keep replies in de-DE.]",
+                        ],
+                    ],
+                ],
+            ],
+        ];
+
+        (new ProcessEndCallReport($workspace, $payload))->handle(app(\App\Services\Vapi\VapiCallSyncService::class));
+
+        $callEvent = CallEvent::query()->where('vapi_call_id', 'call_prompt_cleanup')->firstOrFail();
+        $case->refresh();
+
+        $this->assertNull($callEvent->transcript);
+        $this->assertNull($case->transcript);
+    }
+
+    /** @test */
     public function it_persists_language_labels_for_multilingual_calls(): void
     {
         $workspace = Workspace::factory()->create([

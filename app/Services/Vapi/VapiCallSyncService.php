@@ -11,6 +11,7 @@ use App\Models\Workspace;
 use App\Models\WorkspacePhoneNumber;
 use App\Services\Contacts\ContactLinkingService;
 use App\Support\RegionalPilotStackCatalog;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
@@ -91,6 +92,7 @@ class VapiCallSyncService
         $fromNumber = $this->extractFromNumber($context);
         $toNumber = $this->extractToNumber($context);
         $transcript = $this->extractTranscript($context);
+        $transcriptWasExplicitlyProvided = $this->contextHasTranscriptArtifact($context);
         $recordingUrl = $this->extractRecordingUrl($context);
         $contactName = $this->extractContactName($context, $transcript);
         $contactEmail = $this->extractContactEmail($context);
@@ -112,7 +114,11 @@ class VapiCallSyncService
         $callEvent->to_number = $toNumber ?: $callEvent->to_number;
         $callEvent->duration_seconds = $durationSeconds ?? $callEvent->duration_seconds;
         $callEvent->cost = $cost ?? $callEvent->cost;
-        $callEvent->transcript = $transcript ?: $callEvent->transcript;
+        if (is_string($transcript) && trim($transcript) !== '') {
+            $callEvent->transcript = $transcript;
+        } elseif ($transcriptWasExplicitlyProvided && $this->transcriptLooksLikeAssistantPrompt($callEvent->transcript)) {
+            $callEvent->transcript = null;
+        }
         $callEvent->recording_url = $recordingUrl ?: $callEvent->recording_url;
         $callEvent->meta = $this->compactMetadata(array_replace_recursive(is_array($callEvent->meta) ? $callEvent->meta : [], [
             'call' => $context['call'] ?? null,
@@ -132,8 +138,11 @@ class VapiCallSyncService
         if ($case) {
             $caseChanged = false;
 
-            if ($transcript && $case->transcript !== $transcript) {
+            if (is_string($transcript) && trim($transcript) !== '' && $case->transcript !== $transcript) {
                 $case->transcript = $transcript;
+                $caseChanged = true;
+            } elseif ($transcriptWasExplicitlyProvided && $this->transcriptLooksLikeAssistantPrompt($case->transcript)) {
+                $case->transcript = null;
                 $caseChanged = true;
             }
 
@@ -628,6 +637,17 @@ class VapiCallSyncService
         return null;
     }
 
+    private function contextHasTranscriptArtifact(array $context): bool
+    {
+        $artifact = is_array($context['artifact'] ?? null) ? $context['artifact'] : [];
+        $callArtifact = is_array(data_get($context, 'call.artifact')) ? data_get($context, 'call.artifact') : [];
+        $call = is_array($context['call'] ?? null) ? $context['call'] : [];
+
+        return Arr::exists($artifact, 'transcript')
+            || Arr::exists($callArtifact, 'transcript')
+            || Arr::exists($call, 'transcript');
+    }
+
     private function extractRecordingUrl(array $context): ?string
     {
         $candidates = [
@@ -748,8 +768,16 @@ class VapiCallSyncService
                 }
 
                 $role = strtolower((string) ($entry['role'] ?? 'speaker'));
+                if (in_array($role, ['system', 'tool', 'function', 'developer'], true)) {
+                    return null;
+                }
+
+                if ($role !== 'user' && $this->looksLikeSystemPromptMessage($message)) {
+                    return null;
+                }
+
                 $speaker = match ($role) {
-                    'assistant', 'bot', 'system' => 'Assistant',
+                    'assistant', 'bot' => 'Assistant',
                     'user', 'customer', 'caller' => 'Caller',
                     default => Str::headline($role),
                 };
@@ -761,6 +789,47 @@ class VapiCallSyncService
             ->all();
 
         return count($lines) > 0 ? implode("\n", $lines) : null;
+    }
+
+    private function looksLikeSystemPromptMessage(string $message): bool
+    {
+        $normalized = trim($message);
+        if ($normalized === '') {
+            return false;
+        }
+
+        $markers = [
+            'How to sound:',
+            'Your priorities on every call:',
+            'Always collect:',
+            'Conversation rules:',
+            'Case and scheduling rules:',
+            'Urgency rules:',
+            'What to avoid:',
+            'A good call ends with:',
+            '[SYSTEM NOTE:',
+        ];
+
+        $hits = collect($markers)
+            ->filter(fn (string $marker) => str_contains($normalized, $marker))
+            ->count();
+
+        return $hits >= 2
+            || (
+                Str::startsWith($normalized, 'You are ')
+                && $hits >= 1
+            );
+    }
+
+    private function transcriptLooksLikeAssistantPrompt(?string $transcript): bool
+    {
+        if (! is_string($transcript) || trim($transcript) === '') {
+            return false;
+        }
+
+        $normalized = preg_replace('/^(Assistant|System|Speaker):\s*/mi', '', $transcript) ?? $transcript;
+
+        return $this->looksLikeSystemPromptMessage($normalized);
     }
 
     private function nameFromText(string $text): ?string

@@ -459,6 +459,55 @@ class AssistantVoiceQualityTest extends TestCase
         ]);
     }
 
+    public function test_non_english_standard_models_normalize_openai_voice_choices_back_to_the_curated_regional_voice(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'German Desk',
+            'preset_key' => 'steady_operator',
+            'language_code' => 'de-DE',
+            'model_name' => 'gpt-4.1',
+            'voice_provider' => 'openai',
+            'voice_id' => 'cedar',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $this->assertSame('gpt-4.1', $payload['model']['model']);
+                $this->assertSame('azure', $payload['voice']['provider']);
+                $this->assertSame('de-DE-KlausNeural', $payload['voice']['voiceId']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-de-openai-fallback-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($assistant, $workspace, [
+            'name' => 'German Desk',
+            'language_code' => 'de-DE',
+            'model_name' => 'gpt-4.1',
+            'voice_provider' => 'openai',
+            'voice_id' => 'cedar',
+            'preset_key' => 'steady_operator',
+        ]);
+
+        $assistant->refresh();
+        $this->assertSame('azure', $assistant->voice_provider);
+        $this->assertSame('de-DE-KlausNeural', $assistant->voice_id);
+    }
+
     public function test_free_plan_keeps_curated_non_english_voice_path(): void
     {
         $workspace = Workspace::factory()->create([

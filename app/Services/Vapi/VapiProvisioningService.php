@@ -31,22 +31,33 @@ class VapiProvisioningService
 
     public function provisionAssistantAndToolForConfig(AssistantConfig $config, Workspace $workspace, array $input): AssistantConfig
     {
+        $resolvedModelName = AssistantConfig::normalizedModelName($input['model_name'] ?? $config->model_name);
+        $resolvedPresetKey = AssistantPreset::normalizeKey($input['preset_key'] ?? $config->preset_key);
+        $resolvedVoiceProvider = $input['voice_provider'] ?? $config->voice_provider;
         $resolvedVoiceId = $input['voice_id'] ?? $config->voice_id;
         $resolvedLanguageCode = $this->normalizeLanguageCode(
             $input['language_code'] ?? $config->language_code,
             $resolvedVoiceId,
             $workspace,
         );
+        [$resolvedVoiceProvider, $resolvedVoiceId] = $this->normalizePreferredVoiceSelection(
+            $workspace,
+            $resolvedLanguageCode,
+            $resolvedVoiceProvider,
+            $resolvedVoiceId,
+            $resolvedModelName,
+            $resolvedPresetKey,
+        );
 
         $config->fill([
             'name' => $input['name'] ?? $config->name,
             'first_message' => $input['first_message'] ?? $config->first_message,
             'system_prompt' => $input['system_prompt'] ?? $config->system_prompt,
-            'voice_provider' => $input['voice_provider'] ?? $config->voice_provider,
+            'voice_provider' => $resolvedVoiceProvider,
             'voice_id' => $resolvedVoiceId,
             'language_code' => $resolvedLanguageCode,
-            'model_name' => AssistantConfig::normalizedModelName($input['model_name'] ?? $config->model_name),
-            'preset_key' => AssistantPreset::normalizeKey($input['preset_key'] ?? $config->preset_key),
+            'model_name' => $resolvedModelName,
+            'preset_key' => $resolvedPresetKey,
             'override_params' => $input['override_params'] ?? $config->override_params,
             'intake_params' => $input['intake_params'] ?? $config->intake_params,
             'is_active' => $input['is_active'] ?? true,
@@ -942,6 +953,41 @@ PROMPT);
             'premium_concierge' => ['provider' => 'vapi', 'voiceId' => 'Clara', 'speed' => 1.08],
             default => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.1],
         };
+    }
+
+    private function normalizePreferredVoiceSelection(
+        Workspace $workspace,
+        string $languageCode,
+        ?string $voiceProvider,
+        ?string $voiceId,
+        string $modelName,
+        ?string $presetKey,
+    ): array {
+        $voiceProvider = trim((string) $voiceProvider) !== '' ? trim((string) $voiceProvider) : null;
+        $voiceId = trim((string) $voiceId) !== '' ? trim((string) $voiceId) : null;
+
+        if (
+            $voiceProvider !== 'openai'
+            || AssistantConfig::isRealtimeModelName($modelName)
+            || str_starts_with(strtolower($languageCode), 'en')
+        ) {
+            return [$voiceProvider, $voiceId];
+        }
+
+        $standardVoice = RegionalPilotStackCatalog::standardVoiceProfile(
+            $languageCode,
+            $presetKey,
+            $workspace->primaryMarket(),
+        );
+
+        if (! $standardVoice || ($standardVoice['provider'] ?? null) === 'openai') {
+            return [$voiceProvider, $voiceId];
+        }
+
+        return [
+            $standardVoice['provider'] ?? $voiceProvider,
+            $standardVoice['voiceId'] ?? $voiceId,
+        ];
     }
 
     private function supportsRealtimeVoice(string $provider, string $voiceId): bool
