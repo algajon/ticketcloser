@@ -623,6 +623,12 @@ class AssistantVoiceQualityTest extends TestCase
             'language_code' => 'en-US',
             'vapi_assistant_id' => 'asst_sales_123',
         ]);
+        $supportAssistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Tech Support',
+            'language_code' => 'en-US',
+            'vapi_assistant_id' => 'asst_support_123',
+        ]);
 
         $operator = AssistantConfig::create([
             'workspace_id' => $workspace->id,
@@ -642,6 +648,12 @@ class AssistantVoiceQualityTest extends TestCase
                             'assistant_id' => $salesAssistant->id,
                             'language_code' => 'en-US',
                         ],
+                        [
+                            'label' => 'Tech Support',
+                            'keywords' => 'support, technical support, not working',
+                            'assistant_id' => $supportAssistant->id,
+                            'language_code' => 'en-US',
+                        ],
                     ],
                 ],
             ],
@@ -654,16 +666,23 @@ class AssistantVoiceQualityTest extends TestCase
         $client->expects($this->once())
             ->method('createAssistant')
             ->with($this->callback(function (array $payload): bool {
-                $handoffTool = collect($payload['model']['tools'] ?? [])->firstWhere('type', 'handoff');
+                $handoffTools = collect($payload['model']['tools'] ?? [])->where('type', 'handoff')->values();
+                $handoffTool = $handoffTools->first();
 
+                $this->assertCount(2, $handoffTools);
                 $this->assertNotNull($handoffTool);
+                $this->assertCount(1, $handoffTool['destinations']);
+                $this->assertStringStartsWith('handoff_to_sales_', $handoffTool['function']['name']);
                 $this->assertSame('assistant', $handoffTool['destinations'][0]['type']);
                 $this->assertSame('asst_sales_123', $handoffTool['destinations'][0]['assistantId']);
-                $this->assertSame('all', $handoffTool['destinations'][0]['contextEngineeringPlan']['type']);
+                $this->assertSame('userAndAssistantMessages', $handoffTool['destinations'][0]['contextEngineeringPlan']['type']);
                 $this->assertStringContainsString('Sales', $handoffTool['destinations'][0]['description']);
                 $this->assertStringContainsString('sales, pricing, quote', $handoffTool['destinations'][0]['description']);
+                $this->assertFalse($handoffTool['messages'][2]['endCallAfterSpokenEnabled']);
+                $this->assertSame('system', $handoffTool['messages'][1]['role']);
                 $this->assertStringContainsString('OPERATOR ROUTING MODE', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Vapi-only spoken routing', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('handoff_to_*', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Sales', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Do not tell callers they must press keypad buttons', $payload['model']['messages'][0]['content']);
 

@@ -167,8 +167,7 @@ class VapiWebhookController extends Controller
                                 $modelOverride['toolIds'] = $toolIds;
                             }
 
-                            $handoffTool = $this->runtimeOperatorHandoffTool($workspacePhone->assistant, $workspace);
-                            if ($handoffTool) {
+                            foreach ($this->runtimeOperatorHandoffTools($workspacePhone->assistant, $workspace) as $handoffTool) {
                                 $modelOverride['tools'][] = $handoffTool;
                             }
 
@@ -589,10 +588,10 @@ class VapiWebhookController extends Controller
             : '';
     }
 
-    private function runtimeOperatorHandoffTool(\App\Models\AssistantConfig $assistant, Workspace $workspace): ?array
+    private function runtimeOperatorHandoffTools(\App\Models\AssistantConfig $assistant, Workspace $workspace): array
     {
         if (! $this->runtimeOperatorEnabled($assistant)) {
-            return null;
+            return [];
         }
 
         $routes = $this->runtimeOperatorRoutes($assistant);
@@ -605,7 +604,7 @@ class VapiWebhookController extends Controller
             ->all();
 
         if ($assistantIds === []) {
-            return null;
+            return [];
         }
 
         $destinationsByAssistant = \App\Models\AssistantConfig::query()
@@ -615,7 +614,7 @@ class VapiWebhookController extends Controller
             ->get(['id', 'name', 'language_code', 'vapi_assistant_id'])
             ->keyBy('id');
 
-        $destinations = [];
+        $tools = [];
 
         foreach ($routes as $route) {
             $destinationAssistant = $destinationsByAssistant->get((int) ($route['assistant_id'] ?? 0));
@@ -631,35 +630,73 @@ class VapiWebhookController extends Controller
                 'destination assistant: '.$destinationAssistant->name,
             ]);
 
-            $destinations[] = [
+            $destination = [
                 'type' => 'assistant',
                 'assistantId' => $destinationAssistant->vapi_assistant_id,
                 'description' => implode('; ', $descriptionParts),
                 'contextEngineeringPlan' => [
-                    'type' => 'all',
+                    'type' => 'userAndAssistantMessages',
                 ],
+            ];
+
+            $label = trim((string) ($route['label'] ?? $destinationAssistant->name));
+            $label = $label !== '' ? $label : $destinationAssistant->name;
+
+            $tools[] = [
+                'type' => 'handoff',
+                'function' => [
+                    'name' => $this->runtimeOperatorHandoffFunctionName($label, $destinationAssistant),
+                    'description' => 'Transfer the caller to '.$label.' when their spoken route choice or need matches this destination.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'reason' => [
+                                'type' => 'string',
+                                'description' => 'A short reason why the caller should be transferred to '.$label.'.',
+                            ],
+                        ],
+                    ],
+                ],
+                'messages' => [
+                    [
+                        'type' => 'request-start',
+                        'content' => 'I will connect you to '.$label.' now.',
+                        'blocking' => false,
+                    ],
+                    [
+                        'type' => 'request-complete',
+                        'role' => 'system',
+                        'content' => 'The caller is now connected to '.$label.'. Let the destination assistant continue the conversation.',
+                        'endCallAfterSpokenEnabled' => false,
+                    ],
+                    [
+                        'type' => 'request-failed',
+                        'content' => 'I could not complete that transfer, but I can still help from here. '.$this->runtimeOperatorFallbackMessage($assistant),
+                        'endCallAfterSpokenEnabled' => false,
+                    ],
+                    [
+                        'type' => 'request-response-delayed',
+                        'content' => 'Still connecting you. Thank you for your patience.',
+                        'timingMilliseconds' => 3000,
+                    ],
+                ],
+                'destinations' => [$destination],
             ];
         }
 
-        if ($destinations === []) {
-            return null;
+        return $tools;
+    }
+
+    private function runtimeOperatorHandoffFunctionName(string $label, \App\Models\AssistantConfig $assistant): string
+    {
+        $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', $label) ?: '');
+        $slug = trim($slug, '_');
+
+        if ($slug === '') {
+            $slug = 'assistant_'.$assistant->id;
         }
 
-        return [
-            'type' => 'handoff',
-            'messages' => [
-                [
-                    'type' => 'request-start',
-                    'content' => 'I will connect you to the right assistant now.',
-                    'blocking' => false,
-                ],
-                [
-                    'type' => 'request-failed',
-                    'content' => $this->runtimeOperatorFallbackMessage($assistant),
-                ],
-            ],
-            'destinations' => $destinations,
-        ];
+        return 'handoff_to_'.$slug.'_'.$assistant->id;
     }
 
     private function runtimeOperatorRoutingPrompt(\App\Models\AssistantConfig $assistant, Workspace $workspace): string
@@ -707,7 +744,8 @@ This assistant can act as a spoken operator before normal intake.
 - Start by using this operator routing line when it fits the call: "{$intro}"
 - This is Vapi-only spoken routing. Do not tell callers they must press keypad buttons. If a caller says "one", "two", "English", "Spanish", "German", "sales", "support", or another configured phrase out loud, treat that as their spoken route choice.
 - Ask one short clarification if the route is unclear.
-- When you are confident about the route and the route is live, use the handoff tool to move the caller to the matching assistant. Do not create a ticket before handoff unless no matching live destination exists.
+- When you are confident about the route and the route is live, call the specific handoff_to_* tool for that matching route. Do not create a ticket before handoff unless no matching live destination exists.
+- Handoffs are handled in the background. Do not tell the caller the call is ending, and do not say goodbye before or after a handoff.
 - If no live destination matches, say the fallback message naturally and continue helping with normal intake.
 
 Configured spoken routes:

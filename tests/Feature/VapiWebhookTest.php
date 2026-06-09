@@ -404,12 +404,24 @@ class VapiWebhookTest extends TestCase
         $response->assertOk();
         $response->assertJsonPath('assistantId', 'ast-1234');
 
-        $handoffTool = collect($response->json('assistantOverrides.model.tools') ?? [])->firstWhere('type', 'handoff');
+        $handoffTools = collect($response->json('assistantOverrides.model.tools') ?? [])->where('type', 'handoff')->values();
+        $handoffTool = $handoffTools->first();
+
+        $this->assertCount(1, $handoffTools);
         $this->assertNotNull($handoffTool);
+        $this->assertCount(1, $handoffTool['destinations']);
+        $this->assertStringStartsWith('handoff_to_sales_', $handoffTool['function']['name']);
         $this->assertSame('ast-sales-123', $handoffTool['destinations'][0]['assistantId']);
+        $this->assertSame('userAndAssistantMessages', $handoffTool['destinations'][0]['contextEngineeringPlan']['type']);
         $this->assertStringContainsString('Sales', $handoffTool['destinations'][0]['description']);
+        $this->assertSame('system', $handoffTool['messages'][1]['role']);
+        $this->assertFalse($handoffTool['messages'][2]['endCallAfterSpokenEnabled']);
         $this->assertStringContainsString(
             'OPERATOR ROUTING MODE',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'handoff_to_*',
             $response->json('assistantOverrides.model.messages.0.content')
         );
         $this->assertStringContainsString(

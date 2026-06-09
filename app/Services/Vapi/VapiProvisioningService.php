@@ -298,6 +298,7 @@ class VapiProvisioningService
 
                 $record->vapi_phone_number_id = null;
                 $record->e164 = null;
+                $record->activation_started_at = null;
                 $record->save();
 
                 $pn = $this->createVapiNumber($record, $workspace, $assistantConfig, $areaCode);
@@ -389,6 +390,9 @@ class VapiProvisioningService
         $pn = $this->vapi->createPhoneNumber($payload);
         $record->vapi_phone_number_id = $pn['id'] ?? null;
         $record->e164 = $pn['number'] ?? $pn['sipUri'] ?? null;
+        $record->activation_started_at = filled($record->vapi_phone_number_id) && filled($record->e164)
+            ? now()
+            : null;
         $record->assistant_id = $assistantConfig->id;
         $record->save();
 
@@ -410,6 +414,7 @@ class VapiProvisioningService
 
             $record->vapi_phone_number_id = null;
             $record->e164 = null;
+            $record->activation_started_at = null;
             $record->save();
 
             return $this->vapi->createPhoneNumber($payload);
@@ -422,6 +427,7 @@ class VapiProvisioningService
 
             $record->vapi_phone_number_id = null;
             $record->e164 = null;
+            $record->activation_started_at = null;
             $record->save();
 
             $createPayload = $payload;
@@ -680,8 +686,7 @@ class VapiProvisioningService
             $model['toolIds'][] = $caseLookupToolId;
         }
 
-        $operatorHandoffTool = $this->operatorHandoffTool($config, $workspace);
-        if ($operatorHandoffTool) {
+        foreach ($this->operatorHandoffTools($config, $workspace) as $operatorHandoffTool) {
             $model['tools'][] = $operatorHandoffTool;
         }
 
@@ -764,15 +769,15 @@ class VapiProvisioningService
         return $payload;
     }
 
-    private function operatorHandoffTool(AssistantConfig $config, Workspace $workspace): ?array
+    private function operatorHandoffTools(AssistantConfig $config, Workspace $workspace): array
     {
         if (! $this->operatorRoutingEnabled($config)) {
-            return null;
+            return [];
         }
 
         $routes = $this->operatorRoutes($config);
         if ($routes === []) {
-            return null;
+            return [];
         }
 
         $assistantIds = collect($routes)
@@ -784,7 +789,7 @@ class VapiProvisioningService
             ->all();
 
         if ($assistantIds === []) {
-            return null;
+            return [];
         }
 
         $destinationsByAssistant = AssistantConfig::query()
@@ -794,7 +799,7 @@ class VapiProvisioningService
             ->get(['id', 'name', 'language_code', 'vapi_assistant_id'])
             ->keyBy('id');
 
-        $destinations = [];
+        $tools = [];
 
         foreach ($routes as $route) {
             $assistantId = (int) ($route['assistant_id'] ?? 0);
@@ -811,35 +816,73 @@ class VapiProvisioningService
                 'destination assistant: '.$assistant->name,
             ]);
 
-            $destinations[] = [
+            $destination = [
                 'type' => 'assistant',
                 'assistantId' => $assistant->vapi_assistant_id,
                 'description' => implode('; ', $descriptionParts),
                 'contextEngineeringPlan' => [
-                    'type' => 'all',
+                    'type' => 'userAndAssistantMessages',
                 ],
+            ];
+
+            $label = trim((string) ($route['label'] ?? $assistant->name));
+            $label = $label !== '' ? $label : $assistant->name;
+
+            $tools[] = [
+                'type' => 'handoff',
+                'function' => [
+                    'name' => $this->operatorHandoffFunctionName($label, $assistant),
+                    'description' => 'Transfer the caller to '.$label.' when their spoken route choice or need matches this destination.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'reason' => [
+                                'type' => 'string',
+                                'description' => 'A short reason why the caller should be transferred to '.$label.'.',
+                            ],
+                        ],
+                    ],
+                ],
+                'messages' => [
+                    [
+                        'type' => 'request-start',
+                        'content' => 'I will connect you to '.$label.' now.',
+                        'blocking' => false,
+                    ],
+                    [
+                        'type' => 'request-complete',
+                        'role' => 'system',
+                        'content' => 'The caller is now connected to '.$label.'. Let the destination assistant continue the conversation.',
+                        'endCallAfterSpokenEnabled' => false,
+                    ],
+                    [
+                        'type' => 'request-failed',
+                        'content' => 'I could not complete that transfer, but I can still help from here. '.$this->operatorFallbackMessage($config),
+                        'endCallAfterSpokenEnabled' => false,
+                    ],
+                    [
+                        'type' => 'request-response-delayed',
+                        'content' => 'Still connecting you. Thank you for your patience.',
+                        'timingMilliseconds' => 3000,
+                    ],
+                ],
+                'destinations' => [$destination],
             ];
         }
 
-        if ($destinations === []) {
-            return null;
+        return $tools;
+    }
+
+    private function operatorHandoffFunctionName(string $label, AssistantConfig $assistant): string
+    {
+        $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', $label) ?: '');
+        $slug = trim($slug, '_');
+
+        if ($slug === '') {
+            $slug = 'assistant_'.$assistant->id;
         }
 
-        return [
-            'type' => 'handoff',
-            'messages' => [
-                [
-                    'type' => 'request-start',
-                    'content' => 'I will connect you to the right assistant now.',
-                    'blocking' => false,
-                ],
-                [
-                    'type' => 'request-failed',
-                    'content' => $this->operatorFallbackMessage($config),
-                ],
-            ],
-            'destinations' => $destinations,
-        ];
+        return 'handoff_to_'.$slug.'_'.$assistant->id;
     }
 
     private function operatorRoutingPrompt(AssistantConfig $config, Workspace $workspace): string
@@ -883,7 +926,8 @@ This assistant can act as a spoken operator before normal intake.
 - Start by using this operator routing line when it fits the call: "{$intro}"
 - This is Vapi-only spoken routing. Do not tell callers they must press keypad buttons. If a caller says "one", "two", "English", "Spanish", "German", "sales", "support", or another configured phrase out loud, treat that as their spoken route choice.
 - Ask one short clarification if the route is unclear.
-- When you are confident about the route and the route is live, use the handoff tool to move the caller to the matching assistant. Do not create a ticket before handoff unless no matching live destination exists.
+- When you are confident about the route and the route is live, call the specific handoff_to_* tool for that matching route. Do not create a ticket before handoff unless no matching live destination exists.
+- Handoffs are handled in the background. Do not tell the caller the call is ending, and do not say goodbye before or after a handoff.
 - If no live destination matches, say the fallback message naturally and continue helping with normal intake.
 
 Configured spoken routes:

@@ -217,11 +217,12 @@ class VoiceAssistantController extends Controller
             $phone = new WorkspacePhoneNumber(['workspace_id' => $workspace->id]);
         }
 
-        $activationCountdownEndsAt = null;
+        $activationCountdownEndsAt = $phone->activationCountdownEndsAt(self::PHONE_ACTIVATION_COUNTDOWN_SECONDS);
         $countdown = $request->session()->get('phone_activation_countdown');
 
         if (
-            $config
+            ! $activationCountdownEndsAt
+            && $config
             && is_array($countdown)
             && (int) ($countdown['assistant_id'] ?? 0) === (int) $config->id
             && filled($countdown['ends_at'] ?? null)
@@ -343,10 +344,21 @@ class VoiceAssistantController extends Controller
             ])
             ->with('success', $successMessage);
 
-        if (!$hadProvisionedNumber && filled($record->vapi_phone_number_id)) {
+        $activationCountdownEndsAt = $record->activationCountdownEndsAt(self::PHONE_ACTIVATION_COUNTDOWN_SECONDS);
+
+        if (
+            ! $activationCountdownEndsAt
+            && !$hadProvisionedNumber
+            && filled($record->vapi_phone_number_id)
+            && in_array($setupMode, ['vapi_instant', 'existing_business_number'], true)
+        ) {
+            $activationCountdownEndsAt = now()->addSeconds(self::PHONE_ACTIVATION_COUNTDOWN_SECONDS);
+        }
+
+        if ($activationCountdownEndsAt) {
             $redirect->with('phone_activation_countdown', [
                 'assistant_id' => $record->assistant_id,
-                'ends_at' => now()->addSeconds(self::PHONE_ACTIVATION_COUNTDOWN_SECONDS)->toIso8601String(),
+                'ends_at' => $activationCountdownEndsAt->toIso8601String(),
             ]);
         }
 

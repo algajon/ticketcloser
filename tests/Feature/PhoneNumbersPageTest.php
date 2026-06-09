@@ -197,6 +197,7 @@ class PhoneNumbersPageTest extends TestCase
                 'assistant_id' => $assistant->id,
                 'e164' => '+14155550124',
                 'vapi_phone_number_id' => 'pn_fresh_123',
+                'activation_started_at' => Carbon::now(),
                 'is_active' => true,
             ]);
 
@@ -225,122 +226,184 @@ class PhoneNumbersPageTest extends TestCase
 
     public function test_phone_numbers_page_shows_activation_countdown_for_newly_provisioned_number(): void
     {
-        $user = User::factory()->create();
-        $workspace = Workspace::factory()->create(['plan_key' => 'free']);
+        Carbon::setTestNow('2026-03-31 10:15:00');
 
-        WorkspaceMembership::create([
-            'workspace_id' => $workspace->id,
-            'user_id' => $user->id,
-            'role' => WorkspaceMembership::ROLE_OWNER,
-        ]);
+        try {
+            $user = User::factory()->create();
+            $workspace = Workspace::factory()->create(['plan_key' => 'free']);
 
-        Subscription::create([
-            'workspace_id' => $workspace->id,
-            'stripe_subscription_id' => 'sub_phone_forwarding',
-            'plan_key' => 'startup',
-            'status' => 'active',
-        ]);
+            WorkspaceMembership::create([
+                'workspace_id' => $workspace->id,
+                'user_id' => $user->id,
+                'role' => WorkspaceMembership::ROLE_OWNER,
+            ]);
 
-        $assistant = AssistantConfig::create([
-            'workspace_id' => $workspace->id,
-            'name' => 'Fresh Assistant',
-            'vapi_assistant_id' => 'asst_fresh_123',
-        ]);
+            Subscription::create([
+                'workspace_id' => $workspace->id,
+                'stripe_subscription_id' => 'sub_phone_forwarding',
+                'plan_key' => 'startup',
+                'status' => 'active',
+            ]);
 
-        WorkspacePhoneNumber::create([
-            'workspace_id' => $workspace->id,
-            'assistant_id' => $assistant->id,
-            'e164' => '+14155550124',
-            'vapi_phone_number_id' => 'pn_fresh_123',
-            'is_active' => true,
-        ]);
+            $assistant = AssistantConfig::create([
+                'workspace_id' => $workspace->id,
+                'name' => 'Fresh Assistant',
+                'vapi_assistant_id' => 'asst_fresh_123',
+            ]);
 
-        $response = $this
-            ->actingAs($user)
-            ->withSession([
-                'phone_activation_countdown' => [
-                    'assistant_id' => $assistant->id,
-                    'ends_at' => now()->addSeconds(180)->toIso8601String(),
-                ],
-            ])
-            ->get(route('app.phone_numbers.index', [
-                'workspace' => $workspace,
+            WorkspacePhoneNumber::create([
+                'workspace_id' => $workspace->id,
                 'assistant_id' => $assistant->id,
-            ]));
+                'e164' => '+14155550124',
+                'vapi_phone_number_id' => 'pn_fresh_123',
+                'activation_started_at' => Carbon::now()->subSeconds(45),
+                'is_active' => true,
+            ]);
 
-        $response
-            ->assertOk()
-            ->assertSee('Activation countdown')
-            ->assertSee('This number was just added.')
-            ->assertSee('Activating');
+            $response = $this
+                ->actingAs($user)
+                ->get(route('app.phone_numbers.index', [
+                    'workspace' => $workspace,
+                    'assistant_id' => $assistant->id,
+                ]));
+
+            $response
+                ->assertOk()
+                ->assertSee('Activation countdown')
+                ->assertSee('This number was just added.')
+                ->assertSee('Activating');
+        } finally {
+            Carbon::setTestNow();
+        }
+    }
+
+    public function test_phone_numbers_page_hides_persisted_activation_countdown_after_it_expires(): void
+    {
+        Carbon::setTestNow('2026-03-31 10:20:00');
+
+        try {
+            $user = User::factory()->create();
+            $workspace = Workspace::factory()->create(['plan_key' => 'startup']);
+
+            WorkspaceMembership::create([
+                'workspace_id' => $workspace->id,
+                'user_id' => $user->id,
+                'role' => WorkspaceMembership::ROLE_OWNER,
+            ]);
+
+            Subscription::create([
+                'workspace_id' => $workspace->id,
+                'stripe_subscription_id' => 'sub_phone_countdown_expired',
+                'plan_key' => 'startup',
+                'status' => 'active',
+            ]);
+
+            $assistant = AssistantConfig::create([
+                'workspace_id' => $workspace->id,
+                'name' => 'Already Active Assistant',
+                'vapi_assistant_id' => 'asst_active_123',
+            ]);
+
+            WorkspacePhoneNumber::create([
+                'workspace_id' => $workspace->id,
+                'assistant_id' => $assistant->id,
+                'e164' => '+14155550125',
+                'vapi_phone_number_id' => 'pn_active_123',
+                'activation_started_at' => Carbon::now()->subMinutes(4),
+                'is_active' => true,
+            ]);
+
+            $response = $this
+                ->actingAs($user)
+                ->get(route('app.phone_numbers.index', [
+                    'workspace' => $workspace,
+                    'assistant_id' => $assistant->id,
+                ]));
+
+            $response
+                ->assertOk()
+                ->assertDontSee('Activation countdown')
+                ->assertSee('Active');
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_existing_business_number_can_create_a_forwarding_target_immediately(): void
     {
-        $user = User::factory()->create();
-        $workspace = Workspace::factory()->create([
-            'plan_key' => 'startup',
-            'primary_market' => 'global',
-        ]);
+        Carbon::setTestNow('2026-03-31 10:30:00');
 
-        WorkspaceMembership::create([
-            'workspace_id' => $workspace->id,
-            'user_id' => $user->id,
-            'role' => WorkspaceMembership::ROLE_OWNER,
-        ]);
-
-        Subscription::create([
-            'workspace_id' => $workspace->id,
-            'stripe_subscription_id' => 'sub_phone_import_plan',
-            'plan_key' => 'startup',
-            'status' => 'active',
-        ]);
-
-        $assistant = AssistantConfig::create([
-            'workspace_id' => $workspace->id,
-            'name' => 'Forwarding Assistant',
-            'vapi_assistant_id' => 'asst_forward_123',
-        ]);
-
-        $client = $this->createMock(VapiClient::class);
-        $client->expects($this->once())
-            ->method('createPhoneNumber')
-            ->with($this->callback(function (array $payload) use ($assistant) {
-                return $payload['provider'] === 'vapi'
-                    && $payload['assistantId'] === $assistant->vapi_assistant_id;
-            }))
-            ->willReturn([
-                'id' => 'pn_forward_123',
-                'number' => '+14155550999',
+        try {
+            $user = User::factory()->create();
+            $workspace = Workspace::factory()->create([
+                'plan_key' => 'startup',
+                'primary_market' => 'global',
             ]);
 
-        $this->app->instance(VapiClient::class, $client);
+            WorkspaceMembership::create([
+                'workspace_id' => $workspace->id,
+                'user_id' => $user->id,
+                'role' => WorkspaceMembership::ROLE_OWNER,
+            ]);
 
-        $response = $this
-            ->actingAs($user)
-            ->post(route('app.phone_numbers.store', $workspace), [
+            Subscription::create([
+                'workspace_id' => $workspace->id,
+                'stripe_subscription_id' => 'sub_phone_import_plan',
+                'plan_key' => 'startup',
+                'status' => 'active',
+            ]);
+
+            $assistant = AssistantConfig::create([
+                'workspace_id' => $workspace->id,
+                'name' => 'Forwarding Assistant',
+                'vapi_assistant_id' => 'asst_forward_123',
+            ]);
+
+            $client = $this->createMock(VapiClient::class);
+            $client->expects($this->once())
+                ->method('createPhoneNumber')
+                ->with($this->callback(function (array $payload) use ($assistant) {
+                    return $payload['provider'] === 'vapi'
+                        && $payload['assistantId'] === $assistant->vapi_assistant_id;
+                }))
+                ->willReturn([
+                    'id' => 'pn_forward_123',
+                    'number' => '+14155550999',
+                ]);
+
+            $this->app->instance(VapiClient::class, $client);
+
+            $response = $this
+                ->actingAs($user)
+                ->post(route('app.phone_numbers.store', $workspace), [
+                    'assistant_id' => $assistant->id,
+                    'provisioning_mode' => 'existing_business_number',
+                    'forwarding_number' => '+14155550111',
+                    'auto_forwarding_target' => '1',
+                ]);
+
+            $response
+                ->assertRedirect(route('app.phone_numbers.index', [
+                    'workspace' => $workspace,
+                    'assistant_id' => $assistant->id,
+                ], false))
+                ->assertSessionHas('success', 'Forward your existing number to +14155550999 whenever you are ready to switch calls over.');
+
+            $this->assertDatabaseHas('workspace_phone_numbers', [
+                'workspace_id' => $workspace->id,
                 'assistant_id' => $assistant->id,
                 'provisioning_mode' => 'existing_business_number',
                 'forwarding_number' => '+14155550111',
-                'auto_forwarding_target' => '1',
+                'vapi_phone_number_id' => 'pn_forward_123',
+                'e164' => '+14155550999',
+                'is_active' => true,
             ]);
 
-        $response
-            ->assertRedirect(route('app.phone_numbers.index', [
-                'workspace' => $workspace,
-                'assistant_id' => $assistant->id,
-            ], false))
-            ->assertSessionHas('success', 'Forward your existing number to +14155550999 whenever you are ready to switch calls over.');
-
-        $this->assertDatabaseHas('workspace_phone_numbers', [
-            'workspace_id' => $workspace->id,
-            'assistant_id' => $assistant->id,
-            'provisioning_mode' => 'existing_business_number',
-            'forwarding_number' => '+14155550111',
-            'vapi_phone_number_id' => 'pn_forward_123',
-            'e164' => '+14155550999',
-            'is_active' => true,
-        ]);
+            $phoneNumber = WorkspacePhoneNumber::query()->where('vapi_phone_number_id', 'pn_forward_123')->firstOrFail();
+            $this->assertTrue(Carbon::now()->equalTo($phoneNumber->activation_started_at));
+        } finally {
+            Carbon::setTestNow();
+        }
     }
 
     public function test_existing_number_import_plan_can_be_saved_without_a_vapi_credential(): void
