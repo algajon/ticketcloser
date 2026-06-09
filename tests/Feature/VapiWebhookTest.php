@@ -424,6 +424,14 @@ class VapiWebhookTest extends TestCase
             $response->json('assistantOverrides.model.messages.0.content')
         );
         $this->assertStringContainsString(
+            'The configured spoken routes below are the only choices this operator can offer',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'hand off immediately to that route',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
             'matching Vapi handoff destination',
             $response->json('assistantOverrides.model.messages.0.content')
         );

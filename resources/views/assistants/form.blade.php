@@ -124,9 +124,9 @@
             'I can help route the call, but I need one more detail. Which team should I connect you with?'
         );
         $defaultOperatorRows = [
-            ['label' => 'English support', 'keywords' => 'english, support, help', 'assistant_id' => '', 'language_code' => 'en-US'],
-            ['label' => 'Spanish support', 'keywords' => 'spanish, espanol, ayuda', 'assistant_id' => '', 'language_code' => 'es-ES'],
-            ['label' => 'German support', 'keywords' => 'german, deutsch, hilfe', 'assistant_id' => '', 'language_code' => 'de-DE'],
+            ['label' => 'English', 'keywords' => 'english', 'assistant_id' => '', 'language_code' => 'en-US'],
+            ['label' => 'Spanish', 'keywords' => 'spanish, espanol', 'assistant_id' => '', 'language_code' => 'es-ES'],
+            ['label' => 'German', 'keywords' => 'german, deutsch', 'assistant_id' => '', 'language_code' => 'de-DE'],
             ['label' => 'Sales', 'keywords' => 'sales, pricing, quote, buy', 'assistant_id' => '', 'language_code' => $selectedLanguageValue],
         ];
         $savedOperatorRows = collect(data_get($operatorConfig, 'routes', []))

@@ -682,6 +682,8 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertStringContainsString('OPERATOR ROUTING MODE', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('SILENT HANDOFF RULES', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Vapi-only spoken routing', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('The configured spoken routes below are the only choices this operator can offer', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('hand off immediately to that route', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('silently use the matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Sales', $payload['model']['messages'][0]['content']);
@@ -819,6 +821,8 @@ class AssistantVoiceQualityTest extends TestCase
                     $payload['firstMessage']
                 );
                 $this->assertSame('assistant-speaks-first', $payload['firstMessageMode']);
+                $this->assertStringContainsString('The configured spoken routes below are the only choices this operator can offer', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('hand off immediately to that route', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('do not infer a downstream destination', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('silently use the matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
 
