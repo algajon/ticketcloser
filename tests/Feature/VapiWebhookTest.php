@@ -414,14 +414,21 @@ class VapiWebhookTest extends TestCase
         $this->assertSame('ast-sales-123', $handoffTool['destinations'][0]['assistantId']);
         $this->assertSame('userAndAssistantMessages', $handoffTool['destinations'][0]['contextEngineeringPlan']['type']);
         $this->assertStringContainsString('Sales', $handoffTool['destinations'][0]['description']);
-        $this->assertSame('system', $handoffTool['messages'][1]['role']);
-        $this->assertFalse($handoffTool['messages'][2]['endCallAfterSpokenEnabled']);
+        $this->assertSame([], $handoffTool['messages']);
         $this->assertStringContainsString(
             'OPERATOR ROUTING MODE',
             $response->json('assistantOverrides.model.messages.0.content')
         );
         $this->assertStringContainsString(
+            'SILENT HANDOFF RULES',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
             'matching Vapi handoff destination',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'silently use the matching Vapi handoff destination',
             $response->json('assistantOverrides.model.messages.0.content')
         );
         $this->assertStringContainsString(

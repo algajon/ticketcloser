@@ -678,11 +678,12 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('userAndAssistantMessages', $handoffTool['destinations'][0]['contextEngineeringPlan']['type']);
                 $this->assertStringContainsString('Sales', $handoffTool['destinations'][0]['description']);
                 $this->assertStringContainsString('sales, pricing, quote', $handoffTool['destinations'][0]['description']);
-                $this->assertFalse($handoffTool['messages'][2]['endCallAfterSpokenEnabled']);
-                $this->assertSame('system', $handoffTool['messages'][1]['role']);
+                $this->assertSame([], $handoffTool['messages']);
                 $this->assertStringContainsString('OPERATOR ROUTING MODE', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('SILENT HANDOFF RULES', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Vapi-only spoken routing', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('silently use the matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Sales', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Do not tell callers they must press keypad buttons', $payload['model']['messages'][0]['content']);
 
@@ -692,6 +693,62 @@ class AssistantVoiceQualityTest extends TestCase
 
         $service = new VapiProvisioningService($client);
         $service->provisionAssistantAndToolForConfig($operator, $workspace, ['name' => 'Main Operator']);
+    }
+
+    public function test_operator_route_destination_uses_model_generated_first_message_for_silent_handoff(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $salesAssistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Sales Desk',
+            'language_code' => 'en-US',
+            'first_message' => 'Thanks for calling sales. How can I help?',
+            'vapi_assistant_id' => 'asst_sales_123',
+        ]);
+
+        AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Main Operator',
+            'preset_key' => 'steady_operator',
+            'language_code' => 'en-US',
+            'intake_params' => [
+                'operator' => [
+                    'enabled' => true,
+                    'routes' => [
+                        [
+                            'label' => 'Sales',
+                            'keywords' => 'sales, pricing, quote',
+                            'assistant_id' => $salesAssistant->id,
+                            'language_code' => 'en-US',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('updateAssistant')
+            ->with('asst_sales_123', $this->callback(function (array $payload): bool {
+                $this->assertSame('', $payload['firstMessage']);
+                $this->assertSame('assistant-speaks-first-with-model-generated-message', $payload['firstMessageMode']);
+                $this->assertStringContainsString('SILENT HANDOFF RULES', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Continue directly with the next useful question', $payload['model']['messages'][0]['content']);
+
+                return true;
+            }));
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($salesAssistant, $workspace, ['name' => 'Sales Desk']);
     }
 
     public function test_operator_routing_with_multiple_route_languages_uses_multilingual_transcription(): void

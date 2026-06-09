@@ -134,7 +134,7 @@ class VapiWebhookController extends Controller
                             $operatorRoutingPrompt = $operatorRoutingPrompt !== '' ? "\n\n".$operatorRoutingPrompt : '';
                             $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference.]";
                             $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Use any caller context already provided in the system note before deciding whether to call lookupContact or lookupCase.\n- If the system note already gives you the caller's identity or recent case context, do not call lookupContact or lookupCase at the start of the call.\n- Use lookupContact only if the existing caller context is missing, unclear, or the caller asks what details are on file.\n- Use lookupCase only if recent case history would genuinely help and it was not already provided in the system note.\n- Never narrate lookupContact or lookupCase with phrases like 'Just a sec', 'One moment', 'Give me a moment', or 'Hold on a sec'.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
-                            $systemPrompt = $memory . $basePrompt . $toolRules . $languageGuardrail . $operatorRoutingPrompt . $dateContext;
+                            $systemPrompt = $memory . $basePrompt . $toolRules . "\n\n".$this->silentHandoffGuardrailsPrompt() . $languageGuardrail . $operatorRoutingPrompt . $dateContext;
 
                             // Build toolIds array so Vapi doesn't strip tools when we override the model
                             $toolIds = array_filter([
@@ -183,19 +183,22 @@ class VapiWebhookController extends Controller
                                 ];
                             }
 
-                            $overrides = ['model' => $modelOverride];
+                            $overrides = [
+                                'model' => $modelOverride,
+                                'firstMessage' => $this->runtimeFirstMessage(
+                                    $workspacePhone->assistant->first_message,
+                                    $contact?->name,
+                                    $workspacePhone->assistant->language_code,
+                                    $workspace->name,
+                                    $workspacePhone->assistant->name,
+                                ),
+                                'firstMessageMode' => 'assistant-speaks-first',
+                            ];
 
                             if ($contact?->name) {
                                 $knownCallerSuffix = $this->knownCallerSuffix(
                                     $contact->name,
                                     $workspacePhone->assistant->language_code,
-                                );
-                                $overrides['firstMessage'] = $this->runtimeFirstMessage(
-                                    $workspacePhone->assistant->first_message,
-                                    $contact->name,
-                                    $workspacePhone->assistant->language_code,
-                                    $workspace->name,
-                                    $workspacePhone->assistant->name,
                                 );
                                 $overrides['variableValues'] = [
                                     'knownCallerSuffix' => $knownCallerSuffix,
@@ -588,6 +591,15 @@ class VapiWebhookController extends Controller
             : '';
     }
 
+    private function silentHandoffGuardrailsPrompt(): string
+    {
+        return trim(<<<'PROMPT'
+[SYSTEM NOTE: SILENT HANDOFF RULES]
+- If this assistant receives a caller from another tickIt operator or assistant, do not greet the caller again, do not mention a transfer, and do not make small talk.
+- Continue directly with the next useful question for this assistant's task, using any route choice or caller context already present in the conversation.
+PROMPT);
+    }
+
     private function runtimeOperatorHandoffTools(\App\Models\AssistantConfig $assistant, Workspace $workspace): array
     {
         if (! $this->runtimeOperatorEnabled($assistant)) {
@@ -644,29 +656,7 @@ class VapiWebhookController extends Controller
 
             $tools[] = [
                 'type' => 'handoff',
-                'messages' => [
-                    [
-                        'type' => 'request-start',
-                        'content' => 'I will connect you to '.$label.' now.',
-                        'blocking' => false,
-                    ],
-                    [
-                        'type' => 'request-complete',
-                        'role' => 'system',
-                        'content' => 'The caller is now connected to '.$label.'. Let the destination assistant continue the conversation.',
-                        'endCallAfterSpokenEnabled' => false,
-                    ],
-                    [
-                        'type' => 'request-failed',
-                        'content' => 'I could not complete that transfer, but I can still help from here. '.$this->runtimeOperatorFallbackMessage($assistant),
-                        'endCallAfterSpokenEnabled' => false,
-                    ],
-                    [
-                        'type' => 'request-response-delayed',
-                        'content' => 'Still connecting you. Thank you for your patience.',
-                        'timingMilliseconds' => 3000,
-                    ],
-                ],
+                'messages' => [],
                 'destinations' => [$destination],
             ];
         }
@@ -719,7 +709,7 @@ This assistant can act as a spoken operator before normal intake.
 - Start by using this operator routing line when it fits the call: "{$intro}"
 - This is Vapi-only spoken routing. Do not tell callers they must press keypad buttons. If a caller says "one", "two", "English", "Spanish", "German", "sales", "support", or another configured phrase out loud, treat that as their spoken route choice.
 - Ask one short clarification if the route is unclear.
-- When you are confident about the route and the route is live, use the matching Vapi handoff destination for that route. Do not create a ticket before handoff unless no matching live destination exists.
+- When you are confident about the route and the route is live, silently use the matching Vapi handoff destination for that route. Do not acknowledge the route choice, do not say "connecting", and do not create a ticket before handoff unless no matching live destination exists.
 - Handoffs are handled in the background. Do not tell the caller the call is ending, and do not say goodbye before or after a handoff.
 - If no live destination matches, say the fallback message naturally and continue helping with normal intake.
 

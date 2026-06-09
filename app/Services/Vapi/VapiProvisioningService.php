@@ -643,6 +643,7 @@ class VapiProvisioningService
         $systemPrompt .= "\n\n" . $this->toolExecutionGuardrailsPrompt();
         $systemPrompt .= "\n\n" . $this->knownCallerGuardrailsPrompt();
         $systemPrompt .= "\n\n" . $this->humaneConversationGuardrailsPrompt();
+        $systemPrompt .= "\n\n" . $this->silentHandoffGuardrailsPrompt();
 
         if (! empty($config->language_code)) {
             $systemPrompt .= "\n\n[SYSTEM NOTE: Keep caller-facing replies in {$config->language_code} unless the caller clearly switches language and the business supports that change.]";
@@ -709,6 +710,11 @@ class VapiProvisioningService
             'model' => $model,
             'firstMessage' => $firstMessage,
         ];
+
+        if ($this->isOperatorRouteDestination($config, $workspace)) {
+            $payload['firstMessage'] = '';
+            $payload['firstMessageMode'] = 'assistant-speaks-first-with-model-generated-message';
+        }
 
         $voiceConfig = VoiceConfig::query()
             ->where('workspace_id', $workspace->id)
@@ -830,29 +836,7 @@ class VapiProvisioningService
 
             $tools[] = [
                 'type' => 'handoff',
-                'messages' => [
-                    [
-                        'type' => 'request-start',
-                        'content' => 'I will connect you to '.$label.' now.',
-                        'blocking' => false,
-                    ],
-                    [
-                        'type' => 'request-complete',
-                        'role' => 'system',
-                        'content' => 'The caller is now connected to '.$label.'. Let the destination assistant continue the conversation.',
-                        'endCallAfterSpokenEnabled' => false,
-                    ],
-                    [
-                        'type' => 'request-failed',
-                        'content' => 'I could not complete that transfer, but I can still help from here. '.$this->operatorFallbackMessage($config),
-                        'endCallAfterSpokenEnabled' => false,
-                    ],
-                    [
-                        'type' => 'request-response-delayed',
-                        'content' => 'Still connecting you. Thank you for your patience.',
-                        'timingMilliseconds' => 3000,
-                    ],
-                ],
+                'messages' => [],
                 'destinations' => [$destination],
             ];
         }
@@ -901,7 +885,7 @@ This assistant can act as a spoken operator before normal intake.
 - Start by using this operator routing line when it fits the call: "{$intro}"
 - This is Vapi-only spoken routing. Do not tell callers they must press keypad buttons. If a caller says "one", "two", "English", "Spanish", "German", "sales", "support", or another configured phrase out loud, treat that as their spoken route choice.
 - Ask one short clarification if the route is unclear.
-- When you are confident about the route and the route is live, use the matching Vapi handoff destination for that route. Do not create a ticket before handoff unless no matching live destination exists.
+- When you are confident about the route and the route is live, silently use the matching Vapi handoff destination for that route. Do not acknowledge the route choice, do not say "connecting", and do not create a ticket before handoff unless no matching live destination exists.
 - Handoffs are handled in the background. Do not tell the caller the call is ending, and do not say goodbye before or after a handoff.
 - If no live destination matches, say the fallback message naturally and continue helping with normal intake.
 
@@ -913,6 +897,22 @@ PROMPT);
     private function operatorRoutingEnabled(AssistantConfig $config): bool
     {
         return filter_var(data_get($config->intake_params ?? [], 'operator.enabled', false), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function isOperatorRouteDestination(AssistantConfig $config, Workspace $workspace): bool
+    {
+        return AssistantConfig::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('id', '!=', $config->id)
+            ->get(['id', 'intake_params'])
+            ->contains(function (AssistantConfig $operator) use ($config): bool {
+                if (! $this->operatorRoutingEnabled($operator)) {
+                    return false;
+                }
+
+                return collect($this->operatorRoutes($operator))
+                    ->contains(fn (array $route): bool => (int) ($route['assistant_id'] ?? 0) === (int) $config->id);
+            });
     }
 
     private function operatorRoutes(AssistantConfig $config): array
@@ -1105,6 +1105,15 @@ PROMPT);
 - Avoid filler before tool use, including "just a sec", "one moment", "hold on", and "let me check".
 - If the caller sounds frustrated, slow down, acknowledge the issue briefly, and move one clear step forward.
 - Never pressure the caller to move faster. The caller should feel heard, not managed.
+PROMPT);
+    }
+
+    private function silentHandoffGuardrailsPrompt(): string
+    {
+        return trim(<<<'PROMPT'
+[SYSTEM NOTE: SILENT HANDOFF RULES]
+- If this assistant receives a caller from another tickIt operator or assistant, do not greet the caller again, do not mention a transfer, and do not make small talk.
+- Continue directly with the next useful question for this assistant's task, using any route choice or caller context already present in the conversation.
 PROMPT);
     }
 
