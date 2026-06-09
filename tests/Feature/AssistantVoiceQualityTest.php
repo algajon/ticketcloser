@@ -43,19 +43,21 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('gpt-4o-mini', $payload['model']['model']);
                 $this->assertSame('vapi', $payload['voice']['provider']);
                 $this->assertSame('Clara', $payload['voice']['voiceId']);
-                $this->assertSame(1.08, $payload['voice']['speed']);
+                $this->assertSame(0.98, $payload['voice']['speed']);
                 $this->assertStringContainsString('RETURNING CALLER RULES', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Use any caller context already provided in your system note first', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Nice to speak with you again', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Use any caller context already provided in your system note first', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Never say "Just a sec"', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('HUMANE CONVERSATION RULES', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Do not interrupt the caller', $payload['model']['messages'][0]['content']);
                 $this->assertTrue($payload['backgroundSpeechDenoisingPlan']['smartDenoisingPlan']['enabled']);
                 $this->assertSame('deepgram', $payload['transcriber']['provider']);
                 $this->assertSame('nova-3-general', $payload['transcriber']['model']);
                 $this->assertTrue($payload['transcriber']['numerals']);
-                $this->assertSame(0.62, $payload['startSpeakingPlan']['waitSeconds']);
-                $this->assertSame(2, $payload['stopSpeakingPlan']['numWords']);
-                $this->assertSame(1.1, $payload['stopSpeakingPlan']['backoffSeconds']);
+                $this->assertSame(0.95, $payload['startSpeakingPlan']['waitSeconds']);
+                $this->assertSame(4, $payload['stopSpeakingPlan']['numWords']);
+                $this->assertSame(1.45, $payload['stopSpeakingPlan']['backoffSeconds']);
 
                 return true;
             }))
@@ -63,6 +65,55 @@ class AssistantVoiceQualityTest extends TestCase
 
         $service = new VapiProvisioningService($client);
         $service->provisionAssistantAndToolForConfig($assistant, $workspace, ['name' => 'Front Desk']);
+    }
+
+    public function test_aggressive_timing_overrides_are_clamped_to_humane_defaults(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Careful Desk',
+            'preset_key' => 'confident_closer',
+            'language_code' => 'en-US',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $this->assertSame(0.8, $payload['startSpeakingPlan']['waitSeconds']);
+                $this->assertSame(4, $payload['stopSpeakingPlan']['numWords']);
+                $this->assertSame(0.46, $payload['stopSpeakingPlan']['voiceSeconds']);
+                $this->assertSame(1.25, $payload['stopSpeakingPlan']['backoffSeconds']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($assistant, $workspace, [
+            'name' => 'Careful Desk',
+            'preset_key' => 'confident_closer',
+            'override_params' => [
+                'waitSeconds' => 0.1,
+                'numWords' => 1,
+                'backoffSeconds' => 0.5,
+            ],
+        ]);
+
+        $assistant->refresh();
+        $this->assertSame(0.8, $assistant->override_params['waitSeconds']);
+        $this->assertSame(4, $assistant->override_params['numWords']);
+        $this->assertSame(1.25, $assistant->override_params['backoffSeconds']);
     }
 
     public function test_realtime_model_uses_compatible_openai_voice_and_skips_transcriber(): void
@@ -94,15 +145,15 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('gpt-realtime-2025-08-28', $payload['model']['model']);
                 $this->assertSame('openai', $payload['voice']['provider']);
                 $this->assertSame('shimmer', $payload['voice']['voiceId']);
-                $this->assertSame(1.22, $payload['voice']['speed']);
+                $this->assertSame(1.0, $payload['voice']['speed']);
                 $this->assertArrayNotHasKey('transcriber', $payload);
                 $this->assertSame(0.6, $payload['model']['temperature']);
                 $this->assertSame(380, $payload['model']['maxTokens']);
                 $this->assertSame('Thanks for calling Northline Support. How can I help today?{{ knownCallerSuffix | default: "" }}', $payload['firstMessage']);
-                $this->assertSame(0.44, $payload['startSpeakingPlan']['waitSeconds']);
-                $this->assertSame(3, $payload['stopSpeakingPlan']['numWords']);
-                $this->assertSame(0.37, $payload['stopSpeakingPlan']['voiceSeconds']);
-                $this->assertSame(1.05, $payload['stopSpeakingPlan']['backoffSeconds']);
+                $this->assertSame(0.95, $payload['startSpeakingPlan']['waitSeconds']);
+                $this->assertSame(4, $payload['stopSpeakingPlan']['numWords']);
+                $this->assertSame(0.5, $payload['stopSpeakingPlan']['voiceSeconds']);
+                $this->assertSame(1.45, $payload['stopSpeakingPlan']['backoffSeconds']);
 
                 return true;
             }))
@@ -147,7 +198,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('gpt-4o-mini', $payload['model']['model']);
                 $this->assertSame('vapi', $payload['voice']['provider']);
                 $this->assertSame('Emma', $payload['voice']['voiceId']);
-                $this->assertSame(1.12, $payload['voice']['speed']);
+                $this->assertSame(1.02, $payload['voice']['speed']);
 
                 return true;
             }))
@@ -555,5 +606,141 @@ class AssistantVoiceQualityTest extends TestCase
         $this->assertSame('gpt-4o-mini', $assistant->model_name);
         $this->assertSame('azure', $assistant->voice_provider);
         $this->assertSame('hi-IN-SwaraNeural', $assistant->voice_id);
+    }
+
+    public function test_operator_routing_adds_vapi_handoff_tool_between_synced_assistants(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $salesAssistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Sales Desk',
+            'language_code' => 'en-US',
+            'vapi_assistant_id' => 'asst_sales_123',
+        ]);
+
+        $operator = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Main Operator',
+            'preset_key' => 'steady_operator',
+            'language_code' => 'en-US',
+            'intake_params' => [
+                'operator' => [
+                    'enabled' => true,
+                    'mode' => 'spoken_handoff',
+                    'intro' => 'Thanks for calling Northline Support. Say sales, support, or German and I will connect you.',
+                    'fallback_message' => 'Which team should I connect you with?',
+                    'routes' => [
+                        [
+                            'label' => 'Sales',
+                            'keywords' => 'sales, pricing, quote',
+                            'assistant_id' => $salesAssistant->id,
+                            'language_code' => 'en-US',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $handoffTool = collect($payload['model']['tools'] ?? [])->firstWhere('type', 'handoff');
+
+                $this->assertNotNull($handoffTool);
+                $this->assertSame('assistant', $handoffTool['destinations'][0]['type']);
+                $this->assertSame('asst_sales_123', $handoffTool['destinations'][0]['assistantId']);
+                $this->assertSame('all', $handoffTool['destinations'][0]['contextEngineeringPlan']['type']);
+                $this->assertStringContainsString('Sales', $handoffTool['destinations'][0]['description']);
+                $this->assertStringContainsString('sales, pricing, quote', $handoffTool['destinations'][0]['description']);
+                $this->assertStringContainsString('OPERATOR ROUTING MODE', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Vapi-only spoken routing', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Sales', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Do not tell callers they must press keypad buttons', $payload['model']['messages'][0]['content']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-operator-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($operator, $workspace, ['name' => 'Main Operator']);
+    }
+
+    public function test_operator_routing_with_multiple_route_languages_uses_multilingual_transcription(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $englishAssistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'English Desk',
+            'language_code' => 'en-US',
+            'vapi_assistant_id' => 'asst_en_123',
+        ]);
+        $germanAssistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'German Desk',
+            'language_code' => 'de-DE',
+            'vapi_assistant_id' => 'asst_de_123',
+        ]);
+
+        $operator = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Main Operator',
+            'preset_key' => 'steady_operator',
+            'language_code' => 'en-US',
+            'intake_params' => [
+                'operator' => [
+                    'enabled' => true,
+                    'mode' => 'spoken_handoff',
+                    'routes' => [
+                        [
+                            'label' => 'English support',
+                            'keywords' => 'english, support',
+                            'assistant_id' => $englishAssistant->id,
+                            'language_code' => 'en-US',
+                        ],
+                        [
+                            'label' => 'German support',
+                            'keywords' => 'german, deutsch',
+                            'assistant_id' => $germanAssistant->id,
+                            'language_code' => 'de-DE',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $this->assertSame('deepgram', $payload['transcriber']['provider']);
+                $this->assertSame('nova-3', $payload['transcriber']['model']);
+                $this->assertSame('multi', $payload['transcriber']['language']);
+                $this->assertArrayNotHasKey('fallbackPlan', $payload['transcriber']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-operator-multi-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($operator, $workspace, ['name' => 'Main Operator']);
     }
 }

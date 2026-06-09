@@ -299,8 +299,17 @@ class VapiCallSyncService
             $assistantConfig?->language_code,
             $workspace->preferredLanguageCode()
         );
+        $transcriberCode = $assistantConfig?->transcriberLanguageCode($configuredCode ?: $workspace->preferredLanguageCode())
+            ?? $configuredCode;
         $transcriptLanguage = $this->extractTranscriptLanguageCode($context, $configuredCode);
-        $transcriber = $this->extractTranscriberMetadata($context, $configuredCode);
+        $transcriptSourceLabel = $transcriptLanguage ? 'Detected from call' : null;
+
+        if (! $transcriptLanguage && $transcriberCode === 'multi') {
+            $transcriptLanguage = 'multi';
+            $transcriptSourceLabel = 'Multilingual transcriber';
+        }
+
+        $transcriber = $this->extractTranscriberMetadata($context, $transcriberCode);
 
         return $this->compactMetadata([
             'configured' => [
@@ -311,7 +320,7 @@ class VapiCallSyncService
             'transcript' => [
                 'code' => $transcriptLanguage,
                 'label' => RegionalPilotStackCatalog::languageLabel($transcriptLanguage, $configuredCode),
-                'source_label' => $transcriptLanguage ? 'Detected from call' : null,
+                'source_label' => $transcriptSourceLabel,
             ],
             'transcriber' => $transcriber,
         ]);
@@ -337,7 +346,7 @@ class VapiCallSyncService
         foreach ($candidates as $candidate) {
             $resolved = RegionalPilotStackCatalog::normalizeLanguageCode(is_scalar($candidate) ? (string) $candidate : null);
 
-            if ($resolved) {
+            if ($resolved && $resolved !== 'multi') {
                 return $resolved;
             }
         }
@@ -357,22 +366,33 @@ class VapiCallSyncService
             data_get($context, 'call.monitor.transcriber.model'),
             data_get($context, 'call.transcriberPlan.model'),
         ]);
+        $language = RegionalPilotStackCatalog::normalizeLanguageCode($this->firstFilledString([
+            data_get($context, 'call.transcriber.language'),
+            data_get($context, 'call.monitor.transcriber.language'),
+            data_get($context, 'call.transcriberPlan.language'),
+        ]));
 
         if ($provider === null && $configuredCode) {
             $fallback = RegionalPilotStackCatalog::transcriberProfile($configuredCode);
             $provider = $fallback['provider'] ?? null;
             $model = $model ?? ($fallback['model'] ?? null);
+            $language = $language ?? ($fallback['language'] ?? null);
         }
 
         if ($provider === null && $model === null) {
             return [];
         }
 
-        $label = trim(collect([$provider ? ucfirst($provider) : null, $model])->filter()->implode(' '));
+        $label = trim(collect([
+            $provider ? ucfirst($provider) : null,
+            $model,
+            $language === 'multi' ? 'multilingual' : null,
+        ])->filter()->implode(' '));
 
         return $this->compactMetadata([
             'provider' => $provider,
             'model' => $model,
+            'language' => $language,
             'label' => $label !== '' ? $label : null,
         ]);
     }

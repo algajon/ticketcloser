@@ -345,6 +345,80 @@ class VapiWebhookTest extends TestCase
     }
 
     /** @test */
+    public function it_preserves_operator_handoff_tools_in_runtime_assistant_overrides(): void
+    {
+        $assistant = AssistantConfig::query()->where('workspace_id', $this->workspace->id)->firstOrFail();
+        $destination = AssistantConfig::create([
+            'workspace_id' => $this->workspace->id,
+            'name' => 'Sales Desk',
+            'language_code' => 'en-US',
+            'vapi_assistant_id' => 'ast-sales-123',
+        ]);
+
+        $assistant->update([
+            'first_message' => 'Thanks for calling. Which team do you need?',
+            'language_code' => 'en-US',
+            'intake_params' => [
+                'operator' => [
+                    'enabled' => true,
+                    'mode' => 'spoken_handoff',
+                    'intro' => 'Say sales, support, or German and I will connect you.',
+                    'fallback_message' => 'Which team should I connect you with?',
+                    'routes' => [
+                        [
+                            'label' => 'Sales',
+                            'keywords' => 'sales, pricing, quote',
+                            'assistant_id' => $destination->id,
+                            'language_code' => 'en-US',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        WorkspacePhoneNumber::create([
+            'workspace_id' => $this->workspace->id,
+            'assistant_id' => $assistant->id,
+            'vapi_phone_number_id' => 'pn_operator_known_contact_1',
+            'e164' => '+18005550197',
+            'is_active' => true,
+        ]);
+
+        Contact::create([
+            'workspace_id' => $this->workspace->id,
+            'name' => 'Pat Router',
+            'phone_e164' => '+16402298701',
+        ]);
+
+        $response = $this->postJson('/api/webhooks/vapi', [
+            'message' => [
+                'type' => 'assistant-request',
+                'call' => [
+                    'id' => 'call_operator_known_contact_1',
+                    'phoneNumberId' => 'pn_operator_known_contact_1',
+                    'customer' => ['number' => '+16402298701'],
+                ],
+            ],
+        ]);
+
+        $response->assertOk();
+        $response->assertJsonPath('assistantId', 'ast-1234');
+
+        $handoffTool = collect($response->json('assistantOverrides.model.tools') ?? [])->firstWhere('type', 'handoff');
+        $this->assertNotNull($handoffTool);
+        $this->assertSame('ast-sales-123', $handoffTool['destinations'][0]['assistantId']);
+        $this->assertStringContainsString('Sales', $handoffTool['destinations'][0]['description']);
+        $this->assertStringContainsString(
+            'OPERATOR ROUTING MODE',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'Do not tell callers they must press keypad buttons',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+    }
+
+    /** @test */
     public function it_localizes_the_runtime_opening_line_for_supported_languages(): void
     {
         $assistant = AssistantConfig::query()->where('workspace_id', $this->workspace->id)->firstOrFail();

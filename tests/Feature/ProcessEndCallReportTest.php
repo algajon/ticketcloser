@@ -413,6 +413,106 @@ class ProcessEndCallReportTest extends TestCase
     }
 
     /** @test */
+    public function it_persists_detected_language_for_multilingual_operator_transcripts(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'default_language_code' => 'en-US',
+        ]);
+
+        $germanAssistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'German Desk',
+            'vapi_assistant_id' => 'ast_de_1',
+            'language_code' => 'de-DE',
+        ]);
+
+        $operator = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Main Operator',
+            'vapi_assistant_id' => 'ast_operator_1',
+            'language_code' => 'en-US',
+            'intake_params' => [
+                'operator' => [
+                    'enabled' => true,
+                    'mode' => 'spoken_handoff',
+                    'routes' => [
+                        [
+                            'label' => 'English support',
+                            'keywords' => 'english, support',
+                            'assistant_id' => $germanAssistant->id,
+                            'language_code' => 'en-US',
+                        ],
+                        [
+                            'label' => 'German support',
+                            'keywords' => 'german, deutsch',
+                            'assistant_id' => $germanAssistant->id,
+                            'language_code' => 'de-DE',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $case = SupportCase::create([
+            'workspace_id' => $workspace->id,
+            'assistant_config_id' => $operator->id,
+            'case_number' => 'TC-ENDCALL5',
+            'title' => 'New ticket',
+            'description' => 'New case, no description',
+            'status' => SupportCase::STATUS_NEW,
+            'priority' => SupportCase::PRIORITY_NORMAL,
+            'source' => SupportCase::SOURCE_VOICE,
+            'external_call_id' => 'call_end_5',
+        ]);
+
+        $payload = [
+            'message' => [
+                'type' => 'end-of-call-report',
+                'call' => [
+                    'id' => 'call_end_5',
+                    'assistantId' => 'ast_operator_1',
+                    'customer' => [
+                        'number' => '+49301234567',
+                    ],
+                    'transcriber' => [
+                        'provider' => 'deepgram',
+                        'model' => 'nova-3',
+                        'language' => 'multi',
+                    ],
+                ],
+                'artifact' => [
+                    'transcript' => [
+                        [
+                            'role' => 'user',
+                            'message' => 'Guten Tag, ich brauche Hilfe mit meiner Rechnung.',
+                        ],
+                    ],
+                ],
+                'analysis' => [
+                    'structuredData' => [
+                        'languageCode' => 'de-DE',
+                    ],
+                    'summary' => 'Der Kunde braucht Hilfe mit einer Rechnung.',
+                ],
+            ],
+        ];
+
+        (new ProcessEndCallReport($workspace, $payload))->handle(app(\App\Services\Vapi\VapiCallSyncService::class));
+
+        $callEvent = CallEvent::query()->where('vapi_call_id', 'call_end_5')->firstOrFail();
+        $case->refresh();
+
+        $this->assertSame('en-US', data_get($callEvent->meta, 'language.configured.code'));
+        $this->assertSame('de-DE', data_get($callEvent->meta, 'language.transcript.code'));
+        $this->assertSame('German', $callEvent->transcriptLanguageLabel());
+        $this->assertSame('multi', data_get($callEvent->meta, 'language.transcriber.language'));
+        $this->assertSame('Deepgram nova-3 multilingual', $callEvent->transcriberLabel());
+        $this->assertSame('de-DE', data_get($case->structured_payload, 'voice_metadata.transcript.code'));
+        $this->assertSame('German', $case->transcriptLanguageLabel());
+        $this->assertSame('Deepgram nova-3 multilingual', $case->transcriberLabel());
+    }
+
+    /** @test */
     public function it_deactivates_free_workspace_phone_numbers_once_the_usage_cap_is_reached(): void
     {
         $workspace = Workspace::factory()->create([

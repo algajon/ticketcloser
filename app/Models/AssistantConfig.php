@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\RegionalPilotStackCatalog;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -94,5 +95,61 @@ class AssistantConfig extends Model
     public static function isRealtimeModelName(?string $modelName): bool
     {
         return str_starts_with(self::normalizedModelName($modelName), 'gpt-realtime');
+    }
+
+    public function operatorRoutingEnabled(): bool
+    {
+        return filter_var(data_get($this->intake_params ?? [], 'operator.enabled', false), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    public function operatorRouteLanguageCodes(): array
+    {
+        $routes = data_get($this->intake_params ?? [], 'operator.routes', []);
+
+        if (! is_array($routes)) {
+            return [];
+        }
+
+        return collect($routes)
+            ->filter(fn ($route) => is_array($route))
+            ->pluck('language_code')
+            ->map(fn ($languageCode) => RegionalPilotStackCatalog::normalizeLanguageCode(is_scalar($languageCode) ? (string) $languageCode : null))
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
+    public function usesMultilingualTranscription(?string $defaultLanguageCode = null): bool
+    {
+        $configuredCode = RegionalPilotStackCatalog::normalizeLanguageCode(
+            $this->language_code,
+            $defaultLanguageCode ?: 'en-US',
+        );
+
+        if ($configuredCode === 'multi') {
+            return true;
+        }
+
+        if (! $this->operatorRoutingEnabled()) {
+            return false;
+        }
+
+        $routeLanguageCodes = $this->operatorRouteLanguageCodes();
+
+        return count($routeLanguageCodes) > 1
+            || ($configuredCode && in_array($configuredCode, $routeLanguageCodes, true) === false && $routeLanguageCodes !== []);
+    }
+
+    public function transcriberLanguageCode(?string $defaultLanguageCode = null): string
+    {
+        if ($this->usesMultilingualTranscription($defaultLanguageCode)) {
+            return 'multi';
+        }
+
+        return RegionalPilotStackCatalog::normalizeLanguageCode(
+            $this->language_code,
+            $defaultLanguageCode ?: 'en-US',
+        ) ?: 'en-US';
     }
 }

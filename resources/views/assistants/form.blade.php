@@ -18,21 +18,22 @@
         $workspaceIsFree = $workspace->isFreePlan() && ! $workspace->bypassesPlanLimits();
         $showDeveloperAssistantIds = ! $workspaceIsFree;
         $overrides = old('override_params', $config->override_params ?? []);
+        $intakeParams = old('intake_params', $config->intake_params ?? []);
         $defaultAssistantName = (string) data_get($defaultAssistantDraft, 'assistant_name', '');
         $defaultPromptText = (string) data_get($defaultAssistantDraft, 'prompt', '');
         $defaultPresetKey = \App\Models\AssistantPreset::normalizeKey(data_get($defaultAssistantDraft, 'preset_key', 'bright_guide'));
         $selectedPresetKey = old('preset_key', \App\Models\AssistantPreset::normalizeKey($config->preset_key ?? $defaultPresetKey));
         $presetMeta = collect($presets)->map(function ($preset) {
-            $waitSeconds = (float) data_get($preset->vapi_payload_json, 'startSpeakingPlan.waitSeconds', 0.5);
-            $interruptWords = (int) data_get($preset->vapi_payload_json, 'stopSpeakingPlan.numWords', 2);
-            $backoffSeconds = (float) data_get($preset->vapi_payload_json, 'stopSpeakingPlan.backoffSeconds', 1.0);
+            $waitSeconds = (float) data_get($preset->vapi_payload_json, 'startSpeakingPlan.waitSeconds', 0.9);
+            $interruptWords = (int) data_get($preset->vapi_payload_json, 'stopSpeakingPlan.numWords', 4);
+            $backoffSeconds = (float) data_get($preset->vapi_payload_json, 'stopSpeakingPlan.backoffSeconds', 1.35);
             $voiceSpeed = (float) data_get($preset->vapi_payload_json, 'voiceSpeed', 1.0);
             $simpleNotes = match ($preset->key) {
-                'bright_guide' => 'Friendly and upbeat. Keeps the call easy and warm.',
-                'steady_operator' => 'Calm and steady. Good when callers need a clear guide.',
-                'confident_closer' => 'Direct and focused. Great when you want quick next steps.',
-                'premium_concierge' => 'Polished and thoughtful. Best for a high-touch call experience.',
-                default => 'Use your own style and timing.',
+                'bright_guide' => 'Friendly and upbeat, with enough pause space for real callers.',
+                'steady_operator' => 'Calm and steady. Good when callers need a patient guide.',
+                'confident_closer' => 'Direct and focused without rushing or cutting people off.',
+                'premium_concierge' => 'Polished and thoughtful for a high-touch, low-friction call.',
+                default => 'Use your own style with humane timing guardrails.',
             };
 
             return [
@@ -51,15 +52,15 @@
                 'numWords' => $interruptWords,
                 'backoffSeconds' => $backoffSeconds,
                 'voiceSpeed' => $voiceSpeed,
-                'waitLabel' => $waitSeconds <= 0.3 ? 'Very fast' : ($waitSeconds <= 0.6 ? 'Quick' : 'Calm'),
-                'interruptLabel' => $interruptWords >= 3 ? 'Lets people finish' : ($interruptWords === 2 ? 'Balanced' : 'Cuts in fast'),
-                'speedLabel' => $voiceSpeed >= 1.08 ? 'Bright' : ($voiceSpeed >= 1.0 ? 'Natural' : 'Slow'),
+                'waitLabel' => $waitSeconds >= 0.95 ? 'Patient' : ($waitSeconds >= 0.8 ? 'Calm' : 'Quick'),
+                'interruptLabel' => $interruptWords >= 4 ? 'Very patient' : ($interruptWords === 3 ? 'Lets people finish' : 'Too eager'),
+                'speedLabel' => $voiceSpeed >= 1.05 ? 'Bright' : ($voiceSpeed >= 0.98 ? 'Natural' : 'Relaxed'),
             ];
         })->values();
         $selectedPresetMeta = $presetMeta->firstWhere('key', $selectedPresetKey) ?? $presetMeta->first();
-        $defaultWaitSeconds = (string) ($overrides['waitSeconds'] ?? ($selectedPresetMeta['waitSeconds'] ?? 0.5));
-        $defaultNumWords = (string) ($overrides['numWords'] ?? ($selectedPresetMeta['numWords'] ?? 2));
-        $defaultBackoffSeconds = (string) ($overrides['backoffSeconds'] ?? ($selectedPresetMeta['backoffSeconds'] ?? 1.0));
+        $defaultWaitSeconds = (string) min(max((float) ($overrides['waitSeconds'] ?? ($selectedPresetMeta['waitSeconds'] ?? 0.9)), 0.8), 1.5);
+        $defaultNumWords = (string) min(max((int) ($overrides['numWords'] ?? ($selectedPresetMeta['numWords'] ?? 4)), 4), 8);
+        $defaultBackoffSeconds = (string) min(max((float) ($overrides['backoffSeconds'] ?? ($selectedPresetMeta['backoffSeconds'] ?? 1.35)), 1.25), 2.5);
         $aiWriterAvailable = filled(config('services.openai.api_key'));
         $modelOptions = collect(\App\Models\AssistantConfig::modelOptions())
             ->map(function (array $option) use ($workspaceIsFree) {
@@ -109,6 +110,43 @@
         $csrfTokenValue = csrf_token();
         $promptWriterUrlValue = route('app.prompt-writer.generate');
         $billingPlansUrlValue = route('app.billing.plans');
+        $assistantRouteOptions = $assistantRouteOptions ?? [];
+        $operatorConfig = data_get($intakeParams, 'operator', []);
+        $operatorEnabledValue = filter_var(data_get($operatorConfig, 'enabled', false), FILTER_VALIDATE_BOOLEAN);
+        $operatorIntroValue = data_get(
+            $operatorConfig,
+            'intro',
+            "Thanks for calling {$workspace->name}. Tell me which team or language you need, and I will connect you."
+        );
+        $operatorFallbackMessageValue = data_get(
+            $operatorConfig,
+            'fallback_message',
+            'I can help route the call, but I need one more detail. Which team should I connect you with?'
+        );
+        $defaultOperatorRows = [
+            ['label' => 'English support', 'keywords' => 'english, support, help', 'assistant_id' => '', 'language_code' => 'en-US'],
+            ['label' => 'Spanish support', 'keywords' => 'spanish, espanol, ayuda', 'assistant_id' => '', 'language_code' => 'es-ES'],
+            ['label' => 'German support', 'keywords' => 'german, deutsch, hilfe', 'assistant_id' => '', 'language_code' => 'de-DE'],
+            ['label' => 'Sales', 'keywords' => 'sales, pricing, quote, buy', 'assistant_id' => '', 'language_code' => $selectedLanguageValue],
+        ];
+        $savedOperatorRows = collect(data_get($operatorConfig, 'routes', []))
+            ->filter(fn ($route) => is_array($route))
+            ->values()
+            ->all();
+        $operatorRows = ! empty($savedOperatorRows) ? $savedOperatorRows : $defaultOperatorRows;
+        $operatorRoutes = collect($operatorRows)
+            ->map(fn ($route) => [
+                'label' => (string) ($route['label'] ?? ''),
+                'keywords' => (string) ($route['keywords'] ?? ''),
+                'assistant_id' => (string) ($route['assistant_id'] ?? ''),
+                'language_code' => (string) ($route['language_code'] ?? $selectedLanguageValue),
+            ])
+            ->values()
+            ->all();
+        while (count($operatorRoutes) < 6) {
+            $operatorRoutes[] = ['label' => '', 'keywords' => '', 'assistant_id' => '', 'language_code' => $selectedLanguageValue];
+        }
+        $operatorRoutes = array_slice($operatorRoutes, 0, 6);
 
         $voicesJson = collect($voices ?? [])->map(function ($v) {
             return [
@@ -148,6 +186,96 @@
                             x-model="fallbackPhone"
                             class="tc-input" placeholder="+12345678900" />
                         <p class="tc-help">Optional. If the caller asks for a person, transfer the call here.</p>
+                    </div>
+                </div>
+            </x-ui.panel>
+
+            <x-ui.panel title="Operator routing" description="Use this assistant as a spoken router before handing callers to the right assistant.">
+                <div class="space-y-5">
+                    <div class="flex flex-wrap items-start justify-between gap-4 rounded-[1.25rem] border border-slate-200 bg-slate-50/85 p-4">
+                        <div class="max-w-2xl">
+                            <div class="text-sm font-semibold text-slate-950">Spoken assistant handoff</div>
+                            <p class="mt-2 text-sm leading-6 text-slate-600">
+                                Vapi-only routing listens for spoken choices like "German", "sales", or "technical support", then hands the call to another synced assistant.
+                            </p>
+                        </div>
+                        <label class="inline-flex cursor-pointer items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                            <input type="hidden" name="intake_params[operator][enabled]" value="0">
+                            <input type="checkbox" name="intake_params[operator][enabled]" value="1" class="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500" x-model="operatorEnabled" @checked($operatorEnabledValue)>
+                            <span class="text-sm font-semibold text-slate-900" x-text="operatorEnabled ? 'Routing on' : 'Routing off'">{{ $operatorEnabledValue ? 'Routing on' : 'Routing off' }}</span>
+                        </label>
+                    </div>
+
+                    <input type="hidden" name="intake_params[operator][mode]" value="spoken_handoff">
+
+                    <div x-show="operatorEnabled" x-transition class="space-y-5">
+                        <div class="grid gap-5 md:grid-cols-2">
+                            <div class="tc-field">
+                                <label for="operator_intro" class="tc-field-label">Operator opening</label>
+                                <textarea id="operator_intro" name="intake_params[operator][intro]" rows="3" class="tc-textarea" placeholder="Thanks for calling. Tell me which team or language you need, and I will connect you.">{{ $operatorIntroValue }}</textarea>
+                                <p class="tc-help">This is added to the assistant instructions so it asks for the route before doing intake.</p>
+                            </div>
+
+                            <div class="tc-field">
+                                <label for="operator_fallback_message" class="tc-field-label">If the route is unclear</label>
+                                <textarea id="operator_fallback_message" name="intake_params[operator][fallback_message]" rows="3" class="tc-textarea" placeholder="I can connect you, but I need one more detail. Which team should I route you to?">{{ $operatorFallbackMessageValue }}</textarea>
+                                <p class="tc-help">The assistant asks once more before falling back to normal intake.</p>
+                            </div>
+                        </div>
+
+                        <div class="overflow-hidden rounded-[1.25rem] border border-slate-200 bg-white">
+                            <div class="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3">
+                                <div>
+                                    <div class="text-sm font-semibold text-slate-950">Route map</div>
+                                    <p class="mt-1 text-xs leading-5 text-slate-500">Assign each spoken route to another synced assistant in this workspace.</p>
+                                </div>
+                                <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-slate-500">Vapi handoff</span>
+                            </div>
+
+                            <div class="divide-y divide-slate-200">
+                                @foreach($operatorRoutes as $index => $route)
+                                    <div class="grid gap-3 px-4 py-4 lg:grid-cols-[minmax(0,0.95fr)_minmax(0,1.15fr)_minmax(160px,0.65fr)_minmax(220px,1fr)]">
+                                        <div class="tc-field">
+                                            <label for="operator_route_label_{{ $index }}" class="tc-field-label">Route name</label>
+                                            <input id="operator_route_label_{{ $index }}" type="text" name="intake_params[operator][routes][{{ $index }}][label]" value="{{ $route['label'] }}" class="tc-input" placeholder="Sales, Support, German">
+                                        </div>
+
+                                        <div class="tc-field">
+                                            <label for="operator_route_keywords_{{ $index }}" class="tc-field-label">Caller might say</label>
+                                            <input id="operator_route_keywords_{{ $index }}" type="text" name="intake_params[operator][routes][{{ $index }}][keywords]" value="{{ $route['keywords'] }}" class="tc-input" placeholder="sales, pricing, quote">
+                                        </div>
+
+                                        <div class="tc-field">
+                                            <label for="operator_route_language_{{ $index }}" class="tc-field-label">Language</label>
+                                            <select id="operator_route_language_{{ $index }}" name="intake_params[operator][routes][{{ $index }}][language_code]" class="tc-input">
+                                                @foreach($languageOptionsJson as $language)
+                                                    <option value="{{ $language['value'] }}" @selected($route['language_code'] === $language['value'])>{{ $language['label'] }}</option>
+                                                @endforeach
+                                            </select>
+                                        </div>
+
+                                        <div class="tc-field">
+                                            <label for="operator_route_assistant_{{ $index }}" class="tc-field-label">Destination assistant</label>
+                                            <select id="operator_route_assistant_{{ $index }}" name="intake_params[operator][routes][{{ $index }}][assistant_id]" class="tc-input">
+                                                <option value="">No destination yet</option>
+                                                @foreach($assistantRouteOptions as $assistantOption)
+                                                    <option value="{{ $assistantOption['id'] }}" @selected((string) $route['assistant_id'] === (string) $assistantOption['id'])>
+                                                        {{ $assistantOption['name'] }}{{ $assistantOption['is_synced'] ? '' : ' (sync first)' }}
+                                                    </option>
+                                                @endforeach
+                                            </select>
+                                            @if(empty($assistantRouteOptions))
+                                                <p class="tc-help">Create and sync another assistant first, then choose it here.</p>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        </div>
+
+                        <div class="rounded-[1rem] border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-800">
+                            Keypad presses need a telephony layer like Twilio. This Vapi-only router supports callers saying the option number or department out loud.
+                        </div>
                     </div>
                 </div>
             </x-ui.panel>
@@ -309,7 +437,7 @@
                             @endphp
                             <label class="block cursor-pointer rounded-[1.25rem] border p-4 transition"
                                 :class="selectedPresetKey === '{{ $p->key }}' ? 'tc-accent-card-active' : 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80'">
-                                <input type="radio" name="preset_key" value="{{ $p->key }}" class="sr-only" x-model="selectedPresetKey" @change="handlePresetChange()">
+                                <input type="radio" name="preset_key" value="{{ $p->key }}" class="sr-only" x-model="selectedPresetKey" @change="handlePresetChange()" @checked($selectedPresetKey === $p->key)>
                                 <div class="flex flex-col gap-4 lg:grid lg:grid-cols-[minmax(0,1.5fr)_repeat(4,minmax(0,0.7fr))] lg:items-start">
                                     <div class="min-w-0">
                                         <div class="flex flex-wrap items-center gap-2">
@@ -403,8 +531,8 @@
                                     <label for="waitSeconds" class="tc-field-label">Wait seconds</label>
                                     <span class="text-xs font-medium text-slate-500" x-text="waitSecondsOverride + 's'"></span>
                                 </div>
-                        <input type="range" name="override_params[waitSeconds]" id="waitSeconds" min="0.1" max="3.0" step="0.1" x-model="waitSecondsOverride" class="tc-accent-range w-full">
-                                <p class="tc-help">How long the assistant waits before speaking.</p>
+                        <input type="range" name="override_params[waitSeconds]" id="waitSeconds" min="0.8" max="1.5" step="0.1" x-model="waitSecondsOverride" class="tc-accent-range w-full">
+                                <p class="tc-help">How long the assistant waits so short caller pauses do not get cut off.</p>
                             </div>
 
                             <div class="tc-field">
@@ -412,8 +540,8 @@
                                     <label for="numWords" class="tc-field-label">Interruption words</label>
                                     <span class="text-xs font-medium text-slate-500" x-text="interruptionWordsOverride + ' words'"></span>
                                 </div>
-                        <input type="range" name="override_params[numWords]" id="numWords" min="1" max="5" step="1" x-model="interruptionWordsOverride" class="tc-accent-range w-full">
-                                <p class="tc-help">How many caller words count as an interruption.</p>
+                        <input type="range" name="override_params[numWords]" id="numWords" min="4" max="8" step="1" x-model="interruptionWordsOverride" class="tc-accent-range w-full">
+                                <p class="tc-help">How much caller speech it hears before yielding the floor.</p>
                             </div>
 
                             <div class="tc-field">
@@ -421,8 +549,8 @@
                                     <label for="backoffSeconds" class="tc-field-label">Backoff seconds</label>
                                     <span class="text-xs font-medium text-slate-500" x-text="backoffSecondsOverride + 's'"></span>
                                 </div>
-                        <input type="range" name="override_params[backoffSeconds]" id="backoffSeconds" min="0.5" max="3.0" step="0.1" x-model="backoffSecondsOverride" class="tc-accent-range w-full">
-                                <p class="tc-help">How long the assistant waits before speaking again.</p>
+                        <input type="range" name="override_params[backoffSeconds]" id="backoffSeconds" min="1.25" max="2.5" step="0.1" x-model="backoffSecondsOverride" class="tc-accent-range w-full">
+                                <p class="tc-help">How long it backs off after the caller starts speaking.</p>
                             </div>
                         </div>
                     </div>
@@ -603,6 +731,10 @@
                             <div class="mt-2" x-text="fallbackPhone || 'Not configured'">{{ old('fallback_phone', $config->fallback_phone ?? 'Not configured') }}</div>
                         </div>
                         <div>
+                            <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Operator routing</div>
+                            <div class="mt-2" x-text="operatorEnabled ? 'Spoken router enabled' : 'Not enabled'">{{ $operatorEnabledValue ? 'Spoken router enabled' : 'Not enabled' }}</div>
+                        </div>
+                        <div>
                             <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Opening line</div>
                             <p class="mt-2 text-sm leading-6 text-slate-600" x-text="firstMessage || 'Not set yet'"></p>
                         </div>
@@ -652,6 +784,7 @@
                 fallbackPhone: @js($fallbackPhoneValue),
                 firstMessage: @js($firstMessageValue),
                 promptText: @js($promptTextValue),
+                operatorEnabled: @js($operatorEnabledValue),
                 selectedModelName: @js($selectedModelName),
                 selectedProvider: @js($selectedProviderValue),
                 selectedLanguageCode: @js($selectedLanguageValue),
@@ -685,9 +818,11 @@
                     { value: 'lookup_contact', label: 'Lookup contact' },
                 ],
                 init() {
-                    this.handleModelChange(false);
-                    this.handleProviderChange();
-                    this.ensureVoiceSelection();
+                    const shouldAutoSelectRecommended = !editingAssistantId;
+
+                    this.handleModelChange(shouldAutoSelectRecommended);
+                    this.handleProviderChange(shouldAutoSelectRecommended);
+                    this.ensureVoiceSelection(shouldAutoSelectRecommended);
                 },
                 get selectedModel() {
                     return this.modelOptions.find((option) => option.value === this.selectedModelName) || this.modelOptions[0];
@@ -703,17 +838,17 @@
                         voiceProfileLabel: 'Clear',
                         responseStyleLabel: 'General',
                         recommendedFor: 'Businesses that want a smooth, natural phone agent with strong follow-through.',
-                        waitSeconds: 0.65,
-                        numWords: 2,
-                        backoffSeconds: 1.1,
+                        waitSeconds: 0.9,
+                        numWords: 4,
+                        backoffSeconds: 1.35,
                         voiceSpeed: 1.0,
                         assistantType: 'bright_guide',
                     };
                 },
                 get hasCustomTiming() {
-                    return Number(this.waitSecondsOverride) !== Number(this.selectedPreset.waitSeconds ?? 0.5)
-                        || Number(this.interruptionWordsOverride) !== Number(this.selectedPreset.numWords ?? 2)
-                        || Number(this.backoffSecondsOverride) !== Number(this.selectedPreset.backoffSeconds ?? 1.0);
+                    return Number(this.waitSecondsOverride) !== Number(this.selectedPreset.waitSeconds ?? 0.9)
+                        || Number(this.interruptionWordsOverride) !== Number(this.selectedPreset.numWords ?? 4)
+                        || Number(this.backoffSecondsOverride) !== Number(this.selectedPreset.backoffSeconds ?? 1.35);
                 },
                 providerLabel(provider) {
                     return providerLabels[provider] || provider;
@@ -763,6 +898,10 @@
                 },
                 get filteredVoices() {
                     return this.compatibleVoices.filter((voice) => {
+                        if (this.selectedVoiceId && voice.id === this.selectedVoiceId) {
+                            return true;
+                        }
+
                         const providerMatches = !this.selectedProvider || voice.provider === this.selectedProvider;
                         const languageMatches = !this.selectedLanguageCode
                             || voice.language === this.selectedLanguageCode
@@ -781,18 +920,20 @@
                         this.ensureVoiceSelection(true);
                     }
                 },
-                handleProviderChange() {
+                handleProviderChange(shouldAdjustVoice = true) {
                     const providerHasLanguage = this.compatibleVoices.some((voice) =>
                         voice.provider === this.selectedProvider
                         && (voice.language === this.selectedLanguageCode || voice.language === 'multi')
                     );
 
-                    if (!providerHasLanguage) {
+                    if (!providerHasLanguage && (!editingAssistantId || !this.selectedProvider)) {
                         this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
                     }
 
                     this.promptWriter.language = this.selectedLanguageCode || this.promptWriter.language;
-                    this.ensureVoiceSelection();
+                    if (shouldAdjustVoice) {
+                        this.ensureVoiceSelection();
+                    }
                 },
                 goToBilling() {
                     window.location.href = billingPlansUrl;
@@ -876,9 +1017,9 @@
                     }
                 },
                 applyPresetTiming(openPanel = false) {
-                    this.waitSecondsOverride = String(this.selectedPreset.waitSeconds ?? 0.5);
-                    this.interruptionWordsOverride = String(this.selectedPreset.numWords ?? 2);
-                    this.backoffSecondsOverride = String(this.selectedPreset.backoffSeconds ?? 1.0);
+                    this.waitSecondsOverride = String(this.selectedPreset.waitSeconds ?? 0.9);
+                    this.interruptionWordsOverride = String(this.selectedPreset.numWords ?? 4);
+                    this.backoffSecondsOverride = String(this.selectedPreset.backoffSeconds ?? 1.35);
                     if (openPanel) {
                         this.showAdvancedTiming = true;
                     }
@@ -923,6 +1064,10 @@
                 ensureVoiceSelection(forceRecommended = false) {
                     const recommended = this.recommendedVoiceForCurrentState();
                     const currentStillValid = this.filteredVoices.some((voice) => voice.id === this.selectedVoiceId);
+
+                    if (editingAssistantId && !forceRecommended && this.selectedVoiceId && currentStillValid) {
+                        return;
+                    }
 
                     if (forceRecommended) {
                         this.selectedProvider = recommended.provider;
@@ -1088,4 +1233,3 @@
         }
     </script>
 @endsection
-

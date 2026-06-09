@@ -130,9 +130,11 @@ class VapiWebhookController extends Controller
                                 'assistant_name' => $workspacePhone->assistant->name,
                             ]);
                             $languageGuardrail = $this->languageGuardrail($workspacePhone->assistant->language_code);
+                            $operatorRoutingPrompt = $this->runtimeOperatorRoutingPrompt($workspacePhone->assistant, $workspace);
+                            $operatorRoutingPrompt = $operatorRoutingPrompt !== '' ? "\n\n".$operatorRoutingPrompt : '';
                             $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference.]";
                             $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Use any caller context already provided in the system note before deciding whether to call lookupContact or lookupCase.\n- If the system note already gives you the caller's identity or recent case context, do not call lookupContact or lookupCase at the start of the call.\n- Use lookupContact only if the existing caller context is missing, unclear, or the caller asks what details are on file.\n- Use lookupCase only if recent case history would genuinely help and it was not already provided in the system note.\n- Never narrate lookupContact or lookupCase with phrases like 'Just a sec', 'One moment', 'Give me a moment', or 'Hold on a sec'.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
-                            $systemPrompt = $memory . $basePrompt . $toolRules . $languageGuardrail . $dateContext;
+                            $systemPrompt = $memory . $basePrompt . $toolRules . $languageGuardrail . $operatorRoutingPrompt . $dateContext;
 
                             // Build toolIds array so Vapi doesn't strip tools when we override the model
                             $toolIds = array_filter([
@@ -163,6 +165,11 @@ class VapiWebhookController extends Controller
 
                             if (!empty($toolIds)) {
                                 $modelOverride['toolIds'] = $toolIds;
+                            }
+
+                            $handoffTool = $this->runtimeOperatorHandoffTool($workspacePhone->assistant, $workspace);
+                            if ($handoffTool) {
+                                $modelOverride['tools'][] = $handoffTool;
                             }
 
                             // Preserve the inline transferCall tool if a fallback phone is configured
@@ -580,6 +587,167 @@ class VapiWebhookController extends Controller
         return $languageCode
             ? "\n\n[SYSTEM NOTE: Keep caller-facing replies in {$languageCode} unless the caller clearly switches language and the business supports that change.]"
             : '';
+    }
+
+    private function runtimeOperatorHandoffTool(\App\Models\AssistantConfig $assistant, Workspace $workspace): ?array
+    {
+        if (! $this->runtimeOperatorEnabled($assistant)) {
+            return null;
+        }
+
+        $routes = $this->runtimeOperatorRoutes($assistant);
+        $assistantIds = collect($routes)
+            ->pluck('assistant_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($assistantIds === []) {
+            return null;
+        }
+
+        $destinationsByAssistant = \App\Models\AssistantConfig::query()
+            ->where('workspace_id', $workspace->id)
+            ->whereIn('id', $assistantIds)
+            ->whereNotNull('vapi_assistant_id')
+            ->get(['id', 'name', 'language_code', 'vapi_assistant_id'])
+            ->keyBy('id');
+
+        $destinations = [];
+
+        foreach ($routes as $route) {
+            $destinationAssistant = $destinationsByAssistant->get((int) ($route['assistant_id'] ?? 0));
+
+            if (! $destinationAssistant || blank($destinationAssistant->vapi_assistant_id)) {
+                continue;
+            }
+
+            $descriptionParts = array_filter([
+                trim((string) ($route['label'] ?? '')),
+                filled($route['keywords'] ?? null) ? 'caller may say: '.trim((string) $route['keywords']) : null,
+                filled($route['language_code'] ?? null) ? 'language: '.trim((string) $route['language_code']) : null,
+                'destination assistant: '.$destinationAssistant->name,
+            ]);
+
+            $destinations[] = [
+                'type' => 'assistant',
+                'assistantId' => $destinationAssistant->vapi_assistant_id,
+                'description' => implode('; ', $descriptionParts),
+                'contextEngineeringPlan' => [
+                    'type' => 'all',
+                ],
+            ];
+        }
+
+        if ($destinations === []) {
+            return null;
+        }
+
+        return [
+            'type' => 'handoff',
+            'messages' => [
+                [
+                    'type' => 'request-start',
+                    'content' => 'I will connect you to the right assistant now.',
+                    'blocking' => false,
+                ],
+                [
+                    'type' => 'request-failed',
+                    'content' => $this->runtimeOperatorFallbackMessage($assistant),
+                ],
+            ],
+            'destinations' => $destinations,
+        ];
+    }
+
+    private function runtimeOperatorRoutingPrompt(\App\Models\AssistantConfig $assistant, Workspace $workspace): string
+    {
+        if (! $this->runtimeOperatorEnabled($assistant)) {
+            return '';
+        }
+
+        $routes = $this->runtimeOperatorRoutes($assistant);
+        $liveAssistantIds = \App\Models\AssistantConfig::query()
+            ->where('workspace_id', $workspace->id)
+            ->whereIn('id', collect($routes)->pluck('assistant_id')->filter()->all())
+            ->whereNotNull('vapi_assistant_id')
+            ->pluck('vapi_assistant_id', 'id');
+
+        $routeLines = collect($routes)
+            ->values()
+            ->map(function (array $route, int $index) use ($liveAssistantIds): string {
+                $label = trim((string) ($route['label'] ?? 'Route '.($index + 1)));
+                $keywords = trim((string) ($route['keywords'] ?? ''));
+                $language = trim((string) ($route['language_code'] ?? ''));
+                $assistantId = (int) ($route['assistant_id'] ?? 0);
+                $status = $liveAssistantIds->has($assistantId) ? 'live handoff configured' : 'saved but not live until the destination assistant is synced';
+
+                return ($index + 1).") {$label}"
+                    .($keywords !== '' ? " | caller may say: {$keywords}" : '')
+                    .($language !== '' ? " | language: {$language}" : '')
+                    ." | {$status}";
+            })
+            ->implode("\n");
+
+        if ($routeLines === '') {
+            $routeLines = 'No live routes are configured yet. Continue normal intake and do not claim a transfer is available.';
+        }
+
+        $intro = trim((string) data_get($assistant->intake_params ?? [], 'operator.intro', ''));
+        if ($intro === '') {
+            $intro = "Thanks for calling {$workspace->name}. Tell me which team or language you need, and I will connect you.";
+        }
+
+        return trim(<<<PROMPT
+
+[SYSTEM NOTE: OPERATOR ROUTING MODE]
+This assistant can act as a spoken operator before normal intake.
+- Start by using this operator routing line when it fits the call: "{$intro}"
+- This is Vapi-only spoken routing. Do not tell callers they must press keypad buttons. If a caller says "one", "two", "English", "Spanish", "German", "sales", "support", or another configured phrase out loud, treat that as their spoken route choice.
+- Ask one short clarification if the route is unclear.
+- When you are confident about the route and the route is live, use the handoff tool to move the caller to the matching assistant. Do not create a ticket before handoff unless no matching live destination exists.
+- If no live destination matches, say the fallback message naturally and continue helping with normal intake.
+
+Configured spoken routes:
+{$routeLines}
+PROMPT);
+    }
+
+    private function runtimeOperatorEnabled(\App\Models\AssistantConfig $assistant): bool
+    {
+        return filter_var(data_get($assistant->intake_params ?? [], 'operator.enabled', false), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function runtimeOperatorRoutes(\App\Models\AssistantConfig $assistant): array
+    {
+        $routes = data_get($assistant->intake_params ?? [], 'operator.routes', []);
+
+        if (! is_array($routes)) {
+            return [];
+        }
+
+        return collect($routes)
+            ->filter(fn ($route) => is_array($route))
+            ->map(fn (array $route) => [
+                'label' => trim((string) ($route['label'] ?? '')),
+                'keywords' => trim((string) ($route['keywords'] ?? '')),
+                'assistant_id' => filled($route['assistant_id'] ?? null) ? (int) $route['assistant_id'] : null,
+                'language_code' => trim((string) ($route['language_code'] ?? '')),
+            ])
+            ->filter(fn (array $route) => $route['label'] !== '' || $route['keywords'] !== '' || $route['assistant_id'])
+            ->values()
+            ->all();
+    }
+
+    private function runtimeOperatorFallbackMessage(\App\Models\AssistantConfig $assistant): string
+    {
+        $fallback = trim((string) data_get($assistant->intake_params ?? [], 'operator.fallback_message', ''));
+
+        return $fallback !== ''
+            ? $fallback
+            : 'I can help route the call, but I need one more detail. Which team should I connect you with?';
     }
 
     private function languageFamily(?string $languageCode = null): string

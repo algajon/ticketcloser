@@ -192,7 +192,8 @@ class TicketCreationService
         }
 
         $configuredCode = RegionalPilotStackCatalog::normalizeLanguageCode($assistantConfig->language_code);
-        $transcriber = RegionalPilotStackCatalog::transcriberProfile($configuredCode);
+        $transcriberCode = $assistantConfig->transcriberLanguageCode($configuredCode ?: 'en-US');
+        $transcriber = RegionalPilotStackCatalog::transcriberProfile($transcriberCode);
 
         $payload = $structuredPayload ?? [];
         $payload['voice_metadata'] = array_filter(array_replace_recursive(
@@ -206,6 +207,7 @@ class TicketCreationService
                 'transcriber' => array_filter([
                     'provider' => $transcriber['provider'] ?? null,
                     'model' => $transcriber['model'] ?? null,
+                    'language' => $transcriber['language'] ?? null,
                     'label' => $transcriber['label'] ?? null,
                 ], fn ($value) => filled($value)),
             ]
@@ -266,7 +268,8 @@ class TicketCreationService
         );
 
         if ($configuredCode) {
-            $transcriber = RegionalPilotStackCatalog::transcriberProfile($configuredCode);
+            $transcriberCode = $assistantConfig?->transcriberLanguageCode($configuredCode) ?? $configuredCode;
+            $transcriber = RegionalPilotStackCatalog::transcriberProfile($transcriberCode);
             $meta['language'] = array_filter([
                 'configured' => array_filter([
                     'code' => $configuredCode,
@@ -276,6 +279,7 @@ class TicketCreationService
                 'transcriber' => array_filter([
                     'provider' => $transcriber['provider'] ?? null,
                     'model' => $transcriber['model'] ?? null,
+                    'language' => $transcriber['language'] ?? null,
                     'label' => $transcriber['label'] ?? null,
                 ], fn ($value) => filled($value)),
             ], fn ($value) => $value !== null && $value !== []);

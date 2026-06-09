@@ -13,6 +13,22 @@ use Illuminate\Support\Facades\DB;
 
 class VapiProvisioningService
 {
+    private const HUMANE_DEFAULT_WAIT_SECONDS = 0.9;
+    private const HUMANE_MIN_WAIT_SECONDS = 0.8;
+    private const HUMANE_MAX_WAIT_SECONDS = 1.5;
+    private const HUMANE_DEFAULT_INTERRUPT_WORDS = 4;
+    private const HUMANE_MIN_INTERRUPT_WORDS = 4;
+    private const HUMANE_MAX_INTERRUPT_WORDS = 8;
+    private const HUMANE_DEFAULT_VOICE_SECONDS = 0.48;
+    private const HUMANE_MIN_VOICE_SECONDS = 0.44;
+    private const HUMANE_MAX_VOICE_SECONDS = 0.8;
+    private const HUMANE_DEFAULT_BACKOFF_SECONDS = 1.35;
+    private const HUMANE_MIN_BACKOFF_SECONDS = 1.25;
+    private const HUMANE_MAX_BACKOFF_SECONDS = 2.5;
+    private const HUMANE_DEFAULT_VOICE_SPEED = 1.0;
+    private const HUMANE_MIN_VOICE_SPEED = 0.94;
+    private const HUMANE_MAX_VOICE_SPEED = 1.04;
+
     public function __construct(
         private readonly VapiClient $vapi,
         private readonly ?AssistantScriptLocalizer $scriptLocalizer = null,
@@ -58,7 +74,9 @@ class VapiProvisioningService
             'language_code' => $resolvedLanguageCode,
             'model_name' => $resolvedModelName,
             'preset_key' => $resolvedPresetKey,
-            'override_params' => $input['override_params'] ?? $config->override_params,
+            'override_params' => $this->normalizeHumaneTimingOverrides(
+                $input['override_params'] ?? $config->override_params ?? []
+            ),
             'intake_params' => $input['intake_params'] ?? $config->intake_params,
             'is_active' => $input['is_active'] ?? true,
         ])->save();
@@ -618,9 +636,15 @@ class VapiProvisioningService
         ]);
         $systemPrompt .= "\n\n" . $this->toolExecutionGuardrailsPrompt();
         $systemPrompt .= "\n\n" . $this->knownCallerGuardrailsPrompt();
+        $systemPrompt .= "\n\n" . $this->humaneConversationGuardrailsPrompt();
 
         if (! empty($config->language_code)) {
             $systemPrompt .= "\n\n[SYSTEM NOTE: Keep caller-facing replies in {$config->language_code} unless the caller clearly switches language and the business supports that change.]";
+        }
+
+        $operatorPrompt = $this->operatorRoutingPrompt($config, $workspace);
+        if ($operatorPrompt !== '') {
+            $systemPrompt .= "\n\n".$operatorPrompt;
         }
 
         $systemPrompt .= "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference when scheduling meetings or calculating relative times.]";
@@ -654,6 +678,11 @@ class VapiProvisioningService
 
         if ($caseLookupToolId) {
             $model['toolIds'][] = $caseLookupToolId;
+        }
+
+        $operatorHandoffTool = $this->operatorHandoffTool($config, $workspace);
+        if ($operatorHandoffTool) {
+            $model['tools'][] = $operatorHandoffTool;
         }
 
         if (! empty($config->fallback_phone)) {
@@ -722,6 +751,9 @@ class VapiProvisioningService
             $stopSpeakingPlan['backoffSeconds'] = (float) $overrides['backoffSeconds'];
         }
 
+        $startSpeakingPlan = $this->enforceHumaneStartSpeakingPlan($startSpeakingPlan);
+        $stopSpeakingPlan = $this->enforceHumaneStopSpeakingPlan($stopSpeakingPlan);
+
         if (! empty($startSpeakingPlan)) {
             $payload['startSpeakingPlan'] = $startSpeakingPlan;
         }
@@ -730,6 +762,177 @@ class VapiProvisioningService
         }
 
         return $payload;
+    }
+
+    private function operatorHandoffTool(AssistantConfig $config, Workspace $workspace): ?array
+    {
+        if (! $this->operatorRoutingEnabled($config)) {
+            return null;
+        }
+
+        $routes = $this->operatorRoutes($config);
+        if ($routes === []) {
+            return null;
+        }
+
+        $assistantIds = collect($routes)
+            ->pluck('assistant_id')
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($assistantIds === []) {
+            return null;
+        }
+
+        $destinationsByAssistant = AssistantConfig::query()
+            ->where('workspace_id', $workspace->id)
+            ->whereIn('id', $assistantIds)
+            ->whereNotNull('vapi_assistant_id')
+            ->get(['id', 'name', 'language_code', 'vapi_assistant_id'])
+            ->keyBy('id');
+
+        $destinations = [];
+
+        foreach ($routes as $route) {
+            $assistantId = (int) ($route['assistant_id'] ?? 0);
+            $assistant = $destinationsByAssistant->get($assistantId);
+
+            if (! $assistant || blank($assistant->vapi_assistant_id)) {
+                continue;
+            }
+
+            $descriptionParts = array_filter([
+                trim((string) ($route['label'] ?? '')),
+                filled($route['keywords'] ?? null) ? 'caller may say: '.trim((string) $route['keywords']) : null,
+                filled($route['language_code'] ?? null) ? 'language: '.trim((string) $route['language_code']) : null,
+                'destination assistant: '.$assistant->name,
+            ]);
+
+            $destinations[] = [
+                'type' => 'assistant',
+                'assistantId' => $assistant->vapi_assistant_id,
+                'description' => implode('; ', $descriptionParts),
+                'contextEngineeringPlan' => [
+                    'type' => 'all',
+                ],
+            ];
+        }
+
+        if ($destinations === []) {
+            return null;
+        }
+
+        return [
+            'type' => 'handoff',
+            'messages' => [
+                [
+                    'type' => 'request-start',
+                    'content' => 'I will connect you to the right assistant now.',
+                    'blocking' => false,
+                ],
+                [
+                    'type' => 'request-failed',
+                    'content' => $this->operatorFallbackMessage($config),
+                ],
+            ],
+            'destinations' => $destinations,
+        ];
+    }
+
+    private function operatorRoutingPrompt(AssistantConfig $config, Workspace $workspace): string
+    {
+        if (! $this->operatorRoutingEnabled($config)) {
+            return '';
+        }
+
+        $routes = $this->operatorRoutes($config);
+        $liveAssistantIds = AssistantConfig::query()
+            ->where('workspace_id', $workspace->id)
+            ->whereIn('id', collect($routes)->pluck('assistant_id')->filter()->all())
+            ->whereNotNull('vapi_assistant_id')
+            ->pluck('vapi_assistant_id', 'id');
+
+        $routeLines = collect($routes)
+            ->values()
+            ->map(function (array $route, int $index) use ($liveAssistantIds): string {
+                $label = trim((string) ($route['label'] ?? 'Route '.($index + 1)));
+                $keywords = trim((string) ($route['keywords'] ?? ''));
+                $language = trim((string) ($route['language_code'] ?? ''));
+                $assistantId = (int) ($route['assistant_id'] ?? 0);
+                $status = $liveAssistantIds->has($assistantId) ? 'live handoff configured' : 'saved but not live until the destination assistant is synced';
+
+                return ($index + 1).") {$label}"
+                    .($keywords !== '' ? " | caller may say: {$keywords}" : '')
+                    .($language !== '' ? " | language: {$language}" : '')
+                    ." | {$status}";
+            })
+            ->implode("\n");
+
+        if ($routeLines === '') {
+            $routeLines = 'No live routes are configured yet. Continue normal intake and do not claim a transfer is available.';
+        }
+
+        $intro = $this->operatorIntro($config, $workspace);
+
+        return trim(<<<PROMPT
+[SYSTEM NOTE: OPERATOR ROUTING MODE]
+This assistant can act as a spoken operator before normal intake.
+- Start by using this operator routing line when it fits the call: "{$intro}"
+- This is Vapi-only spoken routing. Do not tell callers they must press keypad buttons. If a caller says "one", "two", "English", "Spanish", "German", "sales", "support", or another configured phrase out loud, treat that as their spoken route choice.
+- Ask one short clarification if the route is unclear.
+- When you are confident about the route and the route is live, use the handoff tool to move the caller to the matching assistant. Do not create a ticket before handoff unless no matching live destination exists.
+- If no live destination matches, say the fallback message naturally and continue helping with normal intake.
+
+Configured spoken routes:
+{$routeLines}
+PROMPT);
+    }
+
+    private function operatorRoutingEnabled(AssistantConfig $config): bool
+    {
+        return filter_var(data_get($config->intake_params ?? [], 'operator.enabled', false), FILTER_VALIDATE_BOOLEAN);
+    }
+
+    private function operatorRoutes(AssistantConfig $config): array
+    {
+        $routes = data_get($config->intake_params ?? [], 'operator.routes', []);
+
+        if (! is_array($routes)) {
+            return [];
+        }
+
+        return collect($routes)
+            ->filter(fn ($route) => is_array($route))
+            ->map(fn (array $route) => [
+                'label' => trim((string) ($route['label'] ?? '')),
+                'keywords' => trim((string) ($route['keywords'] ?? '')),
+                'assistant_id' => filled($route['assistant_id'] ?? null) ? (int) $route['assistant_id'] : null,
+                'language_code' => trim((string) ($route['language_code'] ?? '')),
+            ])
+            ->filter(fn (array $route) => $route['label'] !== '' || $route['keywords'] !== '' || $route['assistant_id'])
+            ->values()
+            ->all();
+    }
+
+    private function operatorIntro(AssistantConfig $config, Workspace $workspace): string
+    {
+        $intro = trim((string) data_get($config->intake_params ?? [], 'operator.intro', ''));
+
+        return $intro !== ''
+            ? $intro
+            : "Thanks for calling {$workspace->name}. Tell me which team or language you need, and I will connect you.";
+    }
+
+    private function operatorFallbackMessage(AssistantConfig $config): string
+    {
+        $fallback = trim((string) data_get($config->intake_params ?? [], 'operator.fallback_message', ''));
+
+        return $fallback !== ''
+            ? $fallback
+            : 'I can help route the call, but I need one more detail. Which team should I connect you with?';
     }
 
     private function voiceBlock(AssistantConfig $config, Workspace $workspace): ?array
@@ -749,11 +952,7 @@ class VapiProvisioningService
             $voiceId = $defaultVoice['voiceId'];
         }
 
-        $speed = (float) ($defaultVoice['speed'] ?? 1.0);
-
-        if ($isRealtimeModel) {
-            $speed = max($speed, 1.16);
-        }
+        $speed = $this->humaneVoiceSpeed($defaultVoice['speed'] ?? self::HUMANE_DEFAULT_VOICE_SPEED);
 
         return [
             'provider' => $voiceProvider,
@@ -764,7 +963,9 @@ class VapiProvisioningService
 
     private function transcriberBlock(AssistantConfig $config, Workspace $workspace): array
     {
-        $languageCode = $config->language_code ?: RegionalPilotStackCatalog::defaultLanguageForMarket($workspace->primary_market ?? null);
+        $languageCode = $config->transcriberLanguageCode(
+            RegionalPilotStackCatalog::defaultLanguageForMarket($workspace->primary_market ?? null)
+        );
         $transcriber = RegionalPilotStackCatalog::transcriberProfile($languageCode);
 
         $keyterms = collect([
@@ -778,20 +979,25 @@ class VapiProvisioningService
             ->values()
             ->all();
 
-        return [
+        $payload = [
             'provider' => $transcriber['provider'],
             'model' => $transcriber['model'],
             'language' => $transcriber['language'],
             'smartFormat' => true,
             'numerals' => true,
             'keyterm' => $keyterms,
-            'fallbackPlan' => [
+        ];
+
+        if (! empty($transcriber['fallback'])) {
+            $payload['fallbackPlan'] = [
                 'transcribers' => [[
                     'provider' => $transcriber['fallback']['provider'],
                     'language' => $transcriber['fallback']['language'],
                 ]],
-            ],
-        ];
+            ];
+        }
+
+        return $payload;
     }
 
     private function defaultPromptTemplate(): string
@@ -868,20 +1074,31 @@ PROMPT);
 PROMPT);
     }
 
+    private function humaneConversationGuardrailsPrompt(): string
+    {
+        return trim(<<<'PROMPT'
+[SYSTEM NOTE: HUMANE CONVERSATION RULES]
+- Sound calm, warm, and capable. Never sound rushed, clipped, annoyed, sarcastic, robotic, or overly cheerful.
+- Speak at a natural human pace. Use short spoken sentences with small pauses between ideas.
+- Do not interrupt the caller. Treat hesitations, breaths, and short silences as the caller still thinking.
+- If the caller starts speaking while you are speaking, stop cleanly, let them finish, then respond to what they said.
+- Ask one question at a time. Do not stack questions unless the caller explicitly asks for a list.
+- Avoid filler before tool use, including "just a sec", "one moment", "hold on", and "let me check".
+- If the caller sounds frustrated, slow down, acknowledge the issue briefly, and move one clear step forward.
+- Never pressure the caller to move faster. The caller should feel heard, not managed.
+PROMPT);
+    }
+
     private function applyStartSpeakingDefaults(array $startSpeakingPlan, AssistantConfig $config): array
     {
-        $startSpeakingPlan['waitSeconds'] = (float) ($startSpeakingPlan['waitSeconds'] ?? 0.62);
-
-        if (AssistantConfig::isRealtimeModelName($config->model_name)) {
-            $startSpeakingPlan['waitSeconds'] = min($startSpeakingPlan['waitSeconds'], 0.44);
-        }
+        $startSpeakingPlan['waitSeconds'] = (float) ($startSpeakingPlan['waitSeconds'] ?? self::HUMANE_DEFAULT_WAIT_SECONDS);
 
         if (! isset($startSpeakingPlan['smartEndpointingPlan'])) {
             $languageCode = strtolower((string) ($config->language_code ?: 'en-US'));
             $startSpeakingPlan['smartEndpointingPlan'] = str_starts_with($languageCode, 'en')
                 ? [
                     'provider' => 'livekit',
-                    'waitFunction' => '240 + 2800 * x',
+                    'waitFunction' => '360 + 3800 * x',
                 ]
                 : [
                     'provider' => 'vapi',
@@ -893,19 +1110,95 @@ PROMPT);
 
     private function applyStopSpeakingDefaults(array $stopSpeakingPlan, AssistantConfig $config): array
     {
-        $stopSpeakingPlan['numWords'] = (int) ($stopSpeakingPlan['numWords'] ?? 2);
-        $stopSpeakingPlan['voiceSeconds'] = (float) ($stopSpeakingPlan['voiceSeconds'] ?? 0.34);
-        $stopSpeakingPlan['backoffSeconds'] = (float) ($stopSpeakingPlan['backoffSeconds'] ?? 1.05);
+        $stopSpeakingPlan['numWords'] = (int) ($stopSpeakingPlan['numWords'] ?? self::HUMANE_DEFAULT_INTERRUPT_WORDS);
+        $stopSpeakingPlan['voiceSeconds'] = (float) ($stopSpeakingPlan['voiceSeconds'] ?? self::HUMANE_DEFAULT_VOICE_SECONDS);
+        $stopSpeakingPlan['backoffSeconds'] = (float) ($stopSpeakingPlan['backoffSeconds'] ?? self::HUMANE_DEFAULT_BACKOFF_SECONDS);
         $stopSpeakingPlan['acknowledgementPhrases'] = $stopSpeakingPlan['acknowledgementPhrases'] ?? ['okay', 'got it', 'right', 'understood'];
         $stopSpeakingPlan['interruptionPhrases'] = $stopSpeakingPlan['interruptionPhrases'] ?? ['stop', 'hold on', 'wait', 'one second'];
 
-        if (AssistantConfig::isRealtimeModelName($config->model_name)) {
-            $stopSpeakingPlan['numWords'] = max((int) $stopSpeakingPlan['numWords'], 3);
-            $stopSpeakingPlan['voiceSeconds'] = min(max((float) $stopSpeakingPlan['voiceSeconds'], 0.34), 0.38);
-            $stopSpeakingPlan['backoffSeconds'] = min(max((float) $stopSpeakingPlan['backoffSeconds'], 0.92), 1.05);
+        return $stopSpeakingPlan;
+    }
+
+    private function normalizeHumaneTimingOverrides(?array $overrides): array
+    {
+        $overrides = is_array($overrides) ? $overrides : [];
+
+        if (array_key_exists('waitSeconds', $overrides) && filled($overrides['waitSeconds'])) {
+            $overrides['waitSeconds'] = $this->clampFloat(
+                (float) $overrides['waitSeconds'],
+                self::HUMANE_MIN_WAIT_SECONDS,
+                self::HUMANE_MAX_WAIT_SECONDS,
+            );
         }
 
+        if (array_key_exists('numWords', $overrides) && filled($overrides['numWords'])) {
+            $overrides['numWords'] = $this->clampInt(
+                (int) $overrides['numWords'],
+                self::HUMANE_MIN_INTERRUPT_WORDS,
+                self::HUMANE_MAX_INTERRUPT_WORDS,
+            );
+        }
+
+        if (array_key_exists('backoffSeconds', $overrides) && filled($overrides['backoffSeconds'])) {
+            $overrides['backoffSeconds'] = $this->clampFloat(
+                (float) $overrides['backoffSeconds'],
+                self::HUMANE_MIN_BACKOFF_SECONDS,
+                self::HUMANE_MAX_BACKOFF_SECONDS,
+            );
+        }
+
+        return $overrides;
+    }
+
+    private function enforceHumaneStartSpeakingPlan(array $startSpeakingPlan): array
+    {
+        $startSpeakingPlan['waitSeconds'] = $this->clampFloat(
+            (float) ($startSpeakingPlan['waitSeconds'] ?? self::HUMANE_DEFAULT_WAIT_SECONDS),
+            self::HUMANE_MIN_WAIT_SECONDS,
+            self::HUMANE_MAX_WAIT_SECONDS,
+        );
+
+        return $startSpeakingPlan;
+    }
+
+    private function enforceHumaneStopSpeakingPlan(array $stopSpeakingPlan): array
+    {
+        $stopSpeakingPlan['numWords'] = $this->clampInt(
+            (int) ($stopSpeakingPlan['numWords'] ?? self::HUMANE_DEFAULT_INTERRUPT_WORDS),
+            self::HUMANE_MIN_INTERRUPT_WORDS,
+            self::HUMANE_MAX_INTERRUPT_WORDS,
+        );
+        $stopSpeakingPlan['voiceSeconds'] = $this->clampFloat(
+            (float) ($stopSpeakingPlan['voiceSeconds'] ?? self::HUMANE_DEFAULT_VOICE_SECONDS),
+            self::HUMANE_MIN_VOICE_SECONDS,
+            self::HUMANE_MAX_VOICE_SECONDS,
+        );
+        $stopSpeakingPlan['backoffSeconds'] = $this->clampFloat(
+            (float) ($stopSpeakingPlan['backoffSeconds'] ?? self::HUMANE_DEFAULT_BACKOFF_SECONDS),
+            self::HUMANE_MIN_BACKOFF_SECONDS,
+            self::HUMANE_MAX_BACKOFF_SECONDS,
+        );
+
         return $stopSpeakingPlan;
+    }
+
+    private function humaneVoiceSpeed(float|int|string|null $speed): float
+    {
+        return $this->clampFloat(
+            is_numeric($speed) ? (float) $speed : self::HUMANE_DEFAULT_VOICE_SPEED,
+            self::HUMANE_MIN_VOICE_SPEED,
+            self::HUMANE_MAX_VOICE_SPEED,
+        );
+    }
+
+    private function clampFloat(float $value, float $min, float $max): float
+    {
+        return round(min(max($value, $min), $max), 2);
+    }
+
+    private function clampInt(int $value, int $min, int $max): int
+    {
+        return min(max($value, $min), $max);
     }
 
     private function defaultVoiceProfile(AssistantConfig $config, Workspace $workspace): array
@@ -925,20 +1218,20 @@ PROMPT);
             }
 
             return match ($presetKey) {
-                'steady_operator' => ['provider' => 'vapi', 'voiceId' => 'Savannah', 'speed' => 1.08],
-                'confident_closer' => ['provider' => 'vapi', 'voiceId' => 'Elliot', 'speed' => 1.1],
-                'premium_concierge' => ['provider' => 'vapi', 'voiceId' => 'Clara', 'speed' => 1.08],
-                default => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.12],
+                'steady_operator' => ['provider' => 'vapi', 'voiceId' => 'Savannah', 'speed' => 0.98],
+                'confident_closer' => ['provider' => 'vapi', 'voiceId' => 'Elliot', 'speed' => 1.02],
+                'premium_concierge' => ['provider' => 'vapi', 'voiceId' => 'Clara', 'speed' => 0.98],
+                default => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.02],
             };
         }
 
         if ($isRealtimeModel) {
             return match ($presetKey) {
-                'premium_concierge' => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.22],
-                'bright_guide' => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.22],
-                'steady_operator' => ['provider' => 'openai', 'voiceId' => 'alloy', 'speed' => 1.18],
-                'confident_closer' => ['provider' => 'openai', 'voiceId' => 'alloy', 'speed' => 1.2],
-                default => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.2],
+                'premium_concierge' => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.0],
+                'bright_guide' => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.0],
+                'steady_operator' => ['provider' => 'openai', 'voiceId' => 'alloy', 'speed' => 0.98],
+                'confident_closer' => ['provider' => 'openai', 'voiceId' => 'alloy', 'speed' => 1.02],
+                default => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.0],
             };
         }
 
@@ -947,11 +1240,11 @@ PROMPT);
         }
 
         return match ($presetKey) {
-            'bright_guide' => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.12],
-            'steady_operator' => ['provider' => 'vapi', 'voiceId' => 'Savannah', 'speed' => 1.08],
-            'confident_closer' => ['provider' => 'vapi', 'voiceId' => 'Elliot', 'speed' => 1.1],
-            'premium_concierge' => ['provider' => 'vapi', 'voiceId' => 'Clara', 'speed' => 1.08],
-            default => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.1],
+            'bright_guide' => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.02],
+            'steady_operator' => ['provider' => 'vapi', 'voiceId' => 'Savannah', 'speed' => 0.98],
+            'confident_closer' => ['provider' => 'vapi', 'voiceId' => 'Elliot', 'speed' => 1.02],
+            'premium_concierge' => ['provider' => 'vapi', 'voiceId' => 'Clara', 'speed' => 0.98],
+            default => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.0],
         };
     }
 

@@ -58,6 +58,16 @@ class VoiceAssistantController extends Controller
             'language_code' => ['nullable', 'string', Rule::in(collect(RegionalPilotStackCatalog::languageOptions($workspace->primaryMarket()))->pluck('value')->all())],
             'model_name' => ['nullable', 'string', Rule::in(collect(AssistantConfig::modelOptions())->pluck('value')->all())],
             'intake_params' => ['nullable', 'array'],
+            'intake_params.operator' => ['nullable', 'array'],
+            'intake_params.operator.enabled' => ['nullable', 'boolean'],
+            'intake_params.operator.mode' => ['nullable', 'string', Rule::in(['spoken_handoff'])],
+            'intake_params.operator.intro' => ['nullable', 'string', 'max:500'],
+            'intake_params.operator.fallback_message' => ['nullable', 'string', 'max:500'],
+            'intake_params.operator.routes' => ['nullable', 'array', 'max:8'],
+            'intake_params.operator.routes.*.label' => ['nullable', 'string', 'max:80'],
+            'intake_params.operator.routes.*.keywords' => ['nullable', 'string', 'max:180'],
+            'intake_params.operator.routes.*.assistant_id' => ['nullable', 'integer'],
+            'intake_params.operator.routes.*.language_code' => ['nullable', 'string', Rule::in(collect(RegionalPilotStackCatalog::languageOptions($workspace->primaryMarket()))->pluck('value')->all())],
             'preset_key' => ['nullable', 'string', Rule::in($availablePresetKeys)],
             'override_params' => ['nullable', 'array'],
             'fallback_phone' => ['nullable', 'string', 'max:20'],
@@ -115,6 +125,13 @@ class VoiceAssistantController extends Controller
                     'name' => $data['name'],
                 ]);
             }
+
+            $data['intake_params'] = $this->normalizeAssistantIntakeParams(
+                $workspace,
+                $data['intake_params'] ?? [],
+                $config->intake_params ?? [],
+                $config,
+            );
 
             $provisioner->provisionAssistantAndToolForConfig($config, $workspace, $data);
         } catch (\Illuminate\Http\Client\RequestException $e) {
@@ -371,8 +388,9 @@ class VoiceAssistantController extends Controller
         $voices = self::vapiVoices();
         $presets = AssistantPreset::ensureDefaults();
         $defaultAssistantDraft = WorkspaceUseCaseCatalog::assistantDraft($workspace);
+        $assistantRouteOptions = $this->assistantRouteOptions($workspace);
 
-        return view('assistants.form', compact('workspace', 'voices', 'presets', 'defaultAssistantDraft'));
+        return view('assistants.form', compact('workspace', 'voices', 'presets', 'defaultAssistantDraft', 'assistantRouteOptions'));
     }
 
     // Show a single assistant for editing
@@ -384,7 +402,9 @@ class VoiceAssistantController extends Controller
         $config = $assistant;
         $voices = self::vapiVoices();
         $presets = AssistantPreset::ensureDefaults();
-        return view('assistants.form', compact('workspace', 'config', 'voices', 'presets'));
+        $assistantRouteOptions = $this->assistantRouteOptions($workspace, $config);
+
+        return view('assistants.form', compact('workspace', 'config', 'voices', 'presets', 'assistantRouteOptions'));
     }
 
     public function duplicate(Request $request, Workspace $workspace, AssistantConfig $assistant, VapiProvisioningService $provisioner)
@@ -488,6 +508,119 @@ class VoiceAssistantController extends Controller
     private static function vapiVoices(): array
     {
         return RegionalPilotStackCatalog::voiceCatalog();
+    }
+
+    private function assistantRouteOptions(Workspace $workspace, ?AssistantConfig $current = null): array
+    {
+        $phonesByAssistant = WorkspacePhoneNumber::query()
+            ->where('workspace_id', $workspace->id)
+            ->whereNotNull('assistant_id')
+            ->latest('updated_at')
+            ->get(['assistant_id', 'e164'])
+            ->keyBy('assistant_id');
+
+        return AssistantConfig::query()
+            ->where('workspace_id', $workspace->id)
+            ->when($current, fn ($query) => $query->whereKeyNot($current->id))
+            ->orderBy('name')
+            ->get(['id', 'name', 'language_code', 'vapi_assistant_id'])
+            ->map(fn (AssistantConfig $assistant) => [
+                'id' => $assistant->id,
+                'name' => $assistant->name,
+                'language_code' => $assistant->language_code ?: $workspace->preferredLanguageCode(),
+                'vapi_assistant_id' => $assistant->vapi_assistant_id,
+                'is_synced' => filled($assistant->vapi_assistant_id),
+                'phone' => $phonesByAssistant->get($assistant->id)?->e164,
+            ])
+            ->values()
+            ->all();
+    }
+
+    private function normalizeAssistantIntakeParams(Workspace $workspace, array $incoming, array $existing, AssistantConfig $current): array
+    {
+        $normalized = array_replace_recursive($existing, $incoming);
+        $operator = data_get($incoming, 'operator', data_get($existing, 'operator', []));
+
+        if (! is_array($operator)) {
+            $operator = [];
+        }
+
+        $allowedLanguages = collect(RegionalPilotStackCatalog::languageOptions($workspace->primaryMarket()))
+            ->pluck('value')
+            ->all();
+        $workspaceLanguage = $workspace->preferredLanguageCode();
+        $assistantNames = AssistantConfig::query()
+            ->where('workspace_id', $workspace->id)
+            ->whereKeyNot($current->id)
+            ->pluck('name', 'id');
+        $allowedAssistantIds = $assistantNames->keys()
+            ->map(fn ($id) => (int) $id)
+            ->all();
+
+        $routes = collect(data_get($operator, 'routes', []))
+            ->values()
+            ->map(function ($route) use ($assistantNames, $allowedAssistantIds, $allowedLanguages, $workspaceLanguage) {
+                if (! is_array($route)) {
+                    return null;
+                }
+
+                $assistantId = filled($route['assistant_id'] ?? null) ? (int) $route['assistant_id'] : null;
+                if ($assistantId && ! in_array($assistantId, $allowedAssistantIds, true)) {
+                    $assistantId = null;
+                }
+
+                $label = $this->cleanOperatorText($route['label'] ?? '', 80);
+                if ($label === '' && $assistantId) {
+                    $label = (string) ($assistantNames[$assistantId] ?? '');
+                }
+
+                $keywords = $this->cleanOperatorText($route['keywords'] ?? '', 180);
+                $languageCode = (string) ($route['language_code'] ?? $workspaceLanguage);
+                if (! in_array($languageCode, $allowedLanguages, true)) {
+                    $languageCode = $workspaceLanguage;
+                }
+
+                if ($label === '' && $keywords === '' && ! $assistantId) {
+                    return null;
+                }
+
+                return [
+                    'label' => $label,
+                    'keywords' => $keywords,
+                    'assistant_id' => $assistantId,
+                    'language_code' => $languageCode,
+                ];
+            })
+            ->filter()
+            ->values()
+            ->take(8)
+            ->all();
+
+        $intro = $this->cleanOperatorText(
+            data_get($operator, 'intro', "Thanks for calling {$workspace->name}. Tell me which team or language you need, and I will connect you."),
+            500,
+        );
+        $fallbackMessage = $this->cleanOperatorText(
+            data_get($operator, 'fallback_message', 'I can help route the call, but I need one more detail. Which team should I connect you with?'),
+            500,
+        );
+
+        $normalized['operator'] = [
+            'enabled' => filter_var(data_get($operator, 'enabled', false), FILTER_VALIDATE_BOOLEAN),
+            'mode' => 'spoken_handoff',
+            'intro' => $intro,
+            'fallback_message' => $fallbackMessage,
+            'routes' => $routes,
+        ];
+
+        return $normalized;
+    }
+
+    private function cleanOperatorText(mixed $value, int $maxLength): string
+    {
+        $text = trim(preg_replace('/\s+/', ' ', (string) $value));
+
+        return mb_substr($text, 0, $maxLength);
     }
 
     private function nextDuplicateAssistantName(Workspace $workspace, string $name): string
