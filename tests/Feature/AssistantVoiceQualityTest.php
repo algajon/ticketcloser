@@ -751,6 +751,84 @@ class AssistantVoiceQualityTest extends TestCase
         $service->provisionAssistantAndToolForConfig($salesAssistant, $workspace, ['name' => 'Sales Desk']);
     }
 
+    public function test_operator_route_destination_that_is_also_a_router_keeps_its_menu_question(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $salesAssistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Sales Desk',
+            'language_code' => 'en-US',
+            'vapi_assistant_id' => 'asst_sales_123',
+        ]);
+        $englishRouter = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'English Router',
+            'language_code' => 'en-US',
+            'first_message' => 'Which line are you looking for: sales, tech support, or property maintenance?',
+            'vapi_assistant_id' => 'asst_english_router_123',
+            'intake_params' => [
+                'operator' => [
+                    'enabled' => true,
+                    'routes' => [
+                        [
+                            'label' => 'Sales',
+                            'keywords' => 'sales, pricing, quote',
+                            'assistant_id' => $salesAssistant->id,
+                            'language_code' => 'en-US',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Main Operator',
+            'preset_key' => 'steady_operator',
+            'language_code' => 'en-US',
+            'intake_params' => [
+                'operator' => [
+                    'enabled' => true,
+                    'routes' => [
+                        [
+                            'label' => 'English support',
+                            'keywords' => 'english, support',
+                            'assistant_id' => $englishRouter->id,
+                            'language_code' => 'en-US',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('updateAssistant')
+            ->with('asst_english_router_123', $this->callback(function (array $payload): bool {
+                $this->assertSame(
+                    'Which line are you looking for: sales, tech support, or property maintenance?{{ knownCallerSuffix | default: "" }}',
+                    $payload['firstMessage']
+                );
+                $this->assertSame('assistant-speaks-first', $payload['firstMessageMode']);
+                $this->assertStringContainsString('do not infer a downstream destination', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('silently use the matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
+
+                return true;
+            }));
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($englishRouter, $workspace, ['name' => 'English Router']);
+    }
+
     public function test_operator_routing_with_multiple_route_languages_uses_multilingual_transcription(): void
     {
         $workspace = Workspace::factory()->create([
