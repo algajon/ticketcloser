@@ -830,19 +830,6 @@ class VapiProvisioningService
 
             $tools[] = [
                 'type' => 'handoff',
-                'function' => [
-                    'name' => $this->operatorHandoffFunctionName($label, $assistant),
-                    'description' => 'Transfer the caller to '.$label.' when their spoken route choice or need matches this destination.',
-                    'parameters' => [
-                        'type' => 'object',
-                        'properties' => [
-                            'reason' => [
-                                'type' => 'string',
-                                'description' => 'A short reason why the caller should be transferred to '.$label.'.',
-                            ],
-                        ],
-                    ],
-                ],
                 'messages' => [
                     [
                         'type' => 'request-start',
@@ -871,18 +858,6 @@ class VapiProvisioningService
         }
 
         return $tools;
-    }
-
-    private function operatorHandoffFunctionName(string $label, AssistantConfig $assistant): string
-    {
-        $slug = strtolower(preg_replace('/[^a-zA-Z0-9]+/', '_', $label) ?: '');
-        $slug = trim($slug, '_');
-
-        if ($slug === '') {
-            $slug = 'assistant_'.$assistant->id;
-        }
-
-        return 'handoff_to_'.$slug.'_'.$assistant->id;
     }
 
     private function operatorRoutingPrompt(AssistantConfig $config, Workspace $workspace): string
@@ -926,7 +901,7 @@ This assistant can act as a spoken operator before normal intake.
 - Start by using this operator routing line when it fits the call: "{$intro}"
 - This is Vapi-only spoken routing. Do not tell callers they must press keypad buttons. If a caller says "one", "two", "English", "Spanish", "German", "sales", "support", or another configured phrase out loud, treat that as their spoken route choice.
 - Ask one short clarification if the route is unclear.
-- When you are confident about the route and the route is live, call the specific handoff_to_* tool for that matching route. Do not create a ticket before handoff unless no matching live destination exists.
+- When you are confident about the route and the route is live, use the matching Vapi handoff destination for that route. Do not create a ticket before handoff unless no matching live destination exists.
 - Handoffs are handled in the background. Do not tell the caller the call is ending, and do not say goodbye before or after a handoff.
 - If no live destination matches, say the fallback message naturally and continue helping with normal intake.
 

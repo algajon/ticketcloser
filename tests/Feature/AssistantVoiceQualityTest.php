@@ -672,7 +672,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertCount(2, $handoffTools);
                 $this->assertNotNull($handoffTool);
                 $this->assertCount(1, $handoffTool['destinations']);
-                $this->assertStringStartsWith('handoff_to_sales_', $handoffTool['function']['name']);
+                $this->assertArrayNotHasKey('function', $handoffTool);
                 $this->assertSame('assistant', $handoffTool['destinations'][0]['type']);
                 $this->assertSame('asst_sales_123', $handoffTool['destinations'][0]['assistantId']);
                 $this->assertSame('userAndAssistantMessages', $handoffTool['destinations'][0]['contextEngineeringPlan']['type']);
@@ -682,7 +682,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('system', $handoffTool['messages'][1]['role']);
                 $this->assertStringContainsString('OPERATOR ROUTING MODE', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Vapi-only spoken routing', $payload['model']['messages'][0]['content']);
-                $this->assertStringContainsString('handoff_to_*', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Sales', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Do not tell callers they must press keypad buttons', $payload['model']['messages'][0]['content']);
 
