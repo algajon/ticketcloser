@@ -4,9 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AssistantConfig;
 use App\Models\AssistantPreset;
-use App\Models\User;
 use App\Models\Workspace;
-use App\Models\WorkspaceMembership;
 use App\Services\Vapi\VapiClient;
 use App\Services\Vapi\VapiProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -218,20 +216,12 @@ class AssistantVoiceQualityTest extends TestCase
         $this->assertSame('Emma', $assistant->voice_id);
     }
 
-    public function test_admin_owned_free_plan_is_not_clamped_to_standard_model_and_voice(): void
+    public function test_standard_models_normalize_openai_voice_choices_back_to_curated_english_voice(): void
     {
         $workspace = Workspace::factory()->create([
             'integration_token' => 'token-123',
             'name' => 'Northline Support',
-            'plan_key' => 'free',
-        ]);
-        $admin = User::factory()->create([
-            'is_admin' => true,
-        ]);
-        WorkspaceMembership::create([
-            'workspace_id' => $workspace->id,
-            'user_id' => $admin->id,
-            'role' => WorkspaceMembership::ROLE_OWNER,
+            'plan_key' => 'pro',
         ]);
         AssistantPreset::ensureDefaults();
 
@@ -253,8 +243,8 @@ class AssistantVoiceQualityTest extends TestCase
             ->method('createAssistant')
             ->with($this->callback(function (array $payload): bool {
                 $this->assertSame('gpt-4.1', $payload['model']['model']);
-                $this->assertSame('openai', $payload['voice']['provider']);
-                $this->assertSame('marin', $payload['voice']['voiceId']);
+                $this->assertSame('vapi', $payload['voice']['provider']);
+                $this->assertSame('Emma', $payload['voice']['voiceId']);
 
                 return true;
             }))
@@ -270,8 +260,8 @@ class AssistantVoiceQualityTest extends TestCase
 
         $assistant->refresh();
         $this->assertSame('gpt-4.1', $assistant->model_name);
-        $this->assertSame('openai', $assistant->voice_provider);
-        $this->assertSame('marin', $assistant->voice_id);
+        $this->assertSame('vapi', $assistant->voice_provider);
+        $this->assertSame('Emma', $assistant->voice_id);
     }
 
     public function test_custom_first_message_is_used_for_standard_models_too(): void
@@ -683,7 +673,8 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertStringContainsString('SILENT HANDOFF RULES', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Vapi-only spoken routing', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('The configured spoken routes below are the only choices this operator can offer', $payload['model']['messages'][0]['content']);
-                $this->assertStringContainsString('hand off immediately to that route', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Route only to the exact configured choice', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('keep the first turn language-only', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('silently use the matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Sales', $payload['model']['messages'][0]['content']);
@@ -822,7 +813,8 @@ class AssistantVoiceQualityTest extends TestCase
                 );
                 $this->assertSame('assistant-speaks-first', $payload['firstMessageMode']);
                 $this->assertStringContainsString('The configured spoken routes below are the only choices this operator can offer', $payload['model']['messages'][0]['content']);
-                $this->assertStringContainsString('hand off immediately to that route', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Route only to the exact configured choice', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('keep the first turn language-only', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('do not infer a downstream destination', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('silently use the matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
 

@@ -890,7 +890,8 @@ This assistant can act as a spoken operator before normal intake.
 - Start by using this operator routing line when it fits the call: "{$intro}"
 - The configured spoken routes below are the only choices this operator can offer. Do not mention or offer departments, languages, or queues that are not configured on this assistant.
 - This is Vapi-only spoken routing. Do not tell callers they must press keypad buttons. If a caller says "one", "two", "English", "Spanish", "German", "sales", "support", or another configured phrase out loud, treat that as their spoken route choice.
-- If the caller says a configured language route such as "English", "Spanish", or "German", hand off immediately to that route. Do not ask which department or team they need at this level unless those department routes are configured on this assistant.
+- Route only to the exact configured choice the caller actually said. A language choice such as "English" may only route to the English destination; it must never be treated as a hidden choice for sales, tech support, or property maintenance.
+- If this operator's opening line asks for a language first, keep the first turn language-only. Do not list or infer department choices until the caller has been handed to the configured language router.
 - Ask one short clarification if the route is unclear.
 - If this assistant was reached after the caller chose only a language or parent menu, do not infer a downstream destination from that prior choice. Ask which configured route they need first.
 - When you are confident about the route and the route is live, silently use the matching Vapi handoff destination for that route. Do not acknowledge the route choice, do not say "connecting", and do not create a ticket before handoff unless no matching live destination exists.
@@ -1312,6 +1313,18 @@ PROMPT);
     ): array {
         $voiceProvider = trim((string) $voiceProvider) !== '' ? trim((string) $voiceProvider) : null;
         $voiceId = trim((string) $voiceId) !== '' ? trim((string) $voiceId) : null;
+        $standardVoice = RegionalPilotStackCatalog::standardVoiceProfile(
+            $languageCode,
+            $presetKey,
+            $workspace->primaryMarket(),
+        );
+
+        if ($voiceProvider === 'openai' && ! AssistantConfig::isRealtimeModelName($modelName)) {
+            return [
+                $standardVoice['provider'] ?? 'vapi',
+                $standardVoice['voiceId'] ?? 'Emma',
+            ];
+        }
 
         if (
             $voiceProvider !== 'openai'
@@ -1320,12 +1333,6 @@ PROMPT);
         ) {
             return [$voiceProvider, $voiceId];
         }
-
-        $standardVoice = RegionalPilotStackCatalog::standardVoiceProfile(
-            $languageCode,
-            $presetKey,
-            $workspace->primaryMarket(),
-        );
 
         if (! $standardVoice || ($standardVoice['provider'] ?? null) === 'openai') {
             return [$voiceProvider, $voiceId];

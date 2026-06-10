@@ -888,7 +888,7 @@
                 },
                 get compatibleVoices() {
                     if (this.selectedModel.voiceMode !== 'realtime') {
-                        return this.voices;
+                        return this.voices.filter((voice) => voice.provider !== 'openai');
                     }
 
                     return this.voices.filter((voice) => voice.provider === 'openai' && ['alloy', 'echo', 'shimmer', 'marin', 'cedar'].includes(voice.id));
@@ -912,6 +912,8 @@
                 handleModelChange(shouldAdjustVoice = true) {
                     if (this.selectedModel.voiceMode === 'realtime') {
                         this.selectedProvider = 'openai';
+                    } else if (this.selectedProvider === 'openai') {
+                        this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
                     } else if (!this.providerAllowedOnFree(this.selectedProvider)) {
                         this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
                     }
@@ -921,6 +923,10 @@
                     }
                 },
                 handleProviderChange(shouldAdjustVoice = true) {
+                    if (this.selectedModel.voiceMode !== 'realtime' && this.selectedProvider === 'openai') {
+                        this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
+                    }
+
                     const providerHasLanguage = this.compatibleVoices.some((voice) =>
                         voice.provider === this.selectedProvider
                         && (voice.language === this.selectedLanguageCode || voice.language === 'multi')
