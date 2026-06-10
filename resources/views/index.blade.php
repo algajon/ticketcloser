@@ -262,13 +262,14 @@
                         </div>
                     </div>
 
-                    <footer
-                        class="mt-8 flex flex-col gap-4 border-t border-white/10 pt-6 text-sm text-slate-400 sm:flex-row sm:items-center sm:justify-between">
-                        <div>tickIt turns inbound calls into tickets your team can work.</div>
-                        <div>&copy; {{ date('Y') }} tickIt</div>
-                    </footer>
                 </div>
             </section>
+
+            {{-- Minimal Footer --}}
+            <footer
+                class="w-full pt-20 pb-10 border-t border-white/5 text-center text-slate-500 text-[13px] bg-black/20 backdrop-blur-sm">
+                <p>&copy; {{ date('Y') }} ticketcloser. All rights reserved.</p>
+            </footer>
         </main>
     </div>
 </body>
