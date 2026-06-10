@@ -838,9 +838,25 @@ class VapiProvisioningService
 
             $label = trim((string) ($route['label'] ?? $assistant->name));
             $label = $label !== '' ? $label : $assistant->name;
+            $functionName = $this->operatorHandoffFunctionName($label, $assistant->name);
 
             $tools[] = [
                 'type' => 'handoff',
+                'function' => [
+                    'name' => $functionName,
+                    'description' => "Silently hand off the call to {$label} ({$assistant->name}). Use this only when the caller explicitly says {$label} or one of its configured phrases.",
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'destination' => [
+                                'type' => 'string',
+                                'description' => 'The exact configured route selected by the caller.',
+                                'enum' => [$label],
+                            ],
+                        ],
+                        'required' => ['destination'],
+                    ],
+                ],
                 'messages' => [],
                 'destinations' => [$destination],
             ];
@@ -862,18 +878,26 @@ class VapiProvisioningService
             ->whereNotNull('vapi_assistant_id')
             ->pluck('vapi_assistant_id', 'id');
 
+        $destinationNames = AssistantConfig::query()
+            ->where('workspace_id', $workspace->id)
+            ->whereIn('id', collect($routes)->pluck('assistant_id')->filter()->all())
+            ->pluck('name', 'id');
+
         $routeLines = collect($routes)
             ->values()
-            ->map(function (array $route, int $index) use ($liveAssistantIds): string {
+            ->map(function (array $route, int $index) use ($liveAssistantIds, $destinationNames): string {
                 $label = trim((string) ($route['label'] ?? 'Route '.($index + 1)));
                 $keywords = trim((string) ($route['keywords'] ?? ''));
                 $language = trim((string) ($route['language_code'] ?? ''));
                 $assistantId = (int) ($route['assistant_id'] ?? 0);
                 $status = $liveAssistantIds->has($assistantId) ? 'live handoff configured' : 'saved but not live until the destination assistant is synced';
+                $destinationName = (string) ($destinationNames[$assistantId] ?? $label);
+                $functionName = $this->operatorHandoffFunctionName($label, $destinationName);
 
                 return ($index + 1).") {$label}"
                     .($keywords !== '' ? " | caller may say: {$keywords}" : '')
                     .($language !== '' ? " | language: {$language}" : '')
+                    ." | handoff function: {$functionName}"
                     ." | {$status}";
             })
             ->implode("\n");
@@ -892,6 +916,8 @@ This assistant can act as a spoken operator before normal intake.
 - This is Vapi-only spoken routing. Do not tell callers they must press keypad buttons. If a caller says "one", "two", "English", "Spanish", "German", "sales", "support", or another configured phrase out loud, treat that as their spoken route choice.
 - Route only to the exact configured choice the caller actually said. A language choice such as "English" may only route to the English destination; it must never be treated as a hidden choice for sales, tech support, or property maintenance.
 - If this operator's opening line asks for a language first, keep the first turn language-only. Do not list or infer department choices until the caller has been handed to the configured language router.
+- When the caller says a configured route, your next action must be the matching handoff function listed below. Do not speak another sentence first.
+- Never answer "How can I help you?" while live operator routes are available. If a route matches, call the matching handoff function instead of normal intake.
 - Ask one short clarification if the route is unclear.
 - If this assistant was reached after the caller chose only a language or parent menu, do not infer a downstream destination from that prior choice. Ask which configured route they need first.
 - When you are confident about the route and the route is live, silently use the matching Vapi handoff destination for that route. Do not acknowledge the route choice, do not say "connecting", and do not create a ticket before handoff unless no matching live destination exists.
@@ -961,6 +987,15 @@ PROMPT);
             ->filter(fn (array $route) => $route['label'] !== '' || $route['keywords'] !== '' || $route['assistant_id'])
             ->values()
             ->all();
+    }
+
+    private function operatorHandoffFunctionName(string $label, string $assistantName): string
+    {
+        $source = $assistantName !== '' ? $assistantName : $label;
+        $slug = strtolower((string) preg_replace('/[^a-zA-Z0-9]+/', '_', $source));
+        $slug = trim((string) preg_replace('/_+/', '_', $slug), '_');
+
+        return 'handoff_to_'.($slug !== '' ? $slug : 'assistant');
     }
 
     private function operatorIntro(AssistantConfig $config, Workspace $workspace): string

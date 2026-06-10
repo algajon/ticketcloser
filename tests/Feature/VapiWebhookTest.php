@@ -410,7 +410,8 @@ class VapiWebhookTest extends TestCase
         $this->assertCount(1, $handoffTools);
         $this->assertNotNull($handoffTool);
         $this->assertCount(1, $handoffTool['destinations']);
-        $this->assertArrayNotHasKey('function', $handoffTool);
+        $this->assertSame('handoff_to_sales_desk', $handoffTool['function']['name']);
+        $this->assertSame(['Sales'], $handoffTool['function']['parameters']['properties']['destination']['enum']);
         $this->assertSame('ast-sales-123', $handoffTool['destinations'][0]['assistantId']);
         $this->assertSame('userAndAssistantMessages', $handoffTool['destinations'][0]['contextEngineeringPlan']['type']);
         $this->assertStringContainsString('Sales', $handoffTool['destinations'][0]['description']);
@@ -433,6 +434,14 @@ class VapiWebhookTest extends TestCase
         );
         $this->assertStringContainsString(
             'keep the first turn language-only',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'handoff function: handoff_to_sales_desk',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'Never answer "How can I help you?"',
             $response->json('assistantOverrides.model.messages.0.content')
         );
         $this->assertStringContainsString(
