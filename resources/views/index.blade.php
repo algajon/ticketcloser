@@ -94,122 +94,30 @@
                 ];
             @endphp
 
-            <section class="px-5 pb-16 pt-12 sm:pb-20 sm:pt-16 lg:px-8 lg:pb-24 lg:pt-20">
-                <div class="mx-auto max-w-7xl">
-                    <div class="tc-landing-motion-stage mx-auto mb-8 flex max-w-fit items-center gap-2 rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-[0.7rem] font-semibold uppercase tracking-[0.24em] text-slate-300 backdrop-blur"
-                        style="--tc-delay: 40ms;">
-                        <span class="h-1.5 w-1.5 rounded-full bg-orange-400 shadow-[0_0_18px_rgba(251,146,60,0.72)]"></span>
-                        AI phone intake for real teams
-                    </div>
+            <section
+                class="flex min-h-[calc(100vh-5.5rem+4rem)] items-center px-4 py-12 sm:min-h-[calc(100vh-5.5rem+5rem)] sm:px-5 sm:py-16 lg:min-h-[calc(100vh-5.75rem+5rem)] lg:px-8 lg:py-20">
+                <div class="mx-auto flex max-w-6xl -translate-y-4 flex-col items-center justify-center text-center sm:-translate-y-6 lg:-translate-y-10">
+                    <h1
+                        class="tc-landing-motion-stage tc-landing-hero-title max-w-4xl text-5xl font-bold tracking-[-0.05em] text-white sm:text-6xl lg:text-[5.4rem] lg:leading-[0.94]"
+                        style="--tc-delay: 90ms;">
+                        <span class="tc-landing-readable-copy">tickIt</span>
+                    </h1>
 
-                    <div class="grid items-center gap-8 lg:grid-cols-[minmax(0,0.92fr)_minmax(0,1.08fr)]">
-                        <div class="max-w-3xl">
-                            <h1 class="tc-landing-motion-stage tc-landing-hero-title text-5xl font-bold tracking-[-0.055em] text-white sm:text-6xl lg:text-[5.8rem] lg:leading-[0.9]"
-                                style="--tc-delay: 100ms;">
-                                <span class="tc-landing-readable-copy">AI calls into tickets.</span>
-                            </h1>
+                    <p class="tc-landing-motion-stage tc-landing-hero-copy mt-5 max-w-2xl text-[15px] leading-7 text-[#cbd5e1] md:text-[17px]"
+                        style="--tc-delay: 180ms;">
+                        <span class="tc-landing-readable-copy-subtle">tickIt answers the call, captures the issue and urgency, saves the transcript, and keeps follow-up moving without manual note-taking.</span>
+                    </p>
 
-                            <p class="tc-landing-motion-stage tc-landing-hero-copy mt-6 max-w-2xl text-base leading-7 text-slate-300 sm:text-[1.05rem]"
-                                style="--tc-delay: 190ms;">
-                                <span class="tc-landing-readable-copy-subtle">tickIt answers inbound calls, captures what happened, creates the ticket, and keeps the follow-up moving.</span>
-                            </p>
-
-                            <div class="tc-landing-motion-stage tc-landing-hero-actions mt-8 flex flex-col gap-3 sm:flex-row"
-                                style="--tc-delay: 280ms;">
-                                <a href="{{ route('register') }}"
-                                    class="tc-landing-cta-primary inline-flex min-w-[9.5rem] justify-center rounded-xl bg-[#f97316] px-5 py-3 text-[15px] font-semibold text-white shadow-[0_0_24px_rgba(249,115,22,0.38)] transition hover:bg-[#ea580c]">
-                                    Try for Free
-                                </a>
-                                <a href="#workflow"
-                                    class="tc-landing-cta-secondary inline-flex min-w-[9.5rem] justify-center rounded-xl border border-white/12 bg-slate-950/28 px-5 py-3 text-[15px] font-semibold text-white/90 backdrop-blur-sm transition hover:border-white/18 hover:bg-white/10 hover:text-white">
-                                    See workflow
-                                </a>
-                            </div>
-
-                            <div class="tc-landing-motion-stage mt-8 grid max-w-xl gap-3 sm:grid-cols-3"
-                                style="--tc-delay: 360ms;">
-                                <div class="rounded-2xl border border-white/10 bg-white/[0.045] p-4 backdrop-blur">
-                                    <div class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-slate-500">Use for</div>
-                                    <div class="mt-2 text-sm font-semibold text-white">Sales</div>
-                                </div>
-                                <div class="rounded-2xl border border-white/10 bg-white/[0.045] p-4 backdrop-blur">
-                                    <div class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-slate-500">Use for</div>
-                                    <div class="mt-2 text-sm font-semibold text-white">Support</div>
-                                </div>
-                                <div class="rounded-2xl border border-white/10 bg-white/[0.045] p-4 backdrop-blur">
-                                    <div class="text-[0.65rem] font-semibold uppercase tracking-[0.22em] text-slate-500">Use for</div>
-                                    <div class="mt-2 text-sm font-semibold text-white">Maintenance</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="tc-landing-panel tc-landing-card tc-landing-demo-frame tc-landing-motion-stage p-3 sm:p-4"
-                            style="--tc-delay: 160ms;">
-                            <div class="relative overflow-hidden rounded-[1.55rem] border border-white/10 bg-slate-950/78">
-                                <div class="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-orange-300/70 to-transparent"></div>
-                                <div class="flex items-center justify-between border-b border-white/10 px-4 py-3">
-                                    <div class="flex items-center gap-2">
-                                        <span class="h-2.5 w-2.5 rounded-full bg-red-400/80"></span>
-                                        <span class="h-2.5 w-2.5 rounded-full bg-amber-300/80"></span>
-                                        <span class="h-2.5 w-2.5 rounded-full bg-emerald-300/80"></span>
-                                    </div>
-                                    <span class="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.2em] text-emerald-200">Live intake</span>
-                                </div>
-
-                                <div class="grid gap-4 p-4 md:grid-cols-[minmax(0,0.72fr)_minmax(0,1fr)] md:p-5">
-                                    <div class="tc-landing-voice-orb min-h-[19rem] rounded-[1.35rem] border border-white/10 bg-black/40 p-5">
-                                        <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-500">Assistant</div>
-                                        <div class="mt-5 flex justify-center">
-                                            <div class="tc-landing-pulse-ring relative flex h-36 w-36 items-center justify-center rounded-full border border-orange-300/20 bg-orange-400/10">
-                                                <div class="h-20 w-20 rounded-full bg-gradient-to-br from-orange-300 to-orange-600 shadow-[0_0_42px_rgba(249,115,22,0.45)]"></div>
-                                            </div>
-                                        </div>
-                                        <div class="mt-7 rounded-2xl border border-white/10 bg-white/[0.055] p-4">
-                                            <div class="text-sm font-semibold text-white">Property intake</div>
-                                            <p class="mt-2 text-sm leading-6 text-slate-300">Calm voice, short questions, no interruption.</p>
-                                        </div>
-                                    </div>
-
-                                    <div class="space-y-4">
-                                        <div class="tc-landing-step-card rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-4">
-                                            <div class="flex items-center justify-between gap-4">
-                                                <div>
-                                                    <div class="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-slate-500">Caller says</div>
-                                                    <p class="mt-2 text-sm leading-6 text-slate-200">"There is water under the kitchen sink."</p>
-                                                </div>
-                                                <span class="rounded-full bg-orange-400/15 px-3 py-1 text-xs font-semibold text-orange-200">Urgent</span>
-                                            </div>
-                                        </div>
-
-                                        <div class="tc-landing-route-line relative overflow-hidden rounded-[1.35rem] border border-white/10 bg-white/[0.045] p-4">
-                                            <div class="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-slate-500">Ticket created</div>
-                                            <h3 class="mt-3 text-xl font-semibold tracking-tight text-white">Leak under kitchen sink</h3>
-                                            <div class="mt-4 grid gap-3 sm:grid-cols-2">
-                                                <div class="rounded-2xl bg-black/30 p-3">
-                                                    <div class="text-[0.65rem] uppercase tracking-[0.2em] text-slate-500">Caller</div>
-                                                    <div class="mt-1 text-sm font-semibold text-white">+1 216 ...</div>
-                                                </div>
-                                                <div class="rounded-2xl bg-black/30 p-3">
-                                                    <div class="text-[0.65rem] uppercase tracking-[0.2em] text-slate-500">Source</div>
-                                                    <div class="mt-1 text-sm font-semibold text-white">Voice</div>
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        <div class="rounded-[1.35rem] border border-white/10 bg-white/[0.055] p-4">
-                                            <div class="flex flex-col gap-3 sm:flex-row">
-                                                <div class="flex-1 rounded-xl border border-white/10 bg-black/30 px-3 py-3 text-sm text-slate-300">Maintenance intake</div>
-                                                <a href="{{ route('register') }}"
-                                                    class="tc-landing-cta-primary rounded-xl bg-[#f97316] px-4 py-3 text-center text-sm font-semibold text-white shadow-[0_0_22px_rgba(249,115,22,0.34)]">
-                                                    Run test call
-                                                </a>
-                                            </div>
-                                            <p class="mt-3 text-xs leading-5 text-slate-500">Choose a language, call path, and assistant before going live.</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="tc-landing-motion-stage tc-landing-hero-actions mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row"
+                        style="--tc-delay: 270ms;">
+                        <a href="{{ route('register') }}"
+                            class="tc-landing-cta-primary inline-flex min-w-[10.5rem] justify-center rounded-xl bg-[#f97316] px-6 py-3 text-[15px] font-semibold text-white shadow-[0_0_24px_rgba(249,115,22,0.38)] transition hover:bg-[#ea580c] hover:shadow-[0_0_34px_rgba(249,115,22,0.54)]">
+                            Try for Free
+                        </a>
+                        <a href="#workflow"
+                            class="tc-landing-cta-secondary inline-flex min-w-[10.5rem] justify-center rounded-xl border border-white/12 bg-slate-950/24 px-6 py-3 text-[15px] font-semibold text-white/92 shadow-[0_22px_60px_-38px_rgba(15,23,42,0.9)] backdrop-blur-sm transition hover:border-white/18 hover:bg-white/10 hover:text-white">
+                            See how it works
+                        </a>
                     </div>
                 </div>
             </section>
