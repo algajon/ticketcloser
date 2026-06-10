@@ -664,7 +664,8 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertCount(1, $handoffTool['destinations']);
                 $this->assertSame('handoff_to_sales_desk', $handoffTool['function']['name']);
                 $this->assertStringContainsString('Caller phrases for this route: sales, pricing, quote', $handoffTool['function']['description']);
-                $this->assertSame(['Sales'], $handoffTool['function']['parameters']['properties']['destination']['enum']);
+                $this->assertArrayHasKey('reason', $handoffTool['function']['parameters']['properties']);
+                $this->assertArrayNotHasKey('destination', $handoffTool['function']['parameters']['properties']);
                 $this->assertSame('assistant', $handoffTool['destinations'][0]['type']);
                 $this->assertSame('asst_sales_123', $handoffTool['destinations'][0]['assistantId']);
                 $this->assertSame('userAndAssistantMessages', $handoffTool['destinations'][0]['contextEngineeringPlan']['type']);

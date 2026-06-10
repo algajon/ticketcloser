@@ -852,13 +852,12 @@ class VapiProvisioningService
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
-                            'destination' => [
+                            'reason' => [
                                 'type' => 'string',
-                                'description' => 'The exact configured route selected by the caller.',
-                                'enum' => [$label],
+                                'description' => 'Brief internal reason for the handoff.',
                             ],
                         ],
-                        'required' => ['destination'],
+                        'required' => [],
                     ],
                 ],
                 'messages' => [],
