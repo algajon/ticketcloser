@@ -439,7 +439,11 @@ class VapiWebhookTest extends TestCase
             $response->json('assistantOverrides.model.messages.0.content')
         );
         $this->assertStringContainsString(
-            'keep the first turn language-only',
+            'If no configured route label is that exact language, ask this exact next question',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'A language choice is permission to continue, not a department choice',
             $response->json('assistantOverrides.model.messages.0.content')
         );
         $this->assertStringContainsString(

@@ -678,7 +678,8 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertStringContainsString('The configured spoken routes below are the only choices this operator can offer', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('A phrase listed after "caller may say" counts as that configured route', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Route only to the exact configured choice', $payload['model']['messages'][0]['content']);
-                $this->assertStringContainsString('keep the first turn language-only', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('If no configured route label is that exact language, ask this exact next question', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('A language choice is permission to continue, not a department choice', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('handoff function: handoff_to_sales_desk', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Never answer "How can I help you?"', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Which team should I connect you with?', $payload['model']['messages'][0]['content']);
@@ -822,7 +823,8 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('assistant-speaks-first', $payload['firstMessageMode']);
                 $this->assertStringContainsString('The configured spoken routes below are the only choices this operator can offer', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Route only to the exact configured choice', $payload['model']['messages'][0]['content']);
-                $this->assertStringContainsString('keep the first turn language-only', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('If no configured route label is that exact language, ask this exact next question', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('A language choice is permission to continue, not a department choice', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('do not infer a downstream destination', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('handoff function: handoff_to_sales_desk', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Never answer "How can I help you?"', $payload['model']['messages'][0]['content']);
