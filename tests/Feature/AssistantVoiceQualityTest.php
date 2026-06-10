@@ -663,6 +663,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertNotNull($handoffTool);
                 $this->assertCount(1, $handoffTool['destinations']);
                 $this->assertSame('handoff_to_sales_desk', $handoffTool['function']['name']);
+                $this->assertStringContainsString('Caller phrases for this route: sales, pricing, quote', $handoffTool['function']['description']);
                 $this->assertSame(['Sales'], $handoffTool['function']['parameters']['properties']['destination']['enum']);
                 $this->assertSame('assistant', $handoffTool['destinations'][0]['type']);
                 $this->assertSame('asst_sales_123', $handoffTool['destinations'][0]['assistantId']);
@@ -674,10 +675,13 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertStringContainsString('SILENT HANDOFF RULES', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Vapi-only spoken routing', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('The configured spoken routes below are the only choices this operator can offer', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('A phrase listed after "caller may say" counts as that configured route', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Route only to the exact configured choice', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('keep the first turn language-only', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('handoff function: handoff_to_sales_desk', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Never answer "How can I help you?"', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Which team should I connect you with?', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Do not continue normal intake while routing is on', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('silently use the matching Vapi handoff destination', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Sales', $payload['model']['messages'][0]['content']);

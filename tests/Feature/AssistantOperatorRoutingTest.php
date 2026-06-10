@@ -140,6 +140,7 @@ class AssistantOperatorRoutingTest extends TestCase
             ->get(route('app.assistant.show', [$workspace, $operator]))
             ->assertOk()
             ->assertSee('Operator routing')
+            ->assertSee('tc-accent-control', false)
             ->assertSee('Connect callers to the right desk.')
             ->assertSee('sales, pricing')
             ->assertSee('Sales Desk')

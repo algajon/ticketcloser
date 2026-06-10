@@ -653,13 +653,17 @@ PROMPT);
 
             $label = trim((string) ($route['label'] ?? $destinationAssistant->name));
             $label = $label !== '' ? $label : $destinationAssistant->name;
+            $keywords = trim((string) ($route['keywords'] ?? ''));
+            $phraseHint = $keywords !== ''
+                ? " Caller phrases for this route: {$keywords}."
+                : '';
             $functionName = $this->runtimeOperatorHandoffFunctionName($label, $destinationAssistant->name);
 
             $tools[] = [
                 'type' => 'handoff',
                 'function' => [
                     'name' => $functionName,
-                    'description' => "Silently hand off the call to {$label} ({$destinationAssistant->name}). Use this only when the caller explicitly says {$label} or one of its configured phrases.",
+                    'description' => "Silently hand off the call to {$label} ({$destinationAssistant->name}). Use this when the caller says {$label} or any configured phrase for this route.{$phraseHint}",
                     'parameters' => [
                         'type' => 'object',
                         'properties' => [
@@ -725,6 +729,7 @@ PROMPT);
         if ($intro === '') {
             $intro = "Thanks for calling {$workspace->name}. Tell me which team or language you need, and I will connect you.";
         }
+        $fallback = $this->runtimeOperatorFallbackMessage($assistant);
 
         return trim(<<<PROMPT
 
@@ -733,15 +738,16 @@ This assistant can act as a spoken operator before normal intake.
 - Start by using this operator routing line when it fits the call: "{$intro}"
 - The configured spoken routes below are the only choices this operator can offer. Do not mention or offer departments, languages, or queues that are not configured on this assistant.
 - This is Vapi-only spoken routing. Do not tell callers they must press keypad buttons. If a caller says "one", "two", "English", "Spanish", "German", "sales", "support", or another configured phrase out loud, treat that as their spoken route choice.
+- A phrase listed after "caller may say" counts as that configured route, even if the phrase does not exactly match the route label.
 - Route only to the exact configured choice the caller actually said. A language choice such as "English" may only route to the English destination; it must never be treated as a hidden choice for sales, tech support, or property maintenance.
 - If this operator's opening line asks for a language first, keep the first turn language-only. Do not list or infer department choices until the caller has been handed to the configured language router.
 - When the caller says a configured route, your next action must be the matching handoff function listed below. Do not speak another sentence first.
 - Never answer "How can I help you?" while live operator routes are available. If a route matches, call the matching handoff function instead of normal intake.
-- Ask one short clarification if the route is unclear.
+- Ask one short clarification if the route is unclear: "{$fallback}"
 - If this assistant was reached after the caller chose only a language or parent menu, do not infer a downstream destination from that prior choice. Ask which configured route they need first.
 - When you are confident about the route and the route is live, silently use the matching Vapi handoff destination for that route. Do not acknowledge the route choice, do not say "connecting", and do not create a ticket before handoff unless no matching live destination exists.
 - Handoffs are handled in the background. Do not tell the caller the call is ending, and do not say goodbye before or after a handoff.
-- If no live destination matches, say the fallback message naturally and continue helping with normal intake.
+- If no live destination matches, say this fallback message naturally and wait for a route choice: "{$fallback}". Do not continue normal intake while routing is on.
 
 Configured spoken routes:
 {$routeLines}

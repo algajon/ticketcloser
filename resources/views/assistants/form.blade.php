@@ -201,7 +201,7 @@
                         </div>
                         <label class="inline-flex cursor-pointer items-center gap-3 rounded-full border border-slate-200 bg-white px-3 py-2 shadow-sm">
                             <input type="hidden" name="intake_params[operator][enabled]" value="0">
-                            <input type="checkbox" name="intake_params[operator][enabled]" value="1" class="h-4 w-4 rounded border-slate-300 text-orange-500 focus:ring-orange-500" x-model="operatorEnabled" @checked($operatorEnabledValue)>
+                            <input type="checkbox" name="intake_params[operator][enabled]" value="1" class="tc-accent-control h-4 w-4 rounded border-slate-300 focus:ring-[rgb(var(--tc-primary))]" x-model="operatorEnabled" @checked($operatorEnabledValue)>
                             <span class="text-sm font-semibold text-slate-900" x-text="operatorEnabled ? 'Routing on' : 'Routing off'">{{ $operatorEnabledValue ? 'Routing on' : 'Routing off' }}</span>
                         </label>
                     </div>

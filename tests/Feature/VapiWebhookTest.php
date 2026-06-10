@@ -411,6 +411,7 @@ class VapiWebhookTest extends TestCase
         $this->assertNotNull($handoffTool);
         $this->assertCount(1, $handoffTool['destinations']);
         $this->assertSame('handoff_to_sales_desk', $handoffTool['function']['name']);
+        $this->assertStringContainsString('Caller phrases for this route: sales, pricing, quote', $handoffTool['function']['description']);
         $this->assertSame(['Sales'], $handoffTool['function']['parameters']['properties']['destination']['enum']);
         $this->assertSame('ast-sales-123', $handoffTool['destinations'][0]['assistantId']);
         $this->assertSame('userAndAssistantMessages', $handoffTool['destinations'][0]['contextEngineeringPlan']['type']);
@@ -429,6 +430,10 @@ class VapiWebhookTest extends TestCase
             $response->json('assistantOverrides.model.messages.0.content')
         );
         $this->assertStringContainsString(
+            'A phrase listed after "caller may say" counts as that configured route',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
             'Route only to the exact configured choice',
             $response->json('assistantOverrides.model.messages.0.content')
         );
@@ -442,6 +447,14 @@ class VapiWebhookTest extends TestCase
         );
         $this->assertStringContainsString(
             'Never answer "How can I help you?"',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'Which team should I connect you with?',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'Do not continue normal intake while routing is on',
             $response->json('assistantOverrides.model.messages.0.content')
         );
         $this->assertStringContainsString(
