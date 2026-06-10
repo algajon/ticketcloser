@@ -14,9 +14,6 @@
     <link rel="icon" href="{{ asset('favicon.svg') }}" type="image/svg+xml">
     <link rel="preconnect" href="https://fonts.bunny.net">
     <link href="https://fonts.bunny.net/css?family=inter:400,500,600,700,800&display=swap" rel="stylesheet" />
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
     @include('partials.analytics.google-tag')
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 </head>
@@ -268,66 +265,27 @@
                 </div>
             </section>
 
-            <!-- FOOTER -->
-            <footer class="px-6 lg:px-12 py-16 border-t" style="--sdv-border-soft: rgba(255, 255, 255, .08); --sdv-muted: rgba(255, 255, 255, .65); --sdv-muted-2: rgba(255, 255, 255, .45); border-color:var(--sdv-border-soft)">
-                <div class="grid md:grid-cols-4 gap-10 max-w-6xl mx-auto">
-
-                    <div class="md:col-span-1">
-                        <div class="flex items-center gap-3 tracking-wide">
-                            <div class="sdv-logo-icon">
-                                <span style="color:#fff">>_</span>
-                            </div>
-                            <span class="text-sm font-medium font-logo">Scaffolding</span>
-                        </div>
-                        <p class="mt-4 text-sm" style="color:var(--sdv-muted)">
-                            Websites and web applications built with clarity and reliability.
-                        </p>
-                    </div>
-
-                    <div>
-                        <div class="text-xs uppercase tracking-[.25em]" style="color:var(--sdv-muted-2)">Navigation
-                        </div>
-                        <ul class="mt-4 space-y-2 text-sm" style="color:var(--sdv-muted)">
-                            <li><a href="#home" class="hover:text-white transition-colors">Home</a></li>
-                            <li><a href="#services" class="hover:text-white transition-colors">Services</a></li>
-                            <li><a href="#work" class="hover:text-white transition-colors">Work</a></li>
-                            <li><a href="#about" class="hover:text-white transition-colors">About</a></li>
-                            <li><a href="#pricing" class="hover:text-white transition-colors">Pricing</a></li>
-                        </ul>
-                    </div>
-
-                    <div>
-                        <div class="text-xs uppercase tracking-[.25em]" style="color:var(--sdv-muted-2)">Services</div>
-                        <ul class="mt-4 space-y-2 text-sm" style="color:var(--sdv-muted)">
-                            <li><a href="#services" class="hover:text-white transition-colors">Web Development</a></li>
-                            <li><a href="#services" class="hover:text-white transition-colors">E-Commerce</a></li>
-                            <li><a href="#services" class="hover:text-white transition-colors">API Development</a></li>
-                            <li><a href="#services" class="hover:text-white transition-colors">Cloud & DevOps</a></li>
-                        </ul>
-                    </div>
-
-                    <div>
-                        <div class="text-xs uppercase tracking-[.25em]" style="color:var(--sdv-muted-2)">Get Started
-                        </div>
-                        <ul class="mt-4 space-y-2 text-sm" style="color:var(--sdv-muted)">
-                            <li><a href="https://calendly.com/joninila/jon-nila-head-of-scaffolding-ai" target="_blank"
-                                    rel="noopener" class="hover:text-white transition-colors">Book a Call</a></li>
-                            <li><a href="#contact" class="hover:text-white transition-colors">Contact</a></li>
-                        </ul>
-                    </div>
-                </div>
-
-                <div class="mt-12 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs max-w-6xl mx-auto"
-                    style="color:var(--sdv-muted-2)">
-                    <span>&copy; {{ date('Y') }} Scaffolding. All rights reserved.</span>
-                    <div class="flex items-center gap-5">
-                        <a href="#" class="hover:text-white transition-colors">Privacy</a>
-                        <a href="#" class="hover:text-white transition-colors">Terms</a>
-                    </div>
-                </div>
-            </footer>
         </main>
     </div>
+<!-- Scaffolding credit banner -->
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&display=swap');
+.sdv-credit{position:relative;z-index:50;background:#000;border-top:1px solid rgba(255,255,255,.10);padding:18px 20px;display:flex;align-items:center;justify-content:center;width:100%;box-sizing:border-box;}
+.sdv-credit a{display:inline-flex;align-items:center;gap:11px;text-decoration:none;opacity:.72;transition:opacity .2s ease;flex-wrap:wrap;justify-content:center;}
+.sdv-credit a:hover{opacity:1;}
+.sdv-credit__icon{width:32px;height:32px;flex:none;background:#000;border:1px solid rgba(255,255,255,.16);border-radius:9px;display:inline-flex;align-items:center;justify-content:center;font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Courier New",monospace;font-size:13px;font-weight:700;color:#fff;}
+.sdv-credit__mark{font-family:"Orbitron","Space Grotesk",system-ui,sans-serif;text-transform:uppercase;letter-spacing:.14em;font-size:12.5px;font-weight:600;color:#fff;}
+.sdv-credit__bar{width:1px;height:15px;background:rgba(255,255,255,.18);}
+.sdv-credit__sub{font-family:Inter,system-ui,-apple-system,Segoe UI,sans-serif;font-size:11.5px;letter-spacing:.01em;color:rgba(255,255,255,.46);}
+</style>
+<div class="sdv-credit">
+<a href="https://scaffoldingdev.com" target="_blank" rel="noopener noreferrer" aria-label="Designed and developed by Scaffolding">
+<span class="sdv-credit__icon">&gt;_</span>
+<span class="sdv-credit__mark">Scaffolding</span>
+<span class="sdv-credit__bar"></span>
+<span class="sdv-credit__sub">Designed &amp; developed by scaffolding.ai</span>
+</a>
+</div>
 </body>
 
 </html>
