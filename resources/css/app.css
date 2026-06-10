@@ -1100,6 +1100,26 @@ body[data-app-accent='purple'] {
             inset 0 1px 0 rgba(255, 255, 255, 0.06);
     }
 
+    .font-logo {
+        font-family: "Orbitron", "Space Grotesk", system-ui, sans-serif;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+    }
+
+    .sdv-logo-icon {
+        width: 36px;
+        height: 36px;
+        background: #000;
+        border: 1px solid rgba(255, 255, 255, .15);
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+        font-size: 14px;
+        font-weight: 700;
+    }
+
     .tc-shell-gradient {
         background:
             radial-gradient(circle at top, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0)),
