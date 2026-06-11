@@ -53,8 +53,8 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('deepgram', $payload['transcriber']['provider']);
                 $this->assertSame('nova-3-general', $payload['transcriber']['model']);
                 $this->assertTrue($payload['transcriber']['numerals']);
-                $this->assertSame(0.95, $payload['startSpeakingPlan']['waitSeconds']);
-                $this->assertSame(4, $payload['stopSpeakingPlan']['numWords']);
+                $this->assertSame(0.75, $payload['startSpeakingPlan']['waitSeconds']);
+                $this->assertSame(3, $payload['stopSpeakingPlan']['numWords']);
                 $this->assertSame(1.45, $payload['stopSpeakingPlan']['backoffSeconds']);
 
                 return true;
@@ -88,10 +88,10 @@ class AssistantVoiceQualityTest extends TestCase
         $client->expects($this->once())
             ->method('createAssistant')
             ->with($this->callback(function (array $payload): bool {
-                $this->assertSame(0.8, $payload['startSpeakingPlan']['waitSeconds']);
-                $this->assertSame(4, $payload['stopSpeakingPlan']['numWords']);
-                $this->assertSame(0.46, $payload['stopSpeakingPlan']['voiceSeconds']);
-                $this->assertSame(1.25, $payload['stopSpeakingPlan']['backoffSeconds']);
+                $this->assertSame(0.5, $payload['startSpeakingPlan']['waitSeconds']);
+                $this->assertSame(1, $payload['stopSpeakingPlan']['numWords']);
+                $this->assertSame(0.2, $payload['stopSpeakingPlan']['voiceSeconds']);
+                $this->assertSame(1.0, $payload['stopSpeakingPlan']['backoffSeconds']);
 
                 return true;
             }))
@@ -109,9 +109,9 @@ class AssistantVoiceQualityTest extends TestCase
         ]);
 
         $assistant->refresh();
-        $this->assertSame(0.8, $assistant->override_params['waitSeconds']);
-        $this->assertSame(4, $assistant->override_params['numWords']);
-        $this->assertSame(1.25, $assistant->override_params['backoffSeconds']);
+        $this->assertSame(0.5, $assistant->override_params['waitSeconds']);
+        $this->assertSame(1, $assistant->override_params['numWords']);
+        $this->assertSame(1, $assistant->override_params['backoffSeconds']);
     }
 
     public function test_realtime_model_uses_compatible_openai_voice_and_skips_transcriber(): void
@@ -148,9 +148,9 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame(0.6, $payload['model']['temperature']);
                 $this->assertSame(380, $payload['model']['maxTokens']);
                 $this->assertSame('Thanks for calling Northline Support. How can I help today?{{ knownCallerSuffix | default: "" }}', $payload['firstMessage']);
-                $this->assertSame(0.95, $payload['startSpeakingPlan']['waitSeconds']);
-                $this->assertSame(4, $payload['stopSpeakingPlan']['numWords']);
-                $this->assertSame(0.5, $payload['stopSpeakingPlan']['voiceSeconds']);
+                $this->assertSame(0.75, $payload['startSpeakingPlan']['waitSeconds']);
+                $this->assertSame(3, $payload['stopSpeakingPlan']['numWords']);
+                $this->assertSame(0.3, $payload['stopSpeakingPlan']['voiceSeconds']);
                 $this->assertSame(1.45, $payload['stopSpeakingPlan']['backoffSeconds']);
 
                 return true;
@@ -196,7 +196,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('gpt-4o-mini', $payload['model']['model']);
                 $this->assertSame('vapi', $payload['voice']['provider']);
                 $this->assertSame('Emma', $payload['voice']['voiceId']);
-                $this->assertSame(1.02, $payload['voice']['speed']);
+                $this->assertSame(1.0, $payload['voice']['speed']);
 
                 return true;
             }))

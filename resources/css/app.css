@@ -1227,6 +1227,20 @@ body[data-app-accent='purple'] {
 
     .tc-accent-control {
         accent-color: rgb(var(--tc-primary));
+        color: rgb(var(--tc-primary));
+        --tw-ring-color: rgb(var(--tc-primary) / 0.22);
+    }
+
+    input[type='checkbox'].tc-accent-control:checked,
+    input[type='radio'].tc-accent-control:checked {
+        border-color: rgb(var(--tc-primary));
+        background-color: rgb(var(--tc-primary));
+    }
+
+    input[type='checkbox'].tc-accent-control:focus,
+    input[type='radio'].tc-accent-control:focus {
+        border-color: rgb(var(--tc-primary));
+        box-shadow: 0 0 0 3px rgb(var(--tc-primary) / 0.18);
     }
 
     .tc-accent-icon {

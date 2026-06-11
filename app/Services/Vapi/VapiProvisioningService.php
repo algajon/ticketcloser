@@ -13,17 +13,17 @@ use Illuminate\Support\Facades\DB;
 
 class VapiProvisioningService
 {
-    private const HUMANE_DEFAULT_WAIT_SECONDS = 0.9;
-    private const HUMANE_MIN_WAIT_SECONDS = 0.8;
+    private const HUMANE_DEFAULT_WAIT_SECONDS = 0.7;
+    private const HUMANE_MIN_WAIT_SECONDS = 0.5;
     private const HUMANE_MAX_WAIT_SECONDS = 1.5;
-    private const HUMANE_DEFAULT_INTERRUPT_WORDS = 4;
-    private const HUMANE_MIN_INTERRUPT_WORDS = 4;
+    private const HUMANE_DEFAULT_INTERRUPT_WORDS = 2;
+    private const HUMANE_MIN_INTERRUPT_WORDS = 1;
     private const HUMANE_MAX_INTERRUPT_WORDS = 8;
-    private const HUMANE_DEFAULT_VOICE_SECONDS = 0.48;
-    private const HUMANE_MIN_VOICE_SECONDS = 0.44;
-    private const HUMANE_MAX_VOICE_SECONDS = 0.8;
-    private const HUMANE_DEFAULT_BACKOFF_SECONDS = 1.35;
-    private const HUMANE_MIN_BACKOFF_SECONDS = 1.25;
+    private const HUMANE_DEFAULT_VOICE_SECONDS = 0.25;
+    private const HUMANE_MIN_VOICE_SECONDS = 0.15;
+    private const HUMANE_MAX_VOICE_SECONDS = 0.5;
+    private const HUMANE_DEFAULT_BACKOFF_SECONDS = 1.2;
+    private const HUMANE_MIN_BACKOFF_SECONDS = 1.0;
     private const HUMANE_MAX_BACKOFF_SECONDS = 2.5;
     private const HUMANE_DEFAULT_VOICE_SPEED = 1.0;
     private const HUMANE_MIN_VOICE_SPEED = 0.94;
@@ -1194,7 +1194,7 @@ PROMPT);
             $startSpeakingPlan['smartEndpointingPlan'] = str_starts_with($languageCode, 'en')
                 ? [
                     'provider' => 'livekit',
-                    'waitFunction' => '360 + 3800 * x',
+                    'waitFunction' => '340 + 3600 * x',
                 ]
                 : [
                     'provider' => 'vapi',
@@ -1209,8 +1209,8 @@ PROMPT);
         $stopSpeakingPlan['numWords'] = (int) ($stopSpeakingPlan['numWords'] ?? self::HUMANE_DEFAULT_INTERRUPT_WORDS);
         $stopSpeakingPlan['voiceSeconds'] = (float) ($stopSpeakingPlan['voiceSeconds'] ?? self::HUMANE_DEFAULT_VOICE_SECONDS);
         $stopSpeakingPlan['backoffSeconds'] = (float) ($stopSpeakingPlan['backoffSeconds'] ?? self::HUMANE_DEFAULT_BACKOFF_SECONDS);
-        $stopSpeakingPlan['acknowledgementPhrases'] = $stopSpeakingPlan['acknowledgementPhrases'] ?? ['okay', 'got it', 'right', 'understood'];
-        $stopSpeakingPlan['interruptionPhrases'] = $stopSpeakingPlan['interruptionPhrases'] ?? ['stop', 'hold on', 'wait', 'one second'];
+        $stopSpeakingPlan['acknowledgementPhrases'] = $stopSpeakingPlan['acknowledgementPhrases'] ?? ['okay', 'got it', 'right', 'yeah', 'mm-hmm', 'uh-huh', 'understood'];
+        $stopSpeakingPlan['interruptionPhrases'] = $stopSpeakingPlan['interruptionPhrases'] ?? ['stop', 'hold on', 'wait', 'actually', 'sorry', 'excuse me', 'one second'];
 
         return $stopSpeakingPlan;
     }
@@ -1315,9 +1315,9 @@ PROMPT);
 
             return match ($presetKey) {
                 'steady_operator' => ['provider' => 'vapi', 'voiceId' => 'Savannah', 'speed' => 0.98],
-                'confident_closer' => ['provider' => 'vapi', 'voiceId' => 'Elliot', 'speed' => 1.02],
+                'confident_closer' => ['provider' => 'vapi', 'voiceId' => 'Elliot', 'speed' => 1.0],
                 'premium_concierge' => ['provider' => 'vapi', 'voiceId' => 'Clara', 'speed' => 0.98],
-                default => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.02],
+                default => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.0],
             };
         }
 
@@ -1326,7 +1326,7 @@ PROMPT);
                 'premium_concierge' => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.0],
                 'bright_guide' => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.0],
                 'steady_operator' => ['provider' => 'openai', 'voiceId' => 'alloy', 'speed' => 0.98],
-                'confident_closer' => ['provider' => 'openai', 'voiceId' => 'alloy', 'speed' => 1.02],
+                'confident_closer' => ['provider' => 'openai', 'voiceId' => 'alloy', 'speed' => 1.0],
                 default => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.0],
             };
         }
@@ -1336,9 +1336,9 @@ PROMPT);
         }
 
         return match ($presetKey) {
-            'bright_guide' => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.02],
+            'bright_guide' => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.0],
             'steady_operator' => ['provider' => 'vapi', 'voiceId' => 'Savannah', 'speed' => 0.98],
-            'confident_closer' => ['provider' => 'vapi', 'voiceId' => 'Elliot', 'speed' => 1.02],
+            'confident_closer' => ['provider' => 'vapi', 'voiceId' => 'Elliot', 'speed' => 1.0],
             'premium_concierge' => ['provider' => 'vapi', 'voiceId' => 'Clara', 'speed' => 0.98],
             default => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.0],
         };

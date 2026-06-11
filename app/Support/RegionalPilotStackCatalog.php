@@ -631,7 +631,7 @@ class RegionalPilotStackCatalog
                     'fallback_language' => 'en-GB',
                 ],
                 'standard_voices' => [
-                    'default' => ['provider' => 'azure', 'voiceId' => 'en-GB-SoniaNeural', 'name' => 'Sonia Neural', 'speed' => 1.02],
+                    'default' => ['provider' => 'azure', 'voiceId' => 'en-GB-SoniaNeural', 'name' => 'Sonia Neural', 'speed' => 1.0],
                     'operator' => ['provider' => 'azure', 'voiceId' => 'en-GB-RyanNeural', 'name' => 'Ryan Neural', 'speed' => 1.0],
                 ],
             ],
@@ -646,7 +646,7 @@ class RegionalPilotStackCatalog
                 ],
                 'standard_voices' => [
                     'default' => ['provider' => 'azure', 'voiceId' => 'ar-AE-FatimaNeural', 'name' => 'Fatima Neural', 'speed' => 1.0],
-                    'operator' => ['provider' => 'azure', 'voiceId' => 'ar-AE-HamdanNeural', 'name' => 'Hamdan Neural', 'speed' => 1.04],
+                    'operator' => ['provider' => 'azure', 'voiceId' => 'ar-AE-HamdanNeural', 'name' => 'Hamdan Neural', 'speed' => 1.0],
                 ],
             ],
             'es-ES' => [
@@ -659,7 +659,7 @@ class RegionalPilotStackCatalog
                     'fallback_language' => 'es-ES',
                 ],
                 'standard_voices' => [
-                    'default' => ['provider' => 'azure', 'voiceId' => 'es-ES-ElviraNeural', 'name' => 'Elvira Neural', 'speed' => 1.02],
+                    'default' => ['provider' => 'azure', 'voiceId' => 'es-ES-ElviraNeural', 'name' => 'Elvira Neural', 'speed' => 1.0],
                     'operator' => ['provider' => 'azure', 'voiceId' => 'es-ES-AlvaroNeural', 'name' => 'Alvaro Neural', 'speed' => 1.0],
                 ],
             ],
@@ -716,7 +716,7 @@ class RegionalPilotStackCatalog
                 ],
                 'standard_voices' => [
                     'default' => ['provider' => 'azure', 'voiceId' => 'hi-IN-SwaraNeural', 'name' => 'Swara Neural', 'speed' => 1.0],
-                    'operator' => ['provider' => 'azure', 'voiceId' => 'hi-IN-MadhurNeural', 'name' => 'Madhur Neural', 'speed' => 1.04],
+                    'operator' => ['provider' => 'azure', 'voiceId' => 'hi-IN-MadhurNeural', 'name' => 'Madhur Neural', 'speed' => 1.0],
                 ],
             ],
             'bn-BD' => [
@@ -730,7 +730,7 @@ class RegionalPilotStackCatalog
                 ],
                 'standard_voices' => [
                     'default' => ['provider' => 'azure', 'voiceId' => 'bn-BD-NabanitaNeural', 'name' => 'Nabanita Neural', 'speed' => 1.0],
-                    'operator' => ['provider' => 'azure', 'voiceId' => 'bn-BD-PradeepNeural', 'name' => 'Pradeep Neural', 'speed' => 1.03],
+                    'operator' => ['provider' => 'azure', 'voiceId' => 'bn-BD-PradeepNeural', 'name' => 'Pradeep Neural', 'speed' => 1.0],
                 ],
             ],
             'zh-CN' => [
@@ -743,7 +743,7 @@ class RegionalPilotStackCatalog
                     'fallback_language' => 'zh-CN',
                 ],
                 'standard_voices' => [
-                    'default' => ['provider' => 'azure', 'voiceId' => 'zh-CN-XiaoxiaoMultilingualNeural', 'name' => 'Xiaoxiao Multilingual Neural', 'speed' => 1.02],
+                    'default' => ['provider' => 'azure', 'voiceId' => 'zh-CN-XiaoxiaoMultilingualNeural', 'name' => 'Xiaoxiao Multilingual Neural', 'speed' => 1.0],
                     'operator' => ['provider' => 'azure', 'voiceId' => 'zh-CN-YunfanMultilingualNeural', 'name' => 'Yunfan Multilingual Neural', 'speed' => 1.0],
                 ],
             ],
@@ -758,7 +758,7 @@ class RegionalPilotStackCatalog
                 ],
                 'standard_voices' => [
                     'default' => ['provider' => 'azure', 'voiceId' => 'pt-BR-FranciscaNeural', 'name' => 'Francisca Neural', 'speed' => 1.0],
-                    'operator' => ['provider' => 'azure', 'voiceId' => 'pt-BR-AntonioNeural', 'name' => 'Antonio Neural', 'speed' => 1.04],
+                    'operator' => ['provider' => 'azure', 'voiceId' => 'pt-BR-AntonioNeural', 'name' => 'Antonio Neural', 'speed' => 1.0],
                 ],
             ],
             'ru-RU' => [
@@ -772,7 +772,7 @@ class RegionalPilotStackCatalog
                 ],
                 'standard_voices' => [
                     'default' => ['provider' => 'azure', 'voiceId' => 'ru-RU-DariyaNeural', 'name' => 'Dariya Neural', 'speed' => 1.0],
-                    'operator' => ['provider' => 'azure', 'voiceId' => 'ru-RU-DmitryNeural', 'name' => 'Dmitry Neural', 'speed' => 1.03],
+                    'operator' => ['provider' => 'azure', 'voiceId' => 'ru-RU-DmitryNeural', 'name' => 'Dmitry Neural', 'speed' => 1.0],
                 ],
             ],
             'ur-PK' => [
@@ -785,8 +785,8 @@ class RegionalPilotStackCatalog
                     'fallback_language' => 'ur-PK',
                 ],
                 'standard_voices' => [
-                    'default' => ['provider' => 'azure', 'voiceId' => 'ur-PK-UzmaNeural', 'name' => 'Uzma Neural', 'speed' => 1.04],
-                    'operator' => ['provider' => 'azure', 'voiceId' => 'ur-PK-AsadNeural', 'name' => 'Asad Neural', 'speed' => 1.02],
+                    'default' => ['provider' => 'azure', 'voiceId' => 'ur-PK-UzmaNeural', 'name' => 'Uzma Neural', 'speed' => 1.0],
+                    'operator' => ['provider' => 'azure', 'voiceId' => 'ur-PK-AsadNeural', 'name' => 'Asad Neural', 'speed' => 1.0],
                 ],
             ],
             'id-ID' => [
@@ -800,7 +800,7 @@ class RegionalPilotStackCatalog
                 ],
                 'standard_voices' => [
                     'default' => ['provider' => 'azure', 'voiceId' => 'id-ID-GadisNeural', 'name' => 'Gadis Neural', 'speed' => 1.0],
-                    'operator' => ['provider' => 'azure', 'voiceId' => 'id-ID-ArdiNeural', 'name' => 'Ardi Neural', 'speed' => 1.03],
+                    'operator' => ['provider' => 'azure', 'voiceId' => 'id-ID-ArdiNeural', 'name' => 'Ardi Neural', 'speed' => 1.0],
                 ],
             ],
             'ja-JP' => [
@@ -813,7 +813,7 @@ class RegionalPilotStackCatalog
                     'fallback_language' => 'ja-JP',
                 ],
                 'standard_voices' => [
-                    'default' => ['provider' => 'azure', 'voiceId' => 'ja-JP-NanamiNeural', 'name' => 'Nanami Neural', 'speed' => 1.03],
+                    'default' => ['provider' => 'azure', 'voiceId' => 'ja-JP-NanamiNeural', 'name' => 'Nanami Neural', 'speed' => 1.0],
                     'operator' => ['provider' => 'azure', 'voiceId' => 'ja-JP-KeitaNeural', 'name' => 'Keita Neural', 'speed' => 1.0],
                 ],
             ],
@@ -827,8 +827,8 @@ class RegionalPilotStackCatalog
                     'fallback_language' => 'ko-KR',
                 ],
                 'standard_voices' => [
-                    'default' => ['provider' => 'azure', 'voiceId' => 'ko-KR-SunHiNeural', 'name' => 'SunHi Neural', 'speed' => 1.04],
-                    'operator' => ['provider' => 'azure', 'voiceId' => 'ko-KR-InJoonNeural', 'name' => 'InJoon Neural', 'speed' => 1.01],
+                    'default' => ['provider' => 'azure', 'voiceId' => 'ko-KR-SunHiNeural', 'name' => 'SunHi Neural', 'speed' => 1.0],
+                    'operator' => ['provider' => 'azure', 'voiceId' => 'ko-KR-InJoonNeural', 'name' => 'InJoon Neural', 'speed' => 1.0],
                 ],
             ],
         ];
