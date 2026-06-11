@@ -157,17 +157,17 @@
                 'provider' => $provider,
                 'language' => $v['language'] ?? $v['accent'] ?? '',
                 'role' => $v['role'] ?? 'default',
-                'costLabel' => match ($provider) {
-                    'vapi' => 'TTS cost: lower',
-                    'openai' => 'TTS cost: premium',
-                    'azure' => 'TTS cost: standard',
-                    default => 'Voice cost varies',
+                'priceMetric' => match ($provider) {
+                    'vapi' => '$0.05/min Vapi + provider at cost',
+                    'openai' => '$15.00 per 1M chars',
+                    'azure' => '$15.00 per 1M chars',
+                    default => 'Provider pricing varies',
                 },
-                'qualityLabel' => match ($provider) {
-                    'vapi' => 'Human Vapi V2 voice',
-                    'openai' => 'Most human TTS option',
-                    'azure' => 'Natural multilingual voice',
-                    default => 'Voice quality varies',
+                'priceNote' => match ($provider) {
+                    'vapi' => 'Vapi hosting is separate from pass-through model and voice provider charges.',
+                    'openai' => 'OpenAI TTS-1 rate shown; HD voices cost more.',
+                    'azure' => 'Azure neural TTS rate shown; HD/custom voices may cost more.',
+                    default => '',
                 },
             ];
         })->values()->all();
@@ -318,16 +318,10 @@
                                 @keydown.space.prevent="chooseModel(option)">
                                 <div class="flex flex-wrap items-center gap-2">
                                     <div class="text-sm font-semibold text-slate-950" x-text="option.label"></div>
-                                    <span class="rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em]"
-                                        :class="modelCostBadgeClass(option)"
-                                        x-text="option.costLabel"></span>
-                                    <span class="rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em] text-slate-500"
-                                        x-text="option.qualityLabel"></span>
                                     <span x-show="option.locked" class="tc-badge tc-accent-badge">Upgrade</span>
                                 </div>
                                 <div class="mt-2 text-base font-semibold text-slate-950" x-text="option.headline"></div>
-                                <div class="mt-1 text-sm font-medium text-slate-700" x-text="option.value"></div>
-                                <p class="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500" x-text="option.costDetail"></p>
+                                <div class="mt-1 text-sm font-semibold text-slate-700" x-text="option.priceMetric"></div>
                                 <p class="mt-3 text-sm leading-6 text-slate-600" x-text="option.description"></p>
                                 <p x-show="option.locked" class="mt-3 text-xs font-medium uppercase tracking-[0.12em] tc-accent-text-strong">Unlock on a paid plan</p>
                             </button>
@@ -351,16 +345,13 @@
                                     <div class="min-w-0">
                                         <div class="text-sm font-semibold text-slate-950" x-text="provider.label"></div>
                                         <p class="mt-1 text-xs leading-5 text-slate-500" x-text="provider.help"></p>
+                                        <p class="mt-1 text-xs font-semibold text-slate-700" x-text="provider.priceMetric"></p>
                                     </div>
-                                    <div class="shrink-0 space-y-2 text-right">
+                                    <div class="shrink-0 text-right">
                                         <span
                                             class="inline-flex rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em]"
                                             :class="provider.locked ? 'border-slate-200 bg-slate-100 text-slate-500' : (selectedProvider === provider.value ? 'tc-accent-badge' : 'border-slate-200 bg-white text-slate-500')"
                                             x-text="provider.locked ? 'Locked' : (selectedProvider === provider.value ? 'Selected' : 'Available')"></span>
-                                        <span
-                                            class="block rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em]"
-                                            :class="providerCostBadgeClass(provider)"
-                                            x-text="provider.costLabel"></span>
                                     </div>
                                 </button>
                             </template>
@@ -385,7 +376,7 @@
                                 <option :value="voice.id" x-text="voiceOptionLabel(voice)"></option>
                             </template>
                         </select>
-                        <p class="mt-2 tc-help" x-show="selectedVoiceId" x-text="selectedVoiceCostLabel + ' / ' + selectedVoiceQualityLabel"></p>
+                        <p class="mt-2 tc-help" x-show="selectedVoiceId" x-text="selectedVoicePriceMetric"></p>
                     </div>
                 </div>
 
@@ -397,10 +388,10 @@
                         <span class="tc-accent-text-soft whitespace-nowrap">/</span>
                         <span class="whitespace-nowrap" x-text="languageLabel(selectedLanguageCode)"></span>
                         <span class="tc-accent-text-soft whitespace-nowrap">/</span>
-                        <span class="whitespace-nowrap" x-text="selectedVoiceCostLabel"></span>
+                        <span class="whitespace-nowrap" x-text="selectedVoicePriceMetric"></span>
                     </div>
-                    <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-text="selectedVoiceQualityLabel"></p>
-                    <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedModel.voiceMode === 'realtime'">Realtime voice uses native speech-to-speech audio pricing. It is the highest-cost, most fluid voice path.</p>
+                    <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedVoicePriceNote" x-text="selectedVoicePriceNote"></p>
+                    <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedModel.voiceMode === 'realtime'">Realtime audio uses token pricing; text tokens can also be billed during the call.</p>
                 </div>
 
                 <div class="mt-5 rounded-[1.25rem] border border-slate-200 bg-slate-50/85 p-4">
@@ -795,14 +786,14 @@
                 azure: 'Azure neural',
             };
             const providerHelp = {
-                vapi: 'Best low-cost human voice path. Uses Vapi Voice V2 when synced.',
-                openai: 'Most human standard TTS voices without requiring realtime.',
-                azure: 'Natural multilingual voices with broad language coverage.',
+                vapi: 'Curated voices through Vapi.',
+                openai: 'OpenAI TTS voices.',
+                azure: 'Azure multilingual neural voices.',
             };
-            const providerCostLabels = {
-                vapi: 'TTS: lower',
-                openai: 'TTS: premium',
-                azure: 'TTS: standard',
+            const providerPriceMetrics = {
+                vapi: '$0.05/min Vapi + provider at cost',
+                openai: '$15.00 per 1M chars',
+                azure: '$15.00 per 1M chars',
             };
             const freeWorkspace = @js($workspaceIsFree);
 
@@ -913,7 +904,7 @@
                         value: provider,
                         label: this.providerLabel(provider),
                         help: providerHelp[provider] || 'Voice provider',
-                        costLabel: providerCostLabels[provider] || 'Cost varies',
+                        priceMetric: providerPriceMetrics[provider] || 'Provider pricing varies',
                         locked: !this.providerAllowedOnFree(provider),
                     }));
                 },
@@ -982,32 +973,6 @@
                     }
 
                     return 'border-slate-200 bg-white hover:border-slate-300 hover:bg-slate-50/80';
-                },
-                modelCostBadgeClass(option) {
-                    if (this.isModelLocked(option)) {
-                        return 'tc-accent-badge';
-                    }
-
-                    if (this.selectedModelName === option.value) {
-                        return 'tc-accent-badge-strong';
-                    }
-
-                    return 'border-slate-200 bg-slate-50 text-slate-500';
-                },
-                providerCostBadgeClass(provider) {
-                    if (provider.locked) {
-                        return 'border-slate-200 bg-slate-100 text-slate-500';
-                    }
-
-                    if (provider.value === 'openai') {
-                        return 'border-amber-200 bg-amber-50 text-amber-700';
-                    }
-
-                    if (provider.value === 'vapi') {
-                        return 'border-emerald-200 bg-emerald-50 text-emerald-700';
-                    }
-
-                    return 'border-slate-200 bg-white text-slate-500';
                 },
                 chooseModel(option) {
                     if (this.isModelLocked(option)) {
@@ -1144,15 +1109,14 @@
                 get selectedVoice() {
                     return this.voices.find((item) => item.id === this.selectedVoiceId) || null;
                 },
-                get selectedVoiceCostLabel() {
-                    return this.selectedVoice?.costLabel || providerCostLabels[this.selectedProvider] || 'Voice cost varies';
+                get selectedVoicePriceMetric() {
+                    return this.selectedVoice?.priceMetric || providerPriceMetrics[this.selectedProvider] || 'Provider pricing varies';
                 },
-                get selectedVoiceQualityLabel() {
-                    return this.selectedVoice?.qualityLabel || providerHelp[this.selectedProvider] || 'Voice quality varies by provider.';
+                get selectedVoicePriceNote() {
+                    return this.selectedVoice?.priceNote || '';
                 },
                 voiceOptionLabel(voice) {
-                    const provider = this.providerLabel(voice.provider);
-                    return `${voice.name} · ${provider} · ${voice.costLabel}`;
+                    return `${voice.name} - ${this.providerLabel(voice.provider)} - ${voice.priceMetric}`;
                 },
                 toggleTool(tool) {
                     if (this.promptWriter.toolsEnabled.includes(tool)) {

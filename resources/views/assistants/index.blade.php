@@ -74,7 +74,7 @@
                                 <span class="whitespace-nowrap text-slate-400">/</span>
                                 <span class="whitespace-nowrap">{{ $modelDefinition['headline'] ?? \App\Models\AssistantConfig::DEFAULT_MODEL }}</span>
                             </div>
-                            <p class="mt-2 text-sm leading-6 text-slate-600">{{ $modelDefinition['qualityLabel'] ?? 'Good quality' }} / {{ $modelDefinition['costLabel'] ?? 'Balanced cost' }}</p>
+                            <p class="mt-2 text-sm leading-6 text-slate-600">{{ $modelDefinition['priceMetric'] ?? 'Pricing varies by provider' }}</p>
                         </div>
 
                         <div>
