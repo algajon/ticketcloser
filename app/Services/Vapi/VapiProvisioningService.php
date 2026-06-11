@@ -1045,7 +1045,7 @@ PROMPT);
             'provider' => $voiceProvider,
             'voiceId' => $voiceId,
             'speed' => round($speed, 2),
-        ];
+        ] + ($voiceProvider === 'vapi' ? ['version' => 2] : []);
     }
 
     private function transcriberBlock(AssistantConfig $config, Workspace $workspace): array
@@ -1354,35 +1354,16 @@ PROMPT);
     ): array {
         $voiceProvider = trim((string) $voiceProvider) !== '' ? trim((string) $voiceProvider) : null;
         $voiceId = trim((string) $voiceId) !== '' ? trim((string) $voiceId) : null;
-        $standardVoice = RegionalPilotStackCatalog::standardVoiceProfile(
-            $languageCode,
-            $presetKey,
-            $workspace->primaryMarket(),
-        );
 
-        if ($voiceProvider === 'openai' && ! AssistantConfig::isRealtimeModelName($modelName)) {
-            return [
-                $standardVoice['provider'] ?? 'vapi',
-                $standardVoice['voiceId'] ?? 'Emma',
-            ];
+        if ($voiceProvider === 'openai') {
+            $voiceId = $this->supportsOpenAiVoice($voiceId)
+                ? $voiceId
+                : $this->defaultOpenAiVoiceForPreset($presetKey);
+
+            return ['openai', $voiceId];
         }
 
-        if (
-            $voiceProvider !== 'openai'
-            || AssistantConfig::isRealtimeModelName($modelName)
-            || str_starts_with(strtolower($languageCode), 'en')
-        ) {
-            return [$voiceProvider, $voiceId];
-        }
-
-        if (! $standardVoice || ($standardVoice['provider'] ?? null) === 'openai') {
-            return [$voiceProvider, $voiceId];
-        }
-
-        return [
-            $standardVoice['provider'] ?? $voiceProvider,
-            $standardVoice['voiceId'] ?? $voiceId,
-        ];
+        return [$voiceProvider, $voiceId];
     }
 
     private function supportsRealtimeVoice(string $provider, string $voiceId): bool
@@ -1391,7 +1372,19 @@ PROMPT);
             return false;
         }
 
+        return $this->supportsOpenAiVoice($voiceId);
+    }
+
+    private function supportsOpenAiVoice(?string $voiceId): bool
+    {
         return in_array($voiceId, ['alloy', 'echo', 'shimmer', 'marin', 'cedar'], true);
+    }
+
+    private function defaultOpenAiVoiceForPreset(?string $presetKey): string
+    {
+        return in_array(AssistantPreset::normalizeKey($presetKey), ['steady_operator', 'confident_closer'], true)
+            ? 'cedar'
+            : 'marin';
     }
 
     private function buildFirstMessage(AssistantConfig $config, Workspace $workspace): string

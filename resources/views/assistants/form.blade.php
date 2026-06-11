@@ -149,12 +149,26 @@
         $operatorRoutes = array_slice($operatorRoutes, 0, 6);
 
         $voicesJson = collect($voices ?? [])->map(function ($v) {
+            $provider = $v['provider'] ?? 'unknown';
+
             return [
                 'id' => $v['voiceId'] ?? $v['id'] ?? '',
                 'name' => $v['name'] ?? $v['voiceId'] ?? 'Unknown',
-                'provider' => $v['provider'] ?? 'unknown',
+                'provider' => $provider,
                 'language' => $v['language'] ?? $v['accent'] ?? '',
                 'role' => $v['role'] ?? 'default',
+                'costLabel' => match ($provider) {
+                    'vapi' => 'TTS cost: lower',
+                    'openai' => 'TTS cost: premium',
+                    'azure' => 'TTS cost: standard',
+                    default => 'Voice cost varies',
+                },
+                'qualityLabel' => match ($provider) {
+                    'vapi' => 'Human Vapi V2 voice',
+                    'openai' => 'Most human TTS option',
+                    'azure' => 'Natural multilingual voice',
+                    default => 'Voice quality varies',
+                },
             ];
         })->values()->all();
     @endphp
@@ -313,6 +327,7 @@
                                 </div>
                                 <div class="mt-2 text-base font-semibold text-slate-950" x-text="option.headline"></div>
                                 <div class="mt-1 text-sm font-medium text-slate-700" x-text="option.value"></div>
+                                <p class="mt-2 text-xs font-semibold uppercase tracking-[0.12em] text-slate-500" x-text="option.costDetail"></p>
                                 <p class="mt-3 text-sm leading-6 text-slate-600" x-text="option.description"></p>
                                 <p x-show="option.locked" class="mt-3 text-xs font-medium uppercase tracking-[0.12em] tc-accent-text-strong">Unlock on a paid plan</p>
                             </button>
@@ -337,10 +352,16 @@
                                         <div class="text-sm font-semibold text-slate-950" x-text="provider.label"></div>
                                         <p class="mt-1 text-xs leading-5 text-slate-500" x-text="provider.help"></p>
                                     </div>
-                                    <span
-                                        class="shrink-0 rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em]"
-                                        :class="provider.locked ? 'border-slate-200 bg-slate-100 text-slate-500' : (selectedProvider === provider.value ? 'tc-accent-badge' : 'border-slate-200 bg-white text-slate-500')"
-                                        x-text="provider.locked ? 'Locked' : (selectedProvider === provider.value ? 'Selected' : 'Available')"></span>
+                                    <div class="shrink-0 space-y-2 text-right">
+                                        <span
+                                            class="inline-flex rounded-full border px-2.5 py-1 text-[0.68rem] font-semibold uppercase tracking-[0.14em]"
+                                            :class="provider.locked ? 'border-slate-200 bg-slate-100 text-slate-500' : (selectedProvider === provider.value ? 'tc-accent-badge' : 'border-slate-200 bg-white text-slate-500')"
+                                            x-text="provider.locked ? 'Locked' : (selectedProvider === provider.value ? 'Selected' : 'Available')"></span>
+                                        <span
+                                            class="block rounded-full border px-2.5 py-1 text-[0.65rem] font-semibold uppercase tracking-[0.12em]"
+                                            :class="providerCostBadgeClass(provider)"
+                                            x-text="provider.costLabel"></span>
+                                    </div>
                                 </button>
                             </template>
                         </div>
@@ -361,9 +382,10 @@
                         <select id="voice_id" name="voice_id" class="tc-input" x-model="selectedVoiceId">
                             <option value="">Select a voice</option>
                             <template x-for="voice in filteredVoices" :key="voice.id">
-                                <option :value="voice.id" x-text="voice.name"></option>
+                                <option :value="voice.id" x-text="voiceOptionLabel(voice)"></option>
                             </template>
                         </select>
+                        <p class="mt-2 tc-help" x-show="selectedVoiceId" x-text="selectedVoiceCostLabel + ' / ' + selectedVoiceQualityLabel"></p>
                     </div>
                 </div>
 
@@ -374,8 +396,11 @@
                         <span class="whitespace-nowrap" x-text="providerLabel(selectedProvider)"></span>
                         <span class="tc-accent-text-soft whitespace-nowrap">/</span>
                         <span class="whitespace-nowrap" x-text="languageLabel(selectedLanguageCode)"></span>
+                        <span class="tc-accent-text-soft whitespace-nowrap">/</span>
+                        <span class="whitespace-nowrap" x-text="selectedVoiceCostLabel"></span>
                     </div>
-                    <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedModel.voiceMode === 'realtime'">Premium voice is tuned to sound quicker and brighter, with faster turn-taking and less drag between sentences.</p>
+                    <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-text="selectedVoiceQualityLabel"></p>
+                    <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedModel.voiceMode === 'realtime'">Realtime voice uses native speech-to-speech audio pricing. It is the highest-cost, most fluid voice path.</p>
                 </div>
 
                 <div class="mt-5 rounded-[1.25rem] border border-slate-200 bg-slate-50/85 p-4">
@@ -770,9 +795,14 @@
                 azure: 'Azure neural',
             };
             const providerHelp = {
-                vapi: 'Best for most assistants.',
-                openai: 'Best for premium voice quality.',
-                azure: 'Best for Arabic and wider language coverage.',
+                vapi: 'Best low-cost human voice path. Uses Vapi Voice V2 when synced.',
+                openai: 'Most human standard TTS voices without requiring realtime.',
+                azure: 'Natural multilingual voices with broad language coverage.',
+            };
+            const providerCostLabels = {
+                vapi: 'TTS: lower',
+                openai: 'TTS: premium',
+                azure: 'TTS: standard',
             };
             const freeWorkspace = @js($workspaceIsFree);
 
@@ -883,15 +913,16 @@
                         value: provider,
                         label: this.providerLabel(provider),
                         help: providerHelp[provider] || 'Voice provider',
+                        costLabel: providerCostLabels[provider] || 'Cost varies',
                         locked: !this.providerAllowedOnFree(provider),
                     }));
                 },
                 get compatibleVoices() {
-                    if (this.selectedModel.voiceMode !== 'realtime') {
-                        return this.voices.filter((voice) => voice.provider !== 'openai');
+                    if (this.selectedModel.voiceMode === 'realtime') {
+                        return this.voices.filter((voice) => voice.provider === 'openai' && ['alloy', 'echo', 'shimmer', 'marin', 'cedar'].includes(voice.id));
                     }
 
-                    return this.voices.filter((voice) => voice.provider === 'openai' && ['alloy', 'echo', 'shimmer', 'marin', 'cedar'].includes(voice.id));
+                    return this.voices;
                 },
                 get languageOptions() {
                     return this.allLanguageOptions;
@@ -912,8 +943,6 @@
                 handleModelChange(shouldAdjustVoice = true) {
                     if (this.selectedModel.voiceMode === 'realtime') {
                         this.selectedProvider = 'openai';
-                    } else if (this.selectedProvider === 'openai') {
-                        this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
                     } else if (!this.providerAllowedOnFree(this.selectedProvider)) {
                         this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
                     }
@@ -923,10 +952,6 @@
                     }
                 },
                 handleProviderChange(shouldAdjustVoice = true) {
-                    if (this.selectedModel.voiceMode !== 'realtime' && this.selectedProvider === 'openai') {
-                        this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
-                    }
-
                     const providerHasLanguage = this.compatibleVoices.some((voice) =>
                         voice.provider === this.selectedProvider
                         && (voice.language === this.selectedLanguageCode || voice.language === 'multi')
@@ -968,6 +993,21 @@
                     }
 
                     return 'border-slate-200 bg-slate-50 text-slate-500';
+                },
+                providerCostBadgeClass(provider) {
+                    if (provider.locked) {
+                        return 'border-slate-200 bg-slate-100 text-slate-500';
+                    }
+
+                    if (provider.value === 'openai') {
+                        return 'border-amber-200 bg-amber-50 text-amber-700';
+                    }
+
+                    if (provider.value === 'vapi') {
+                        return 'border-emerald-200 bg-emerald-50 text-emerald-700';
+                    }
+
+                    return 'border-slate-200 bg-white text-slate-500';
                 },
                 chooseModel(option) {
                     if (this.isModelLocked(option)) {
@@ -1038,6 +1078,14 @@
                     }
 
                     const prefersOperatorVoice = ['steady_operator', 'confident_closer'].includes(this.selectedPresetKey);
+
+                    if (!freeWorkspace) {
+                        return {
+                            provider: 'openai',
+                            id: prefersOperatorVoice ? 'cedar' : 'marin',
+                        };
+                    }
+
                     const localizedStandardVoices = this.voices.filter((voice) =>
                         voice.provider === 'azure' && voice.language === this.selectedLanguageCode
                     );
@@ -1091,8 +1139,20 @@
                     }
                 },
                 get selectedVoiceName() {
-                    const voice = this.voices.find((item) => item.id === this.selectedVoiceId);
-                    return voice ? voice.name : 'No voice selected';
+                    return this.selectedVoice ? this.selectedVoice.name : 'No voice selected';
+                },
+                get selectedVoice() {
+                    return this.voices.find((item) => item.id === this.selectedVoiceId) || null;
+                },
+                get selectedVoiceCostLabel() {
+                    return this.selectedVoice?.costLabel || providerCostLabels[this.selectedProvider] || 'Voice cost varies';
+                },
+                get selectedVoiceQualityLabel() {
+                    return this.selectedVoice?.qualityLabel || providerHelp[this.selectedProvider] || 'Voice quality varies by provider.';
+                },
+                voiceOptionLabel(voice) {
+                    const provider = this.providerLabel(voice.provider);
+                    return `${voice.name} · ${provider} · ${voice.costLabel}`;
                 },
                 toggleTool(tool) {
                     if (this.promptWriter.toolsEnabled.includes(tool)) {
