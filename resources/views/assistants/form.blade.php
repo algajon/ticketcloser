@@ -158,16 +158,10 @@
                 'language' => $v['language'] ?? $v['accent'] ?? '',
                 'role' => $v['role'] ?? 'default',
                 'priceMetric' => match ($provider) {
-                    'vapi' => '$0.05/min Vapi + provider at cost',
-                    'openai' => '$15.00 per 1M chars',
-                    'azure' => '$15.00 per 1M chars',
-                    default => 'Provider pricing varies',
-                },
-                'priceNote' => match ($provider) {
-                    'vapi' => 'Vapi hosting is separate from pass-through model and voice provider charges.',
-                    'openai' => 'OpenAI TTS-1 rate shown; HD voices cost more.',
-                    'azure' => 'Azure neural TTS rate shown; HD/custom voices may cost more.',
-                    default => '',
+                    'vapi' => '~$0.01/min voice',
+                    'openai' => '~$0.02/min voice',
+                    'azure' => '~$0.01/min voice',
+                    default => 'Voice cost varies',
                 },
             ];
         })->values()->all();
@@ -301,7 +295,7 @@
                         @if($workspaceIsFree)
                             Free workspaces use the Standard engine. You can still preview the premium engines below, then upgrade when you are ready.
                         @else
-                            Higher tiers cost more, but they can sound more polished and handle complex calls more smoothly.
+                            Prices are estimated per active call minute. Add Vapi platform (~$0.05/min) and transcription (~$0.01/min).
                         @endif
                     </p>
 
@@ -390,8 +384,7 @@
                         <span class="tc-accent-text-soft whitespace-nowrap">/</span>
                         <span class="whitespace-nowrap" x-text="selectedVoicePriceMetric"></span>
                     </div>
-                    <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedVoicePriceNote" x-text="selectedVoicePriceNote"></p>
-                    <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedModel.voiceMode === 'realtime'">Realtime audio uses token pricing; text tokens can also be billed during the call.</p>
+                    <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedModel.voiceMode === 'realtime'">Realtime audio is the premium voice path and usually costs more per call minute.</p>
                 </div>
 
                 <div class="mt-5 rounded-[1.25rem] border border-slate-200 bg-slate-50/85 p-4">
@@ -791,9 +784,9 @@
                 azure: 'Azure multilingual neural voices.',
             };
             const providerPriceMetrics = {
-                vapi: '$0.05/min Vapi + provider at cost',
-                openai: '$15.00 per 1M chars',
-                azure: '$15.00 per 1M chars',
+                vapi: '~$0.01/min voice',
+                openai: '~$0.02/min voice',
+                azure: '~$0.01/min voice',
             };
             const freeWorkspace = @js($workspaceIsFree);
 
@@ -1111,9 +1104,6 @@
                 },
                 get selectedVoicePriceMetric() {
                     return this.selectedVoice?.priceMetric || providerPriceMetrics[this.selectedProvider] || 'Provider pricing varies';
-                },
-                get selectedVoicePriceNote() {
-                    return this.selectedVoice?.priceNote || '';
                 },
                 voiceOptionLabel(voice) {
                     return `${voice.name} - ${this.providerLabel(voice.provider)} - ${voice.priceMetric}`;
