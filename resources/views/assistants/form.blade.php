@@ -370,7 +370,6 @@
                                 <option :value="voice.id" x-text="voiceOptionLabel(voice)"></option>
                             </template>
                         </select>
-                        <p class="mt-2 tc-help" x-show="selectedVoiceId" x-text="selectedVoicePriceMetric"></p>
                     </div>
                 </div>
 
