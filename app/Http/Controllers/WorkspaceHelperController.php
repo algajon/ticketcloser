@@ -42,7 +42,9 @@ class WorkspaceHelperController extends Controller
             'dashboard' => ['label' => 'Open dashboard', 'href' => route('app.dashboard')],
             'cases' => ['label' => 'Review cases', 'href' => route('app.tickets.index')],
             'assistants' => ['label' => 'Open assistants', 'href' => route('app.assistant.edit', $workspace)],
-            'new_assistant' => ['label' => 'Create assistant', 'href' => route('app.assistant.create', $workspace)],
+            'new_assistant' => $workspace->canCreateAssistants()
+                ? ['label' => 'Create assistant', 'href' => route('app.assistant.create', $workspace)]
+                : ['label' => 'View plans', 'href' => route('app.billing.plans')],
             'phone_numbers' => ['label' => 'Manage phone numbers', 'href' => route('app.phone_numbers.index', $workspace)],
             'calls' => ['label' => 'Open calls', 'href' => route('app.calls.index', $workspace)],
             'calls_analytics' => ['label' => 'View call analytics', 'href' => route('app.calls.analytics', $workspace)],

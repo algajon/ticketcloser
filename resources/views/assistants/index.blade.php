@@ -6,7 +6,11 @@
 @section('header_description', 'Manage the assistants that answer calls and create tickets for '.$workspace->name.'.')
 
 @section('header_actions')
-    <a href="{{ route('app.assistant.create', $workspace) }}" class="tc-btn-primary">New assistant</a>
+    @if($assistantCreationLocked ?? false)
+        <a href="{{ route('app.billing.plans') }}" class="tc-btn-primary">Upgrade to add assistant</a>
+    @else
+        <a href="{{ route('app.assistant.create', $workspace) }}" class="tc-btn-primary">New assistant</a>
+    @endif
 @endsection
 
 @section('content')
@@ -18,7 +22,11 @@
 
     @if($assistants->isEmpty())
         <x-ui.panel>
-            <x-ui.empty-state title="No assistants yet" description="Create your first assistant to answer calls and create tickets." actionText="Create assistant" :actionHref="route('app.assistant.create', $ws)" />
+            @if($assistantCreationLocked ?? false)
+                <x-ui.empty-state title="Assistant creation requires a paid plan" description="Choose a paid plan before adding a voice assistant to this workspace." actionText="View plans" :actionHref="route('app.billing.plans')" />
+            @else
+                <x-ui.empty-state title="No assistants yet" description="Create your first assistant to answer calls and create tickets." actionText="Create assistant" :actionHref="route('app.assistant.create', $ws)" />
+            @endif
         </x-ui.panel>
     @else
         <div class="grid gap-5 lg:grid-cols-3">
@@ -43,10 +51,12 @@
                             </button>
 
                             <div x-show="open" x-transition.origin.top.right @click.away="open = false" class="absolute right-0 top-[calc(100%+0.5rem)] z-20 w-40 rounded-[1rem] border border-slate-200 bg-white p-2 shadow-[0_22px_60px_-32px_rgba(15,23,42,0.38)]">
-                                <form method="POST" action="{{ route('app.assistant.duplicate', [$ws, $assistant]) }}">
-                                    @csrf
-                                    <button type="submit" class="tc-shell-nav-link !w-full !rounded-[0.9rem] !px-3 !py-2.5 text-left">Duplicate</button>
-                                </form>
+                                @if(! ($assistantCreationLocked ?? false))
+                                    <form method="POST" action="{{ route('app.assistant.duplicate', [$ws, $assistant]) }}">
+                                        @csrf
+                                        <button type="submit" class="tc-shell-nav-link !w-full !rounded-[0.9rem] !px-3 !py-2.5 text-left">Duplicate</button>
+                                    </form>
+                                @endif
                                 <a href="{{ route('app.assistant.show', [$ws, $assistant]) }}" class="tc-shell-nav-link !rounded-[0.9rem] !px-3 !py-2.5">Edit</a>
                                 <form method="POST" action="{{ route('app.assistant.destroy', [$ws, $assistant]) }}" onsubmit="return confirm('Delete this assistant?')" class="mt-1">
                                     @csrf
@@ -110,10 +120,10 @@
                 </div>
             @endforeach
 
-            <a href="{{ route('app.assistant.create', $ws) }}" class="tc-accent-card-hover flex min-h-[280px] items-center justify-center rounded-[1.6rem] border border-dashed border-slate-300 bg-white/70 p-6 text-center transition">
+            <a href="{{ ($assistantCreationLocked ?? false) ? route('app.billing.plans') : route('app.assistant.create', $ws) }}" class="tc-accent-card-hover flex min-h-[280px] items-center justify-center rounded-[1.6rem] border border-dashed border-slate-300 bg-white/70 p-6 text-center transition">
                 <div>
-                    <div class="mt-4 text-base font-semibold text-slate-900">Add another assistant</div>
-                    <p class="mt-2 text-sm leading-6 text-slate-600">Create another assistant for a different team, line, or tone.</p>
+                    <div class="mt-4 text-base font-semibold text-slate-900">{{ ($assistantCreationLocked ?? false) ? 'Upgrade to add assistant' : 'Add another assistant' }}</div>
+                    <p class="mt-2 text-sm leading-6 text-slate-600">{{ ($assistantCreationLocked ?? false) ? 'Assistant creation is available after choosing a paid plan.' : 'Create another assistant for a different team, line, or tone.' }}</p>
                 </div>
             </a>
         </div>

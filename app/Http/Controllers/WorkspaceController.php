@@ -176,6 +176,12 @@ class WorkspaceController extends Controller
 
         $request->session()->put('current_workspace_id', $workspace->id);
 
+        if (! $workspace->canCreateAssistants()) {
+            return redirect()
+                ->route('app.billing.plans')
+                ->with('success', 'Workspace created. Choose a paid plan to create and sync your first assistant.');
+        }
+
         return redirect()
             ->route('app.assistant.create', $workspace)
             ->with('success', 'Workspace created. We prefilled your first assistant based on your workflow.');

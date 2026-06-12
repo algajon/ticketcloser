@@ -111,6 +111,7 @@ class DashboardController extends Controller
         $hasRecentCase = (int) ($caseStats->total_cases ?? 0) > 0;
         $launchReady = $hasWorkflowSelection && $hasSyncedAssistant && $livePhoneCount > 0;
         $isPropertyManagement = $workspace->use_case === 'property_management';
+        $canCreateAssistants = $workspace->canCreateAssistants();
 
         $maintenanceStats = null;
         $urgentQueue = collect();
@@ -175,10 +176,12 @@ class DashboardController extends Controller
             ],
             [
                 'label' => 'Create your first assistant',
-                'description' => 'Review the prefilled assistant and sync it live.',
+                'description' => $canCreateAssistants
+                    ? 'Review the prefilled assistant and sync it live.'
+                    : 'Choose a paid plan before adding a voice assistant.',
                 'done' => $hasSyncedAssistant,
-                'href' => route('app.assistant.create', $workspace),
-                'action' => 'Build assistant',
+                'href' => $canCreateAssistants ? route('app.assistant.create', $workspace) : route('app.billing.plans'),
+                'action' => $canCreateAssistants ? 'Build assistant' : 'View plans',
             ],
             [
                 'label' => 'Connect your number',

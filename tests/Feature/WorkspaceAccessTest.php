@@ -68,7 +68,7 @@ class WorkspaceAccessTest extends TestCase
             ->assertSessionHas('error', 'Choose a workspace to continue.');
     }
 
-    public function test_creating_a_workspace_applies_use_case_defaults_and_redirects_to_assistant_builder(): void
+    public function test_creating_a_workspace_applies_use_case_defaults_and_redirects_to_plans_for_free_workspace(): void
     {
         $user = User::factory()->create();
         $user->markEmailAsVerified();
@@ -86,9 +86,9 @@ class WorkspaceAccessTest extends TestCase
         $intakeConfig = IntakeConfig::query()->where('workspace_id', $workspace->id)->first();
 
         $response
-            ->assertRedirect(route('app.assistant.create', $workspace))
+            ->assertRedirect(route('app.billing.plans'))
             ->assertSessionHas('current_workspace_id', $workspace->id)
-            ->assertSessionHas('success', 'Workspace created. We prefilled your first assistant based on your workflow.');
+            ->assertSessionHas('success', 'Workspace created. Choose a paid plan to create and sync your first assistant.');
 
         $this->assertDatabaseHas('workspace_memberships', [
             'workspace_id' => $workspace->id,

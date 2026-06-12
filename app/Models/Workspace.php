@@ -143,6 +143,12 @@ class Workspace extends Model
         return ($this->plan_key ?? 'free') === 'free';
     }
 
+    public function canCreateAssistants(): bool
+    {
+        return $this->bypassesPlanLimits()
+            || (! $this->isFreePlan() && $this->hasActiveSubscription());
+    }
+
     public function includedMinutesLimit(): ?int
     {
         if ($this->bypassesPlanLimits()) {

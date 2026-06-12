@@ -13,7 +13,7 @@ class OnboardingFlowTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_saving_workspace_setup_applies_use_case_defaults_and_redirects_to_assistant_builder(): void
+    public function test_saving_workspace_setup_applies_use_case_defaults_and_redirects_to_plans_for_free_workspace(): void
     {
         $user = User::factory()->create();
         $user->markEmailAsVerified();
@@ -44,8 +44,8 @@ class OnboardingFlowTest extends TestCase
         $intakeConfig = IntakeConfig::query()->where('workspace_id', $workspace->id)->first();
 
         $response
-            ->assertRedirect(route('app.assistant.create', $workspace))
-            ->assertSessionHas('success', 'Workspace saved. We prefilled your first assistant based on your workflow.');
+            ->assertRedirect(route('app.billing.plans'))
+            ->assertSessionHas('success', 'Workspace saved. Choose a paid plan to create and sync your first assistant.');
 
         $this->assertSame('Harbor Property Group', $workspace->name);
         $this->assertSame('harbor-property-group', $workspace->slug);

@@ -151,6 +151,12 @@ class OnboardingController extends Controller
             ]
         );
 
+        if (! $workspace->canCreateAssistants()) {
+            return redirect()
+                ->route('app.billing.plans')
+                ->with('success', 'Workspace saved. Choose a paid plan to create and sync your first assistant.');
+        }
+
         return redirect()
             ->route('app.assistant.create', $workspace)
             ->with('success', 'Workspace saved. We prefilled your first assistant based on your workflow.');

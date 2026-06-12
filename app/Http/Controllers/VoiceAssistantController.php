@@ -18,6 +18,7 @@ class VoiceAssistantController extends Controller
     use Concerns\AuthorizesWorkspace;
 
     private const PHONE_ACTIVATION_COUNTDOWN_SECONDS = 180;
+    private const ASSISTANT_CREATION_PAID_PLAN_MESSAGE = 'Assistant creation is available on paid plans only. Upgrade to add an assistant.';
 
     // ─── Assistant ────────────────────────────────────────────────────────────
 
@@ -39,8 +40,9 @@ class VoiceAssistantController extends Controller
 
         // Use hardcoded voices for consistent picker experience
         $voices = self::vapiVoices();
+        $assistantCreationLocked = ! $workspace->canCreateAssistants();
 
-        return view('assistants.index', compact('workspace', 'configs', 'voices', 'phonesByAssistant'));
+        return view('assistants.index', compact('workspace', 'configs', 'voices', 'phonesByAssistant', 'assistantCreationLocked'));
     }
 
     public function update(Request $request, Workspace $workspace, VapiProvisioningService $provisioner)
@@ -77,6 +79,12 @@ class VoiceAssistantController extends Controller
         $wasClampedForFreePlan = false;
 
         if ($isCreating) {
+            if (! $workspace->canCreateAssistants()) {
+                return redirect()
+                    ->route('app.assistant.edit', $workspace)
+                    ->with('error', self::ASSISTANT_CREATION_PAID_PLAN_MESSAGE);
+            }
+
             if ($workspace->isFreePlan() && $workspace->hasReachedVoiceMinuteLimit()) {
                 return redirect()
                     ->route('app.assistant.edit', $workspace)
@@ -391,6 +399,12 @@ class VoiceAssistantController extends Controller
     {
         $this->authorizeWorkspaceRole($request, $workspace, ['owner', 'admin', 'manager'], 'Only workspace managers can manage assistants.');
 
+        if (! $workspace->canCreateAssistants()) {
+            return redirect()
+                ->route('app.assistant.edit', $workspace)
+                ->with('error', self::ASSISTANT_CREATION_PAID_PLAN_MESSAGE);
+        }
+
         if ($workspace->isFreePlan() && $workspace->hasReachedVoiceMinuteLimit()) {
             return redirect()
                 ->route('app.assistant.edit', $workspace)
@@ -423,6 +437,12 @@ class VoiceAssistantController extends Controller
     {
         $this->authorizeWorkspaceRole($request, $workspace, ['owner', 'admin', 'manager'], 'Only workspace managers can manage assistants.');
         abort_if($assistant->workspace_id !== $workspace->id, 404);
+
+        if (! $workspace->canCreateAssistants()) {
+            return redirect()
+                ->route('app.assistant.edit', $workspace)
+                ->with('error', self::ASSISTANT_CREATION_PAID_PLAN_MESSAGE);
+        }
 
         if ($workspace->isFreePlan() && $workspace->hasReachedVoiceMinuteLimit()) {
             return redirect()
