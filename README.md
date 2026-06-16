@@ -196,55 +196,11 @@ That starts:
 - Laravel Pail logs
 - the Vite dev server
 
-## Environment Variables
+## Environment Configuration
 
-At minimum, local development needs the normal Laravel app and database settings. The external-service settings below become important as soon as you use live voice, prompt generation, billing, or calendar sync.
+Local development needs the normal Laravel app, database, mail, queue, cache, session, and filesystem configuration. Live production features also need private credentials for voice, AI prompt generation, billing, calendar sync, webhook verification, and internal server-to-server access.
 
-### App and database
-
-- `APP_NAME`
-- `APP_ENV`
-- `APP_KEY`
-- `APP_URL`
-- `DB_CONNECTION`
-- `DB_DATABASE`
-- `DB_HOST`
-- `DB_PORT`
-- `DB_USERNAME`
-- `DB_PASSWORD`
-
-### Vapi
-
-- `VAPI_API_KEY`
-- `VAPI_BASE_URL`
-- `VAPI_WEBHOOK_URL`
-- `VAPI_WEBHOOK_SECRET`
-
-### OpenAI
-
-- `OPENAI_API_KEY`
-- `OPENAI_BASE_URL`
-- `OPENAI_MODEL`
-
-### Google Calendar
-
-- `GOOGLE_CLIENT_ID`
-- `GOOGLE_CLIENT_SECRET`
-- `GOOGLE_REDIRECT_URI`
-
-### Stripe
-
-- `STRIPE_KEY`
-- `STRIPE_SECRET`
-- `STRIPE_WEBHOOK_SECRET`
-- `STRIPE_PRICE_STARTUP`
-- `STRIPE_PRICE_PRO`
-- `STRIPE_PRICE_ENTERPRISE`
-
-### Misc
-
-- `SERVER_API_TOKEN`
-- normal Laravel mail, queue, cache, session, and filesystem settings
+Keep exact environment variable names and secret values in private deployment notes or the server environment, not in this README.
 
 ## Key Commands
 
@@ -327,7 +283,7 @@ There are still PHPUnit doc-comment metadata deprecation warnings in some older 
 ## Security Notes
 
 - Do not commit production credentials, SSH passwords, API keys, or `.env` files.
-- Keep Vapi webhook verification enabled in production by setting `VAPI_WEBHOOK_SECRET`.
+- Keep Vapi webhook verification enabled in production.
 - Treat workspace integration tokens and server API tokens as secrets.
 
 ## GitHub Workflow
