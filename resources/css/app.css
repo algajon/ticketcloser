@@ -1484,6 +1484,12 @@ body[data-app-accent='purple'] {
     background: rgb(var(--tc-surface) / 0.98);
 }
 
+.tc-shell-brand:hover,
+.tc-shell-brand:focus-visible {
+    background: rgb(var(--tc-primary) / 0.06);
+    outline: none;
+}
+
 .tc-shell-workspace-card {
     border-color: rgb(var(--tc-border) / 0.62);
     background: rgb(var(--tc-surface-muted) / 0.92);
