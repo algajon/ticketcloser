@@ -5,10 +5,9 @@ namespace App\Http\Controllers;
 use App\Models\CalendarConnection;
 use App\Models\CalendarEvent;
 use App\Models\SuggestedEvent;
-use App\Models\SupportCase;
+use App\Services\Meetings\MeetingBookingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Crypt;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 class CalendarController extends Controller
@@ -43,6 +42,7 @@ class CalendarController extends Controller
     {
         $workspace = $request->user()->currentWorkspace();
         $connections = CalendarConnection::where('workspace_id', $workspace->id)->get()->keyBy('provider');
+
         return view('calendar.settings', compact('workspace', 'connections'));
     }
 
@@ -74,25 +74,33 @@ class CalendarController extends Controller
         $workspace = $request->user()->currentWorkspace();
         abort_unless($workspace, 403);
 
-        $clientId = config('services.google.client_id');
-        $redirectUri = route('app.calendar.google.callback');
-        $scopes = urlencode('https://www.googleapis.com/auth/calendar.events');
+        $clientId = trim((string) config('services.google.client_id'));
+        $clientSecret = trim((string) config('services.google.client_secret'));
+        $redirectUri = $this->googleRedirectUri();
+
+        if ($clientId === '' || $clientSecret === '') {
+            return redirect()
+                ->route('app.calendar.settings')
+                ->with('error', 'Google Calendar is not configured yet. Add GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET, then clear the app config cache.');
+        }
+
         $statePayload = [
             'workspace_id' => $workspace->id,
             'user_id' => $request->user()->id,
             'nonce' => Str::random(40),
         ];
         $request->session()->put('google_oauth_state', $statePayload);
-        $state = urlencode(Crypt::encryptString(json_encode($statePayload)));
+        $state = Crypt::encryptString(json_encode($statePayload));
 
-        $url = "https://accounts.google.com/o/oauth2/v2/auth"
-            . "?client_id={$clientId}"
-            . "&redirect_uri={$redirectUri}"
-            . "&response_type=code"
-            . "&scope={$scopes}"
-            . "&access_type=offline"
-            . "&prompt=consent"
-            . "&state={$state}";
+        $url = 'https://accounts.google.com/o/oauth2/v2/auth?' . http_build_query([
+            'client_id' => $clientId,
+            'redirect_uri' => $redirectUri,
+            'response_type' => 'code',
+            'scope' => 'https://www.googleapis.com/auth/calendar.events',
+            'access_type' => 'offline',
+            'prompt' => 'consent',
+            'state' => $state,
+        ], '', '&', PHP_QUERY_RFC3986);
 
         return redirect($url);
     }
@@ -127,10 +135,11 @@ class CalendarController extends Controller
 
         $code = $request->get('code');
         $tokens = $this->exchangeGoogleCode($code);
-        if (!$tokens)
+        if (!$tokens) {
             return redirect()->route('app.calendar.settings')->with('error', 'Google auth failed.');
+        }
 
-        $conn = CalendarConnection::updateOrCreate(
+        $connection = CalendarConnection::updateOrCreate(
             ['workspace_id' => $workspaceId, 'provider' => 'google'],
             [
                 'tokens_encrypted' => '-',
@@ -138,16 +147,16 @@ class CalendarController extends Controller
                 'metadata' => ['scope' => $tokens['scope'] ?? null],
             ]
         );
-        $conn->tokens = $tokens;
-        $conn->save();
+        $connection->tokens = $tokens;
+        $connection->save();
 
         return redirect()->route('app.calendar.settings')->with('success', 'Google Calendar connected!');
     }
 
     /**
-     * Confirm a suggested event and create a calendar booking.
+     * Confirm a suggested event and send the user to the selected provider.
      */
-    public function confirm(Request $request, SuggestedEvent $suggestedEvent)
+    public function confirm(Request $request, SuggestedEvent $suggestedEvent, MeetingBookingService $meetingBooking)
     {
         abort_unless($suggestedEvent->workspace_id === $request->user()->currentWorkspace()?->id, 403);
 
@@ -161,71 +170,31 @@ class CalendarController extends Controller
         $startsAt = isset($validated['starts_at']) ? \Carbon\Carbon::parse($validated['starts_at']) : $suggestedEvent->starts_at;
         $endsAt = isset($validated['ends_at']) ? \Carbon\Carbon::parse($validated['ends_at']) : $suggestedEvent->ends_at;
 
-        $url = null;
-        $providerEventId = null;
+        try {
+            $event = $meetingBooking->confirmSuggestedEvent($suggestedEvent, $provider, $startsAt, $endsAt);
+        } catch (\Throwable $e) {
+            report($e);
 
-        if ($provider === 'ics') {
-            // ICS download — handled client-side via JS, just record it
-        } elseif ($provider === 'calendly') {
-            $conn = CalendarConnection::where('workspace_id', $suggestedEvent->workspace_id)
-                ->where('provider', 'calendly')
-                ->first();
-            $baseLink = $conn?->calendly_scheduling_link ?? '';
-            
-            if ($baseLink) {
-                $case = $suggestedEvent->supportCase;
-                $contact = $case?->contact;
-                
-                $name = urlencode(trim(($contact?->name ?? '')));
-                $email = urlencode(trim(($case?->requester_email ?? $contact?->email ?? '')));
-                
-                $params = [];
-                if ($name) $params['name'] = $name;
-                if ($email) $params['email'] = $email;
-                if ($startsAt) {
-                    $params['month'] = $startsAt->format('Y-m');
-                    $params['date'] = $startsAt->format('Y-m-d');
-                }
-                
-                $queryString = urldecode(http_build_query($params));
-                $separator = str_contains($baseLink, '?') ? '&' : '?';
-                $url = $baseLink . $separator . $queryString;
-            } else {
-                $url = null;
+            if ($request->wantsJson() || $request->ajax()) {
+                return response()->json([
+                    'ok' => false,
+                    'message' => $e->getMessage(),
+                ], 422);
             }
-        } elseif ($provider === 'google') {
-            $url = $this->createGoogleEvent($suggestedEvent, $startsAt, $endsAt);
+
+            return back()->with('error', $e->getMessage());
         }
-
-        $event = CalendarEvent::create([
-            'workspace_id' => $suggestedEvent->workspace_id,
-            'case_id' => $suggestedEvent->case_id,
-            'suggested_event_id' => $suggestedEvent->id,
-            'provider' => $provider,
-            'provider_event_id' => $providerEventId,
-            'starts_at' => $startsAt,
-            'ends_at' => $endsAt,
-            'status' => 'created',
-            'url' => $url,
-        ]);
-
-        $suggestedEvent->update(['status' => 'confirmed']);
-
-        Log::info('CalendarController: event confirmed', [
-            'calendar_event_id' => $event->id,
-            'provider' => $provider,
-        ]);
 
         if ($request->wantsJson() || $request->ajax()) {
             return response()->json([
                 'ok' => true,
-                'url' => $url,
+                'url' => $event->url,
                 'event_id' => $event->id,
             ]);
         }
 
-        if ($provider === 'calendly' && $url) {
-            return redirect()->away($url);
+        if (in_array($provider, ['google', 'calendly'], true) && $event->url) {
+            return redirect()->away($event->url);
         }
 
         return back()->with('success', 'Meeting confirmed and added to calendar.');
@@ -246,46 +215,28 @@ class CalendarController extends Controller
         return back()->with('success', 'Suggested meeting was dismissed.');
     }
 
-    // ── Private helpers ──────────────────────────────────────────────
-
     protected function exchangeGoogleCode(string $code): ?array
     {
+        $clientId = trim((string) config('services.google.client_id'));
+        $clientSecret = trim((string) config('services.google.client_secret'));
+
+        if ($clientId === '' || $clientSecret === '') {
+            return null;
+        }
+
         $response = \Illuminate\Support\Facades\Http::asForm()->post('https://oauth2.googleapis.com/token', [
             'code' => $code,
-            'client_id' => config('services.google.client_id'),
-            'client_secret' => config('services.google.client_secret'),
-            'redirect_uri' => route('app.calendar.google.callback'),
+            'client_id' => $clientId,
+            'client_secret' => $clientSecret,
+            'redirect_uri' => $this->googleRedirectUri(),
             'grant_type' => 'authorization_code',
         ]);
 
         return $response->ok() ? $response->json() : null;
     }
 
-    protected function createGoogleEvent(SuggestedEvent $suggested, $startsAt, $endsAt): ?string
+    protected function googleRedirectUri(): string
     {
-        $conn = CalendarConnection::where('workspace_id', $suggested->workspace_id)
-            ->where('provider', 'google')
-            ->first();
-        if (!$conn)
-            return null;
-
-        $tokens = $conn->tokens;
-        $case = $suggested->supportCase;
-        $summary = $case ? "Case #{$case->case_number}: {$case->title}" : 'Scheduled from TicketCloser';
-
-        $response = \Illuminate\Support\Facades\Http::withToken($tokens['access_token'] ?? '')
-            ->post('https://www.googleapis.com/calendar/v3/calendars/primary/events', [
-                'summary' => $summary,
-                'description' => $case?->description ?? '',
-                'start' => ['dateTime' => $startsAt?->toRfc3339String(), 'timeZone' => $suggested->timezone],
-                'end' => ['dateTime' => $endsAt?->toRfc3339String(), 'timeZone' => $suggested->timezone],
-            ]);
-
-        if ($response->ok()) {
-            return $response->json('htmlLink');
-        }
-
-        Log::warning('CalendarController: Google event creation failed', ['response' => $response->json()]);
-        return null;
+        return trim((string) config('services.google.redirect')) ?: route('app.calendar.google.callback');
     }
 }

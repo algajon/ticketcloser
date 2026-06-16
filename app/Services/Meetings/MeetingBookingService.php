@@ -163,14 +163,28 @@ class MeetingBookingService
             return [null, null, null];
         }
 
-        $case = $suggestedEvent->supportCase;
+        $context = $this->bookingContext($suggestedEvent);
+        $eventBody = [
+            'summary' => $context['summary'],
+            'description' => $context['description'],
+            'start' => ['dateTime' => $startsAt->toRfc3339String(), 'timeZone' => $suggestedEvent->timezone ?? 'UTC'],
+            'end' => ['dateTime' => $endsAt->toRfc3339String(), 'timeZone' => $suggestedEvent->timezone ?? 'UTC'],
+        ];
+
+        if ($context['email'] && filter_var($context['email'], FILTER_VALIDATE_EMAIL)) {
+            $attendee = [
+                'email' => $context['email'],
+            ];
+
+            if ($context['name']) {
+                $attendee['displayName'] = $context['name'];
+            }
+
+            $eventBody['attendees'] = [$attendee];
+        }
+
         $response = Http::withToken($connection->tokens['access_token'] ?? '')
-            ->post('https://www.googleapis.com/calendar/v3/calendars/primary/events', [
-                'summary' => 'Support Follow-up: Case #' . $case?->case_number,
-                'description' => $case?->description ?? '',
-                'start' => ['dateTime' => $startsAt->toRfc3339String(), 'timeZone' => $suggestedEvent->timezone ?? 'UTC'],
-                'end' => ['dateTime' => $endsAt->toRfc3339String(), 'timeZone' => $suggestedEvent->timezone ?? 'UTC'],
-            ]);
+            ->post('https://www.googleapis.com/calendar/v3/calendars/primary/events', $eventBody);
 
         if (!$response->ok()) {
             return [null, null, ['error' => $response->json()]];
@@ -179,7 +193,7 @@ class MeetingBookingService
         return [
             $response->json('htmlLink'),
             $response->json('id'),
-            $response->json(),
+            ['request' => $eventBody, 'response' => $response->json()],
         ];
     }
 
@@ -194,22 +208,132 @@ class MeetingBookingService
             return [null, null, null];
         }
 
-        $case = $suggestedEvent->supportCase;
-        $contact = $case?->contact;
+        $context = $this->bookingContext($suggestedEvent);
         $params = array_filter([
-            'name' => trim((string) ($contact?->name ?? '')),
-            'email' => trim((string) ($case?->requester_email ?? $contact?->email ?? '')),
+            'name' => $context['name'],
+            'email' => $context['email'],
             'month' => $startsAt->format('Y-m'),
             'date' => $startsAt->format('Y-m-d'),
-        ]);
-
-        $separator = str_contains($baseLink, '?') ? '&' : '?';
+            'a1' => $context['phone'],
+            'a2' => $context['ticket'],
+            'a3' => $context['issue'],
+            'a4' => $context['property_unit'],
+            'a5' => $context['visit_context'],
+        ], fn ($value) => filled($value));
 
         return [
-            $baseLink . $separator . http_build_query($params),
+            $this->appendQueryString($baseLink, $params),
             null,
-            ['params' => $params],
+            ['params' => $params, 'context' => $context],
         ];
+    }
+
+    private function bookingContext(SuggestedEvent $suggestedEvent): array
+    {
+        $suggestedEvent->loadMissing(['contact', 'supportCase.contact']);
+
+        $case = $suggestedEvent->supportCase;
+        $contact = $suggestedEvent->contact ?: $case?->contact;
+        $structuredPayload = is_array($case?->structured_payload) ? $case->structured_payload : [];
+        $ticket = $case?->case_number ? "Case #{$case->case_number}" : null;
+        $property = $case?->propertyDisplay();
+        $unit = $case?->unitDisplay();
+        $accessNotes = $case?->accessDetailsDisplay();
+        $preferredWindow = $case?->preferredVisitWindowDisplay();
+
+        $name = $this->firstFilled(
+            $contact?->name,
+            data_get($structuredPayload, 'requesterName'),
+            data_get($structuredPayload, 'requester_name'),
+            data_get($structuredPayload, 'fullName'),
+            data_get($structuredPayload, 'full_name'),
+            data_get($structuredPayload, 'name')
+        );
+        $email = $this->firstFilled(
+            $case?->requester_email,
+            $contact?->email,
+            data_get($structuredPayload, 'requesterEmail'),
+            data_get($structuredPayload, 'requester_email'),
+            data_get($structuredPayload, 'email')
+        );
+        $phone = $this->firstFilled(
+            $case?->requester_phone,
+            $contact?->phone_e164,
+            data_get($structuredPayload, 'requesterPhone'),
+            data_get($structuredPayload, 'requester_phone'),
+            data_get($structuredPayload, 'phoneNumber'),
+            data_get($structuredPayload, 'phone_number'),
+            data_get($structuredPayload, 'callbackNumber')
+        );
+        $issue = $this->firstFilled($case?->title, $case?->category, $case?->description);
+        $propertyUnit = trim(implode(' ', array_filter([
+            $property,
+            $unit ? "Unit {$unit}" : null,
+        ])));
+        $visitContext = trim(implode(' | ', array_filter([
+            $preferredWindow ? "Preferred window: {$preferredWindow}" : null,
+            $accessNotes ? "Access: {$accessNotes}" : null,
+        ])));
+
+        $descriptionLines = array_filter([
+            $ticket,
+            $name ? "Caller: {$name}" : null,
+            $phone ? "Phone: {$phone}" : null,
+            $email ? "Email: {$email}" : null,
+            $propertyUnit ? "Property: {$propertyUnit}" : null,
+            $preferredWindow ? "Preferred window: {$preferredWindow}" : null,
+            $accessNotes ? "Access notes: {$accessNotes}" : null,
+            $case?->description ? "\nIssue details:\n{$case->description}" : null,
+            $case ? "\nTicket link: " . route('app.tickets.show', $case) : null,
+        ]);
+
+        return [
+            'summary' => $case
+                ? "{$ticket}: {$case->title}"
+                : 'tickIt follow-up',
+            'description' => implode("\n", $descriptionLines),
+            'name' => $name,
+            'email' => $email,
+            'phone' => $phone,
+            'ticket' => $ticket,
+            'issue' => $issue,
+            'property_unit' => $propertyUnit,
+            'visit_context' => $visitContext,
+        ];
+    }
+
+    private function firstFilled(mixed ...$values): ?string
+    {
+        foreach ($values as $value) {
+            if (! is_scalar($value)) {
+                continue;
+            }
+
+            $normalized = trim((string) $value);
+
+            if ($normalized !== '') {
+                return $normalized;
+            }
+        }
+
+        return null;
+    }
+
+    private function appendQueryString(string $url, array $params): string
+    {
+        if ($params === []) {
+            return $url;
+        }
+
+        $fragment = '';
+        if (str_contains($url, '#')) {
+            [$url, $fragment] = explode('#', $url, 2);
+            $fragment = '#' . $fragment;
+        }
+
+        $separator = str_contains($url, '?') ? '&' : '?';
+
+        return $url . $separator . http_build_query($params, '', '&', PHP_QUERY_RFC3986) . $fragment;
     }
 
     private function hasGoogleConnection(int $workspaceId): bool
