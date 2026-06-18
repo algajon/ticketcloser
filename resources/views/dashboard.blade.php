@@ -38,8 +38,8 @@
     @endphp
 
     <div class="tc-dashboard space-y-10">
-        <div class="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)]" style="align-items:start;">
-            <x-ui.panel class="tc-dashboard-panel" style="align-self:start;" title="Workspace pulse" description="See what is live and what the team will feel first.">
+        <div class="grid gap-6 xl:grid-cols-[minmax(0,1.18fr)_minmax(320px,0.82fr)] xl:items-stretch">
+            <x-ui.panel class="tc-dashboard-panel xl:h-full" title="Workspace pulse" description="See what is live and what the team will feel first.">
                 <div class="tc-dashboard-pulse-grid">
                     <div class="tc-dashboard-pulse-metric">
                         <p class="tc-dashboard-pulse-label">Open tickets</p>
@@ -86,8 +86,8 @@
                 @endif
             </x-ui.panel>
 
-            <div class="space-y-6">
-                <x-ui.panel class="tc-dashboard-panel" title="Next move" description="The clearest action from here.">
+            <div class="space-y-6 xl:h-full">
+                <x-ui.panel class="tc-dashboard-panel xl:h-full" title="Next move" description="The clearest action from here.">
                     @if(! $primaryAttention)
                         <x-ui.empty-state title="Everything looks good" description="Setup is done and there are no urgent blockers right now." />
                     @else
