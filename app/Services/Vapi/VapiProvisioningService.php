@@ -477,26 +477,21 @@ class VapiProvisioningService
         string $twilioAuthToken,
     ): array {
         $payload = array_merge(
-            $this->phoneNumberAssignmentPayload($workspace, $assistantConfig),
+            $this->phoneNumberAssignmentUrlPayload($workspace, $assistantConfig),
             [
-                'provider' => 'twilio',
-                'number' => $routingNumber,
+                'twilioPhoneNumber' => $routingNumber,
                 'twilioAccountSid' => $twilioAccountSid,
                 'twilioAuthToken' => $twilioAuthToken,
-                'smsEnabled' => true,
             ],
         );
 
         $existing = $this->findVapiPhoneNumberByNumber($routingNumber);
 
         if ($existing && filled($existing['id'] ?? null)) {
-            $updatePayload = $payload;
-            unset($updatePayload['provider']);
-
-            return $this->vapi->updatePhoneNumber($existing['id'], $updatePayload);
+            $this->deleteRemotePhoneNumberQuietly($existing['id']);
         }
 
-        return $this->vapi->createPhoneNumber($payload);
+        return $this->vapi->importTwilioPhoneNumber($payload);
     }
 
     private function findVapiPhoneNumberByNumber(string $phoneNumber): ?array
@@ -535,6 +530,15 @@ class VapiProvisioningService
             'server' => [
                 'url' => config('services.vapi.webhook_url'),
             ],
+        ];
+    }
+
+    private function phoneNumberAssignmentUrlPayload(Workspace $workspace, AssistantConfig $assistantConfig): array
+    {
+        return [
+            'name' => $workspace->name . ' Support',
+            'assistantId' => $assistantConfig->vapi_assistant_id,
+            'serverUrl' => config('services.vapi.webhook_url'),
         ];
     }
 

@@ -587,16 +587,14 @@ class PhoneNumbersPageTest extends TestCase
             ->method('listPhoneNumbers')
             ->willReturn([]);
         $client->expects($this->once())
-            ->method('createPhoneNumber')
+            ->method('importTwilioPhoneNumber')
             ->with($this->callback(function (array $payload) use ($assistant, $workspace) {
-                return $payload['provider'] === 'twilio'
-                    && $payload['number'] === '+13613263105'
+                return $payload['twilioPhoneNumber'] === '+13613263105'
                     && $payload['twilioAccountSid'] === 'ACTestOnlySidNeverReal123'
                     && $payload['twilioAuthToken'] === 'token_secret'
-                    && $payload['smsEnabled'] === true
                     && $payload['assistantId'] === $assistant->vapi_assistant_id
                     && $payload['name'] === $workspace->name.' Support'
-                    && data_get($payload, 'server.url') === config('services.vapi.webhook_url');
+                    && $payload['serverUrl'] === config('services.vapi.webhook_url');
             }))
             ->willReturn([
                 'id' => 'pn_twilio_created_123',
@@ -637,7 +635,7 @@ class PhoneNumbersPageTest extends TestCase
         ]);
     }
 
-    public function test_twilio_import_reuses_existing_vapi_number_found_by_phone_number(): void
+    public function test_twilio_import_rebuilds_existing_vapi_number_found_by_phone_number(): void
     {
         $user = User::factory()->create();
         $workspace = Workspace::factory()->create([
@@ -676,23 +674,25 @@ class PhoneNumbersPageTest extends TestCase
                 ],
             ]);
         $client->expects($this->once())
-            ->method('updatePhoneNumber')
-            ->with('pn_twilio_existing_123', $this->callback(function (array $payload) use ($assistant, $workspace) {
-                return ! isset($payload['provider'])
-                    && $payload['number'] === '+13613263105'
+            ->method('deletePhoneNumber')
+            ->with('pn_twilio_existing_123');
+        $client->expects($this->once())
+            ->method('importTwilioPhoneNumber')
+            ->with($this->callback(function (array $payload) use ($assistant, $workspace) {
+                return $payload['twilioPhoneNumber'] === '+13613263105'
                     && $payload['twilioAccountSid'] === 'ACTestOnlySidNeverReal123'
                     && $payload['twilioAuthToken'] === 'token_secret'
-                    && $payload['smsEnabled'] === true
                     && $payload['assistantId'] === $assistant->vapi_assistant_id
                     && $payload['name'] === $workspace->name.' Support'
-                    && data_get($payload, 'server.url') === config('services.vapi.webhook_url');
+                    && $payload['serverUrl'] === config('services.vapi.webhook_url');
             }))
             ->willReturn([
-                'id' => 'pn_twilio_existing_123',
+                'id' => 'pn_twilio_rebuilt_123',
                 'number' => '+13613263105',
                 'provider' => 'twilio',
             ]);
         $client->expects($this->never())->method('createPhoneNumber');
+        $client->expects($this->never())->method('updatePhoneNumber');
 
         $this->app->instance(VapiClient::class, $client);
 
@@ -719,7 +719,7 @@ class PhoneNumbersPageTest extends TestCase
             'workspace_id' => $workspace->id,
             'assistant_id' => $assistant->id,
             'external_provider' => 'twilio',
-            'vapi_phone_number_id' => 'pn_twilio_existing_123',
+            'vapi_phone_number_id' => 'pn_twilio_rebuilt_123',
             'e164' => '+13613263105',
         ]);
     }

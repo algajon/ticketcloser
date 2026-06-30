@@ -62,6 +62,12 @@ class VapiClient
     }
 
     /** @throws RequestException */
+    public function importTwilioPhoneNumber(array $payload): array
+    {
+        return $this->http()->post('/phone-number/import/twilio', $payload)->throw()->json();
+    }
+
+    /** @throws RequestException */
     public function updatePhoneNumber(string $id, array $payload): array
     {
         return $this->http()->patch("/phone-number/{$id}", $payload)->throw()->json();
