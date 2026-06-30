@@ -217,8 +217,12 @@ class VapiProvisioningService
         $record->assistant_id = $assistantConfig->id;
         $record->provisioning_mode = $input['provisioning_mode'] ?? $record->provisioning_mode ?? $workspace->preferredPhoneSetupMode();
         $record->external_provider = $input['external_provider'] ?? $record->external_provider ?? $workspace->preferredExternalPhoneProvider();
-        $record->vapi_credential_id = $input['vapi_credential_id'] ?? $record->vapi_credential_id ?? $workspace->default_vapi_credential_id;
+        $record->vapi_credential_id = $record->external_provider === 'twilio'
+            ? ($input['vapi_credential_id'] ?? null)
+            : ($input['vapi_credential_id'] ?? $record->vapi_credential_id ?? $workspace->default_vapi_credential_id);
         $providedVapiPhoneNumberId = $this->normalizeStoredPhoneNumber($input['vapi_phone_number_id'] ?? null);
+        $twilioAccountSid = $this->normalizeStoredPhoneNumber($input['twilio_account_sid'] ?? null);
+        $twilioAuthToken = $this->normalizeStoredPhoneNumber($input['twilio_auth_token'] ?? null);
 
         $areaCode = isset($input['area_code'])
             ? preg_replace('/\D+/', '', (string) $input['area_code'])
@@ -231,7 +235,38 @@ class VapiProvisioningService
 
             $routingNumber = preg_replace('/[^0-9+]/', '', (string) ($record->forwarding_number ?? ''));
 
-            if (filled($providedVapiPhoneNumberId)) {
+            if (
+                $record->external_provider === 'twilio'
+                && $routingNumber !== ''
+                && filled($twilioAccountSid)
+                && filled($twilioAuthToken)
+            ) {
+                if (
+                    filled($previousVapiPhoneNumberId)
+                    && $previousProvisioningMode === 'vapi_instant'
+                ) {
+                    $this->deleteRemotePhoneNumberQuietly($previousVapiPhoneNumberId);
+                    $record->vapi_phone_number_id = null;
+                    $record->e164 = null;
+                    $record->activation_started_at = null;
+                    $record->save();
+                }
+
+                $pn = $this->syncTwilioPhoneNumber(
+                    $workspace,
+                    $assistantConfig,
+                    $routingNumber,
+                    $twilioAccountSid,
+                    $twilioAuthToken,
+                );
+
+                $this->assertImportedPhoneNumberMatches($pn, $routingNumber);
+
+                $record->vapi_phone_number_id = $pn['id'] ?? $record->vapi_phone_number_id;
+                $record->e164 = $pn['number'] ?? $pn['sipUri'] ?? $routingNumber ?: $record->e164;
+                $record->assistant_id = $assistantConfig->id;
+                $record->save();
+            } elseif (filled($providedVapiPhoneNumberId)) {
                 $existingPhoneNumber = $this->vapi->getPhoneNumber($providedVapiPhoneNumberId);
                 $this->assertImportedPhoneNumberMatches($existingPhoneNumber, $routingNumber);
 
@@ -432,6 +467,75 @@ class VapiProvisioningService
         $record->save();
 
         return $pn;
+    }
+
+    private function syncTwilioPhoneNumber(
+        Workspace $workspace,
+        AssistantConfig $assistantConfig,
+        string $routingNumber,
+        string $twilioAccountSid,
+        string $twilioAuthToken,
+    ): array {
+        $payload = array_merge(
+            $this->phoneNumberAssignmentPayload($workspace, $assistantConfig),
+            [
+                'provider' => 'twilio',
+                'number' => $routingNumber,
+                'twilioAccountSid' => $twilioAccountSid,
+                'twilioAuthToken' => $twilioAuthToken,
+                'smsEnabled' => true,
+            ],
+        );
+
+        $existing = $this->findVapiPhoneNumberByNumber($routingNumber);
+
+        if ($existing && filled($existing['id'] ?? null)) {
+            $updatePayload = $payload;
+            unset($updatePayload['provider']);
+
+            return $this->vapi->updatePhoneNumber($existing['id'], $updatePayload);
+        }
+
+        return $this->vapi->createPhoneNumber($payload);
+    }
+
+    private function findVapiPhoneNumberByNumber(string $phoneNumber): ?array
+    {
+        $needle = $this->normalizeComparablePhoneNumber($phoneNumber);
+
+        if ($needle === null) {
+            return null;
+        }
+
+        $phoneNumbers = $this->vapi->listPhoneNumbers();
+        $items = is_array($phoneNumbers['results'] ?? null)
+            ? $phoneNumbers['results']
+            : $phoneNumbers;
+
+        foreach ($items as $candidate) {
+            if (! is_array($candidate)) {
+                continue;
+            }
+
+            $candidateNumber = $this->normalizeComparablePhoneNumber($candidate['number'] ?? $candidate['sipUri'] ?? null);
+
+            if ($candidateNumber === $needle) {
+                return $candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private function phoneNumberAssignmentPayload(Workspace $workspace, AssistantConfig $assistantConfig): array
+    {
+        return [
+            'name' => $workspace->name . ' Support',
+            'assistantId' => $assistantConfig->vapi_assistant_id,
+            'server' => [
+                'url' => config('services.vapi.webhook_url'),
+            ],
+        ];
     }
 
     private function syncImportedPhoneNumber(

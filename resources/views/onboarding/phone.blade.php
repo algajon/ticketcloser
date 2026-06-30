@@ -21,6 +21,7 @@
             'vapi_phone_number_id',
             $phone?->provisioning_mode === 'external_provider' ? $phone?->vapi_phone_number_id : null
         );
+        $twilioAccountSid = old('twilio_account_sid');
         $existingNumberCountry = old(
             'existing_number_country',
             $defaultExistingNumberCountry ?? \App\Support\RegionalPilotStackCatalog::inferExistingNumberCountry(
@@ -192,6 +193,8 @@
                     externalProvider: @js($externalProvider),
                     vapiCredentialId: @js($vapiCredentialId),
                     vapiPhoneNumberId: @js($vapiPhoneNumberId),
+                    twilioAccountSid: @js($twilioAccountSid),
+                    twilioAuthToken: '',
                     existingNumberCountry: @js($existingNumberCountry),
                     workspaceHasDefaultVapiCredential: @js($workspaceHasDefaultVapiCredential),
                     autoForwardingTarget: @js((string) $autoForwardingTarget === '1'),
@@ -210,6 +213,9 @@
                     },
                     hasImportedVapiNumber() {
                         return String(this.vapiPhoneNumberId || '').trim() !== '';
+                    },
+                    hasTwilioCredentials() {
+                        return String(this.twilioAccountSid || '').trim() !== '' && String(this.twilioAuthToken || '').trim() !== '';
                     },
                     countryConfig() {
                         return this.numberCatalog[this.existingNumberCountry] || this.numberCatalog.us || Object.values(this.numberCatalog)[0] || {};
@@ -240,6 +246,10 @@
                         return this.countryConfig().placeholder || '+1 415 555 0123';
                     },
                     providerHelp() {
+                        if (this.externalProvider === 'twilio') {
+                            return 'tickIt will import this Twilio number into Vapi, configure the Twilio webhooks, and assign it to this assistant.';
+                        }
+
                         return this.countryConfig().provider_help || 'Use the carrier that already owns this number.';
                     },
                     credentialHelp() {
@@ -272,6 +282,10 @@
                         }
 
                         if (this.isImportMode()) {
+                            if (this.externalProvider === 'twilio') {
+                                return 'Import Twilio number and attach assistant';
+                            }
+
                             if (this.hasImportedVapiNumber()) {
                                 return 'Attach existing Vapi number';
                             }
@@ -335,21 +349,22 @@
                     </div>
                 </div>
 
-                <div class="tc-meta-card border-emerald-200 bg-emerald-50/80 text-sm leading-6 text-emerald-900" x-show="isImportMode() && (hasImportedVapiNumber() || hasAnyCredential())" x-transition>
-                    <div class="tc-label-eyebrow text-emerald-700" x-text="hasImportedVapiNumber() ? 'Ready to attach' : 'Ready to import'">Ready to import</div>
+                <div class="tc-meta-card border-emerald-200 bg-emerald-50/80 text-sm leading-6 text-emerald-900" x-show="isImportMode() && (hasImportedVapiNumber() || hasAnyCredential() || (externalProvider === 'twilio' && hasTwilioCredentials()))" x-transition>
+                    <div class="tc-label-eyebrow text-emerald-700" x-text="externalProvider === 'twilio' && hasTwilioCredentials() ? 'Ready to import through Vapi' : (hasImportedVapiNumber() ? 'Ready to attach' : 'Ready to import')">Ready to import</div>
                     <div class="mt-2">
-                        <span x-text="hasImportedVapiNumber() ? 'This existing Vapi number will be assigned to the selected assistant when you save.' : 'This assistant can import a US, German, UAE, or other existing number directly into Vapi as soon as you save it.'">
+                        <span x-text="externalProvider === 'twilio' && hasTwilioCredentials() ? 'Vapi will import the Twilio number, configure the Twilio webhooks, and assign it to this assistant.' : (hasImportedVapiNumber() ? 'This existing Vapi number will be assigned to the selected assistant when you save.' : 'This assistant can import a US, German, UAE, or other existing number directly into Vapi as soon as you save it.')">
                             This assistant can import a US, German, UAE, or other existing number directly into Vapi as soon as you save it.
                         </span>
                     </div>
                 </div>
 
-                <div class="tc-meta-card border-amber-200 bg-amber-50/80 text-sm leading-6 text-amber-900" x-show="isImportMode() && !hasImportedVapiNumber() && !hasAnyCredential()" x-transition>
+                <div class="tc-meta-card border-amber-200 bg-amber-50/80 text-sm leading-6 text-amber-900" x-show="isImportMode() && !hasImportedVapiNumber() && !hasAnyCredential() && !(externalProvider === 'twilio' && hasTwilioCredentials())" x-transition>
                     <div class="tc-label-eyebrow text-amber-700">Import needs one detail</div>
                     <div class="mt-2">
-                        Paste the Vapi phone ID if this Twilio number is already in Vapi, or add a workspace Vapi BYO credential once in
-                        <a href="{{ route('app.workspaces.settings', $workspace) }}" class="font-semibold underline decoration-amber-300 underline-offset-2">workspace settings</a>
-                        for direct carrier imports.
+                        <span x-show="externalProvider === 'twilio'">Enter your Twilio Account SID and Auth Token so tickIt can import this number into Vapi.</span>
+                        <span x-show="externalProvider !== 'twilio'">Paste the Vapi phone ID if this number is already in Vapi, or add a workspace Vapi BYO credential once in
+                            <a href="{{ route('app.workspaces.settings', $workspace) }}" class="font-semibold underline decoration-amber-300 underline-offset-2">workspace settings</a>
+                            for direct carrier imports.</span>
                     </div>
                 </div>
 
@@ -420,16 +435,37 @@
                     </p>
                 </div>
 
+                <div class="grid gap-4 md:grid-cols-2" x-show="provisioningMode === 'external_provider' && externalProvider === 'twilio'" x-transition>
+                    <div class="tc-field">
+                        <label for="twilio_account_sid" class="tc-field-label">Twilio Account SID</label>
+                        <input id="twilio_account_sid" name="twilio_account_sid" type="text" class="tc-input" x-model="twilioAccountSid" value="{{ old('twilio_account_sid') }}" placeholder="AC..." autocomplete="off" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
+                        @if($errors->first('twilio_account_sid'))
+                            <p class="tc-error">{{ $errors->first('twilio_account_sid') }}</p>
+                        @endif
+                    </div>
+
+                    <div class="tc-field">
+                        <label for="twilio_auth_token" class="tc-field-label">Twilio Auth Token</label>
+                        <input id="twilio_auth_token" name="twilio_auth_token" type="password" class="tc-input" x-model="twilioAuthToken" placeholder="Used once; not stored by tickIt" autocomplete="off" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
+                        @if($errors->first('twilio_auth_token'))
+                            <p class="tc-error">{{ $errors->first('twilio_auth_token') }}</p>
+                        @endif
+                    </div>
+                </div>
+                <p class="tc-help -mt-3" x-show="provisioningMode === 'external_provider' && externalProvider === 'twilio'" x-cloak>
+                    tickIt sends these to Vapi so Vapi can claim the Twilio number and configure voice/SMS webhooks. The auth token is not saved in tickIt.
+                </p>
+
                 <div class="tc-field" x-show="provisioningMode === 'external_provider'" x-transition>
-                    <label for="vapi_phone_number_id" class="tc-field-label">Vapi phone number ID <span class="text-slate-500">Optional</span></label>
-                    <input id="vapi_phone_number_id" name="vapi_phone_number_id" type="text" class="tc-input" x-model="vapiPhoneNumberId" placeholder="Paste the Vapi ID for your Twilio number" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
-                    <p class="tc-help">Already added your Twilio number in Vapi? Paste its Vapi phone ID here and tickIt will assign it to the selected assistant.</p>
+                    <label for="vapi_phone_number_id" class="tc-field-label">Existing Vapi phone ID <span class="text-slate-500">Advanced optional</span></label>
+                    <input id="vapi_phone_number_id" name="vapi_phone_number_id" type="text" class="tc-input" x-model="vapiPhoneNumberId" placeholder="Only needed if this number is already configured in Vapi" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
+                    <p class="tc-help">Leave this blank for a normal Twilio import. If supplied, tickIt verifies the Vapi ID belongs to the number above before assigning it.</p>
                     @if($errors->first('vapi_phone_number_id'))
                         <p class="tc-error">{{ $errors->first('vapi_phone_number_id') }}</p>
                     @endif
                 </div>
 
-                <div class="tc-field" x-show="provisioningMode !== 'vapi_instant'" x-transition>
+                <div class="tc-field" x-show="provisioningMode !== 'vapi_instant' && externalProvider !== 'twilio'" x-transition>
                     <label for="vapi_credential_id" class="tc-field-label">Vapi import credential <span class="text-slate-500">Optional</span></label>
                     <input id="vapi_credential_id" name="vapi_credential_id" type="text" class="tc-input" x-model="vapiCredentialId" placeholder="Paste a Vapi BYO credential ID if you want to override the workspace default" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
                     <p class="tc-help" x-text="credentialHelp()">Optional import help text.</p>

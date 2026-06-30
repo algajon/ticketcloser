@@ -554,6 +554,176 @@ class PhoneNumbersPageTest extends TestCase
             ->assertSee('SMS ready');
     }
 
+    public function test_twilio_import_through_tickit_creates_vapi_phone_number_and_assigns_it(): void
+    {
+        $user = User::factory()->create();
+        $workspace = Workspace::factory()->create([
+            'plan_key' => 'startup',
+            'primary_market' => 'global',
+        ]);
+
+        WorkspaceMembership::create([
+            'workspace_id' => $workspace->id,
+            'user_id' => $user->id,
+            'role' => WorkspaceMembership::ROLE_OWNER,
+        ]);
+
+        Subscription::create([
+            'workspace_id' => $workspace->id,
+            'stripe_subscription_id' => 'sub_phone_twilio_create',
+            'plan_key' => 'startup',
+            'status' => 'active',
+        ]);
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Sales Assistant',
+            'vapi_assistant_id' => 'asst_sales_456',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->method('updateAssistant')->willReturn([]);
+        $client->expects($this->once())
+            ->method('listPhoneNumbers')
+            ->willReturn([]);
+        $client->expects($this->once())
+            ->method('createPhoneNumber')
+            ->with($this->callback(function (array $payload) use ($assistant, $workspace) {
+                return $payload['provider'] === 'twilio'
+                    && $payload['number'] === '+13613263105'
+                    && $payload['twilioAccountSid'] === 'AC123'
+                    && $payload['twilioAuthToken'] === 'token_secret'
+                    && $payload['smsEnabled'] === true
+                    && $payload['assistantId'] === $assistant->vapi_assistant_id
+                    && $payload['name'] === $workspace->name.' Support'
+                    && data_get($payload, 'server.url') === config('services.vapi.webhook_url');
+            }))
+            ->willReturn([
+                'id' => 'pn_twilio_created_123',
+                'number' => '+13613263105',
+                'provider' => 'twilio',
+            ]);
+
+        $this->app->instance(VapiClient::class, $client);
+
+        $response = $this
+            ->actingAs($user)
+            ->post(route('app.phone_numbers.store', $workspace), [
+                'assistant_id' => $assistant->id,
+                'provisioning_mode' => 'external_provider',
+                'external_provider' => 'twilio',
+                'existing_number_country' => 'us',
+                'forwarding_number' => '+1 (361) 326 3105',
+                'twilio_account_sid' => 'AC123',
+                'twilio_auth_token' => 'token_secret',
+            ]);
+
+        $response
+            ->assertRedirect(route('app.phone_numbers.index', [
+                'workspace' => $workspace,
+                'assistant_id' => $assistant->id,
+            ], false))
+            ->assertSessionHas('success', 'Existing number imported and linked to the assistant.');
+
+        $this->assertDatabaseHas('workspace_phone_numbers', [
+            'workspace_id' => $workspace->id,
+            'assistant_id' => $assistant->id,
+            'provisioning_mode' => 'external_provider',
+            'external_provider' => 'twilio',
+            'forwarding_number' => '+1 (361) 326 3105',
+            'vapi_phone_number_id' => 'pn_twilio_created_123',
+            'e164' => '+13613263105',
+            'is_active' => true,
+        ]);
+    }
+
+    public function test_twilio_import_reuses_existing_vapi_number_found_by_phone_number(): void
+    {
+        $user = User::factory()->create();
+        $workspace = Workspace::factory()->create([
+            'plan_key' => 'startup',
+            'primary_market' => 'global',
+        ]);
+
+        WorkspaceMembership::create([
+            'workspace_id' => $workspace->id,
+            'user_id' => $user->id,
+            'role' => WorkspaceMembership::ROLE_OWNER,
+        ]);
+
+        Subscription::create([
+            'workspace_id' => $workspace->id,
+            'stripe_subscription_id' => 'sub_phone_twilio_find',
+            'plan_key' => 'startup',
+            'status' => 'active',
+        ]);
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Property Maintenance Assistant',
+            'vapi_assistant_id' => 'asst_pm_456',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->method('updateAssistant')->willReturn([]);
+        $client->expects($this->once())
+            ->method('listPhoneNumbers')
+            ->willReturn([
+                [
+                    'id' => 'pn_twilio_existing_123',
+                    'number' => '+13613263105',
+                    'provider' => 'twilio',
+                ],
+            ]);
+        $client->expects($this->once())
+            ->method('updatePhoneNumber')
+            ->with('pn_twilio_existing_123', $this->callback(function (array $payload) use ($assistant, $workspace) {
+                return ! isset($payload['provider'])
+                    && $payload['number'] === '+13613263105'
+                    && $payload['twilioAccountSid'] === 'AC123'
+                    && $payload['twilioAuthToken'] === 'token_secret'
+                    && $payload['smsEnabled'] === true
+                    && $payload['assistantId'] === $assistant->vapi_assistant_id
+                    && $payload['name'] === $workspace->name.' Support'
+                    && data_get($payload, 'server.url') === config('services.vapi.webhook_url');
+            }))
+            ->willReturn([
+                'id' => 'pn_twilio_existing_123',
+                'number' => '+13613263105',
+                'provider' => 'twilio',
+            ]);
+        $client->expects($this->never())->method('createPhoneNumber');
+
+        $this->app->instance(VapiClient::class, $client);
+
+        $response = $this
+            ->actingAs($user)
+            ->post(route('app.phone_numbers.store', $workspace), [
+                'assistant_id' => $assistant->id,
+                'provisioning_mode' => 'external_provider',
+                'external_provider' => 'twilio',
+                'existing_number_country' => 'us',
+                'forwarding_number' => '+1 (361) 326 3105',
+                'twilio_account_sid' => 'AC123',
+                'twilio_auth_token' => 'token_secret',
+            ]);
+
+        $response
+            ->assertRedirect(route('app.phone_numbers.index', [
+                'workspace' => $workspace,
+                'assistant_id' => $assistant->id,
+            ], false))
+            ->assertSessionHas('success', 'Existing number imported and linked to the assistant.');
+
+        $this->assertDatabaseHas('workspace_phone_numbers', [
+            'workspace_id' => $workspace->id,
+            'assistant_id' => $assistant->id,
+            'external_provider' => 'twilio',
+            'vapi_phone_number_id' => 'pn_twilio_existing_123',
+            'e164' => '+13613263105',
+        ]);
+    }
+
     public function test_twilio_import_rejects_a_vapi_id_for_a_different_number(): void
     {
         $user = User::factory()->create();

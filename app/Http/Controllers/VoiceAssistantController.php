@@ -293,6 +293,8 @@ class VoiceAssistantController extends Controller
             'external_provider' => ['nullable', 'string', Rule::in(collect(RegionalPilotStackCatalog::externalProviderOptions())->pluck('value')->all())],
             'vapi_credential_id' => ['nullable', 'string', 'max:120'],
             'vapi_phone_number_id' => ['nullable', 'string', 'max:120'],
+            'twilio_account_sid' => ['nullable', 'string', 'max:120'],
+            'twilio_auth_token' => ['nullable', 'string', 'max:255'],
             'forwarding_number' => ['nullable', 'string', 'max:40'],
             'existing_number_country' => ['nullable', 'string', Rule::in(collect(RegionalPilotStackCatalog::existingNumberCountryOptions($workspace->primaryMarket()))->pluck('value')->all())],
             'auto_forwarding_target' => ['nullable', 'boolean'],
@@ -303,6 +305,12 @@ class VoiceAssistantController extends Controller
             : null;
         $data['vapi_phone_number_id'] = filled($data['vapi_phone_number_id'] ?? null)
             ? trim((string) $data['vapi_phone_number_id'])
+            : null;
+        $data['twilio_account_sid'] = filled($data['twilio_account_sid'] ?? null)
+            ? trim((string) $data['twilio_account_sid'])
+            : null;
+        $data['twilio_auth_token'] = filled($data['twilio_auth_token'] ?? null)
+            ? trim((string) $data['twilio_auth_token'])
             : null;
 
         if ($workspace->hasReachedVoiceMinuteLimit()) {
@@ -324,6 +332,28 @@ class VoiceAssistantController extends Controller
         ) {
             return back()
                 ->withErrors(['vapi_phone_number_id' => 'Enter the Vapi phone number ID or the Twilio number you want to import.'])
+                ->withInput();
+        }
+
+        if (
+            $setupMode === 'external_provider'
+            && ($data['external_provider'] ?? null) === 'twilio'
+            && blank($data['vapi_phone_number_id'])
+            && blank($data['twilio_account_sid'])
+        ) {
+            return back()
+                ->withErrors(['twilio_account_sid' => 'Enter the Twilio Account SID so tickIt can import this number into Vapi.'])
+                ->withInput();
+        }
+
+        if (
+            $setupMode === 'external_provider'
+            && ($data['external_provider'] ?? null) === 'twilio'
+            && blank($data['vapi_phone_number_id'])
+            && blank($data['twilio_auth_token'])
+        ) {
+            return back()
+                ->withErrors(['twilio_auth_token' => 'Enter the Twilio Auth Token so Vapi can configure this Twilio number.'])
                 ->withInput();
         }
 

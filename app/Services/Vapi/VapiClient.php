@@ -73,6 +73,12 @@ class VapiClient
         return $this->http()->get("/phone-number/{$id}")->throw()->json();
     }
 
+    /** @throws RequestException */
+    public function listPhoneNumbers(): array
+    {
+        return $this->http()->get('/phone-number')->throw()->json();
+    }
+
     /** Delete a phone number (best-effort, ignores 404) */
     public function deletePhoneNumber(string $id): void
     {
