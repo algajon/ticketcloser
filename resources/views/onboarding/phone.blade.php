@@ -17,7 +17,10 @@
         $provisioningMode = old('provisioning_mode', $phone?->provisioning_mode ?: $workspace->preferredPhoneSetupMode());
         $externalProvider = old('external_provider', $phone?->external_provider ?: $workspace->preferredExternalPhoneProvider());
         $vapiCredentialId = old('vapi_credential_id', $phone?->vapi_credential_id ?: $workspace->default_vapi_credential_id);
-        $vapiPhoneNumberId = old('vapi_phone_number_id', $phone?->vapi_phone_number_id);
+        $vapiPhoneNumberId = old(
+            'vapi_phone_number_id',
+            $phone?->provisioning_mode === 'external_provider' ? $phone?->vapi_phone_number_id : null
+        );
         $existingNumberCountry = old(
             'existing_number_country',
             $defaultExistingNumberCountry ?? \App\Support\RegionalPilotStackCatalog::inferExistingNumberCountry(

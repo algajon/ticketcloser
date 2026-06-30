@@ -232,6 +232,9 @@ class VapiProvisioningService
             $routingNumber = preg_replace('/[^0-9+]/', '', (string) ($record->forwarding_number ?? ''));
 
             if (filled($providedVapiPhoneNumberId)) {
+                $existingPhoneNumber = $this->vapi->getPhoneNumber($providedVapiPhoneNumberId);
+                $this->assertImportedPhoneNumberMatches($existingPhoneNumber, $routingNumber);
+
                 if (
                     filled($previousVapiPhoneNumberId)
                     && $previousVapiPhoneNumberId !== $providedVapiPhoneNumberId
@@ -245,6 +248,7 @@ class VapiProvisioningService
                     'serverUrl' => config('services.vapi.webhook_url'),
                     'assistantId' => $assistantConfig->vapi_assistant_id,
                 ]);
+                $this->assertImportedPhoneNumberMatches($pn, $routingNumber);
 
                 $record->vapi_phone_number_id = $pn['id'] ?? $providedVapiPhoneNumberId;
                 $record->e164 = $pn['number'] ?? $pn['sipUri'] ?? $routingNumber ?: $record->e164;
@@ -481,6 +485,34 @@ class VapiProvisioningService
         } catch (\Throwable) {
             // Ignore missing phone numbers in Vapi when we are rebuilding the binding.
         }
+    }
+
+    private function assertImportedPhoneNumberMatches(array $phoneNumber, string $expectedNumber): void
+    {
+        if ($expectedNumber === '') {
+            return;
+        }
+
+        $expected = $this->normalizeComparablePhoneNumber($expectedNumber);
+        $actual = $this->normalizeComparablePhoneNumber($phoneNumber['number'] ?? $phoneNumber['sipUri'] ?? null);
+
+        if ($expected === null || $actual === null || $expected === $actual) {
+            return;
+        }
+
+        throw new \RuntimeException('That Vapi phone number ID belongs to '.$this->formatComparablePhoneNumber($actual).', not '.$this->formatComparablePhoneNumber($expected).'. Paste the Vapi phone ID for the number you are importing.');
+    }
+
+    private function normalizeComparablePhoneNumber(?string $phoneNumber): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $phoneNumber);
+
+        return is_string($digits) && $digits !== '' ? $digits : null;
+    }
+
+    private function formatComparablePhoneNumber(string $digits): string
+    {
+        return '+'.$digits;
     }
 
     private function normalizeStoredPhoneNumber(?string $phoneNumber): ?string
