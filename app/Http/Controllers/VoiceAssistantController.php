@@ -181,6 +181,11 @@ class VoiceAssistantController extends Controller
         $phoneNumbersLockedForFreePlan = $workspace->isFreePlan() && ! $workspace->bypassesPlanLimits();
 
         $configs = AssistantConfig::where('workspace_id', $workspace->id)->get();
+        $phoneNumbers = WorkspacePhoneNumber::query()
+            ->with('assistant')
+            ->where('workspace_id', $workspace->id)
+            ->latest('updated_at')
+            ->get();
 
         $assistantId = $request->query('assistant_id');
         $config = $assistantId
@@ -262,6 +267,7 @@ class VoiceAssistantController extends Controller
             'config',
             'phoneNumbersLockedForFreePlan',
             'activationCountdownEndsAt',
+            'phoneNumbers',
             'pilotStack',
             'phoneSetupOptions',
             'externalProviderOptions',
@@ -286,6 +292,7 @@ class VoiceAssistantController extends Controller
             'provisioning_mode' => ['nullable', 'string', Rule::in(['vapi_instant', 'existing_business_number', 'external_provider'])],
             'external_provider' => ['nullable', 'string', Rule::in(collect(RegionalPilotStackCatalog::externalProviderOptions())->pluck('value')->all())],
             'vapi_credential_id' => ['nullable', 'string', 'max:120'],
+            'vapi_phone_number_id' => ['nullable', 'string', 'max:120'],
             'forwarding_number' => ['nullable', 'string', 'max:40'],
             'existing_number_country' => ['nullable', 'string', Rule::in(collect(RegionalPilotStackCatalog::existingNumberCountryOptions($workspace->primaryMarket()))->pluck('value')->all())],
             'auto_forwarding_target' => ['nullable', 'boolean'],
@@ -294,6 +301,9 @@ class VoiceAssistantController extends Controller
         $data['forwarding_number'] = filled($data['forwarding_number'] ?? null)
             ? trim((string) $data['forwarding_number'])
             : null;
+        $data['vapi_phone_number_id'] = filled($data['vapi_phone_number_id'] ?? null)
+            ? trim((string) $data['vapi_phone_number_id'])
+            : null;
 
         if ($workspace->hasReachedVoiceMinuteLimit()) {
             return back()->withInput()->with('error', 'This workspace has reached its free voice limit. Upgrade to re-enable calling.');
@@ -301,12 +311,19 @@ class VoiceAssistantController extends Controller
 
         $setupMode = $data['provisioning_mode'] ?? RegionalPilotStackCatalog::defaultPhoneSetupMode($workspace->primary_market);
 
-        if (
-            in_array($setupMode, ['existing_business_number', 'external_provider'], true)
-            && blank($data['forwarding_number'])
-        ) {
+        if ($setupMode === 'existing_business_number' && blank($data['forwarding_number'])) {
             return back()
                 ->withErrors(['forwarding_number' => 'Enter the existing number you want this assistant to use.'])
+                ->withInput();
+        }
+
+        if (
+            $setupMode === 'external_provider'
+            && blank($data['forwarding_number'])
+            && blank($data['vapi_phone_number_id'])
+        ) {
+            return back()
+                ->withErrors(['vapi_phone_number_id' => 'Enter the Vapi phone number ID or the Twilio number you want to import.'])
                 ->withInput();
         }
 

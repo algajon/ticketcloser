@@ -8,6 +8,7 @@
 @section('content')
     @php
         $configs = $configs ?? collect();
+        $phoneNumbers = collect($phoneNumbers ?? []);
         $phoneNumbersLockedForFreePlan = $phoneNumbersLockedForFreePlan ?? false;
         $existingNumberCountryOptions = collect($existingNumberCountryOptions ?? []);
         $activationCountdownIso = $activationCountdownEndsAt?->toIso8601String();
@@ -16,6 +17,7 @@
         $provisioningMode = old('provisioning_mode', $phone?->provisioning_mode ?: $workspace->preferredPhoneSetupMode());
         $externalProvider = old('external_provider', $phone?->external_provider ?: $workspace->preferredExternalPhoneProvider());
         $vapiCredentialId = old('vapi_credential_id', $phone?->vapi_credential_id ?: $workspace->default_vapi_credential_id);
+        $vapiPhoneNumberId = old('vapi_phone_number_id', $phone?->vapi_phone_number_id);
         $existingNumberCountry = old(
             'existing_number_country',
             $defaultExistingNumberCountry ?? \App\Support\RegionalPilotStackCatalog::inferExistingNumberCountry(
@@ -186,6 +188,7 @@
                     provisioningMode: @js($provisioningMode),
                     externalProvider: @js($externalProvider),
                     vapiCredentialId: @js($vapiCredentialId),
+                    vapiPhoneNumberId: @js($vapiPhoneNumberId),
                     existingNumberCountry: @js($existingNumberCountry),
                     workspaceHasDefaultVapiCredential: @js($workspaceHasDefaultVapiCredential),
                     autoForwardingTarget: @js((string) $autoForwardingTarget === '1'),
@@ -201,6 +204,9 @@
                     },
                     hasAnyCredential() {
                         return this.workspaceHasDefaultVapiCredential || String(this.vapiCredentialId || '').trim() !== '';
+                    },
+                    hasImportedVapiNumber() {
+                        return String(this.vapiPhoneNumberId || '').trim() !== '';
                     },
                     countryConfig() {
                         return this.numberCatalog[this.existingNumberCountry] || this.numberCatalog.us || Object.values(this.numberCatalog)[0] || {};
@@ -235,6 +241,10 @@
                     },
                     credentialHelp() {
                         if (this.isImportMode()) {
+                            if (this.hasImportedVapiNumber()) {
+                                return 'Not needed when the number already exists in Vapi. We will attach that Vapi phone ID to the selected assistant.';
+                            }
+
                             return this.hasAnyCredential()
                                 ? 'We will use the saved Vapi BYO credential to import this number and attach it to the selected assistant.'
                                 : 'Paste a Vapi BYO credential here, or save one once in workspace settings for one-click imports.';
@@ -259,6 +269,10 @@
                         }
 
                         if (this.isImportMode()) {
+                            if (this.hasImportedVapiNumber()) {
+                                return 'Attach existing Vapi number';
+                            }
+
                             return this.hasAnyCredential() ? 'Import number and attach assistant' : 'Save import plan';
                         }
 
@@ -318,19 +332,21 @@
                     </div>
                 </div>
 
-                <div class="tc-meta-card border-emerald-200 bg-emerald-50/80 text-sm leading-6 text-emerald-900" x-show="isImportMode() && hasAnyCredential()" x-transition>
-                    <div class="tc-label-eyebrow text-emerald-700">Ready to import</div>
+                <div class="tc-meta-card border-emerald-200 bg-emerald-50/80 text-sm leading-6 text-emerald-900" x-show="isImportMode() && (hasImportedVapiNumber() || hasAnyCredential())" x-transition>
+                    <div class="tc-label-eyebrow text-emerald-700" x-text="hasImportedVapiNumber() ? 'Ready to attach' : 'Ready to import'">Ready to import</div>
                     <div class="mt-2">
-                        This assistant can import a US, German, UAE, or other existing number directly into Vapi as soon as you save it.
+                        <span x-text="hasImportedVapiNumber() ? 'This existing Vapi number will be assigned to the selected assistant when you save.' : 'This assistant can import a US, German, UAE, or other existing number directly into Vapi as soon as you save it.'">
+                            This assistant can import a US, German, UAE, or other existing number directly into Vapi as soon as you save it.
+                        </span>
                     </div>
                 </div>
 
-                <div class="tc-meta-card border-amber-200 bg-amber-50/80 text-sm leading-6 text-amber-900" x-show="isImportMode() && !hasAnyCredential()" x-transition>
-                    <div class="tc-label-eyebrow text-amber-700">One-click import tip</div>
+                <div class="tc-meta-card border-amber-200 bg-amber-50/80 text-sm leading-6 text-amber-900" x-show="isImportMode() && !hasImportedVapiNumber() && !hasAnyCredential()" x-transition>
+                    <div class="tc-label-eyebrow text-amber-700">Import needs one detail</div>
                     <div class="mt-2">
-                        Add a workspace Vapi BYO credential once in
+                        Paste the Vapi phone ID if this Twilio number is already in Vapi, or add a workspace Vapi BYO credential once in
                         <a href="{{ route('app.workspaces.settings', $workspace) }}" class="font-semibold underline decoration-amber-300 underline-offset-2">workspace settings</a>
-                        and future German or US number imports become a single save here.
+                        for direct carrier imports.
                     </div>
                 </div>
 
@@ -401,6 +417,15 @@
                     </p>
                 </div>
 
+                <div class="tc-field" x-show="provisioningMode === 'external_provider'" x-transition>
+                    <label for="vapi_phone_number_id" class="tc-field-label">Vapi phone number ID <span class="text-slate-500">Optional</span></label>
+                    <input id="vapi_phone_number_id" name="vapi_phone_number_id" type="text" class="tc-input" x-model="vapiPhoneNumberId" placeholder="Paste the Vapi ID for your Twilio number" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
+                    <p class="tc-help">Already added your Twilio number in Vapi? Paste its Vapi phone ID here and tickIt will assign it to the selected assistant.</p>
+                    @if($errors->first('vapi_phone_number_id'))
+                        <p class="tc-error">{{ $errors->first('vapi_phone_number_id') }}</p>
+                    @endif
+                </div>
+
                 <div class="tc-field" x-show="provisioningMode !== 'vapi_instant'" x-transition>
                     <label for="vapi_credential_id" class="tc-field-label">Vapi import credential <span class="text-slate-500">Optional</span></label>
                     <input id="vapi_credential_id" name="vapi_credential_id" type="text" class="tc-input" x-model="vapiCredentialId" placeholder="Paste a Vapi BYO credential ID if you want to override the workspace default" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
@@ -417,6 +442,73 @@
                     <span x-text="submitLabel()">{{ $phone?->vapi_phone_number_id ? 'Save number' : 'Create test number' }}</span>
                 </button>
             </form>
+        </x-ui.panel>
+
+        <x-ui.panel title="Number status" class="xl:col-span-2">
+            @if($phoneNumbers->isEmpty())
+                <x-ui.empty-state title="No numbers imported yet" description="Import your Twilio/Vapi number or create a test number to see assignment status here." />
+            @else
+                <div class="grid gap-3 lg:grid-cols-2 xl:grid-cols-3">
+                    @foreach($phoneNumbers as $workspacePhone)
+                        @php
+                            $displayNumber = $workspacePhone->e164 ?: ($workspacePhone->forwarding_number ?: 'Number pending');
+                            $assistantName = $workspacePhone->assistant?->name;
+                            $providerLabel = match ($workspacePhone->provisioning_mode) {
+                                'vapi_instant' => 'Vapi instant',
+                                'existing_business_number' => 'Forwarding',
+                                'external_provider' => $workspacePhone->external_provider ? ucfirst($workspacePhone->external_provider) : 'External',
+                                default => 'Saved',
+                            };
+                            $isAssigned = filled($workspacePhone->assistant_id) && filled($assistantName);
+                            $isVapiLinked = filled($workspacePhone->vapi_phone_number_id);
+                            $isSmsReady = $workspacePhone->external_provider === 'twilio'
+                                && $isVapiLinked
+                                && filled($workspacePhone->e164)
+                                && $workspacePhone->is_active;
+                        @endphp
+
+                        <div class="tc-meta-card-white flex h-full flex-col justify-between gap-4">
+                            <div>
+                                <div class="flex items-start justify-between gap-3">
+                                    <div class="min-w-0">
+                                        <div class="truncate text-base font-semibold text-slate-950">{{ $displayNumber }}</div>
+                                        <div class="mt-1 text-sm text-slate-500">{{ $providerLabel }}</div>
+                                    </div>
+                                    <x-ui.badge :tone="$workspacePhone->is_active ? 'success' : 'warning'">
+                                        {{ $workspacePhone->is_active ? 'Active' : 'Inactive' }}
+                                    </x-ui.badge>
+                                </div>
+
+                                <div class="mt-4 grid gap-3 text-sm">
+                                    <div>
+                                        <div class="tc-label-eyebrow-tight">Assistant</div>
+                                        <div class="mt-1 font-semibold {{ $isAssigned ? 'text-slate-950' : 'text-amber-700' }}">
+                                            {{ $isAssigned ? 'Assigned to '.$assistantName : 'Unassigned' }}
+                                        </div>
+                                    </div>
+
+                                    @if($workspacePhone->forwarding_number && $workspacePhone->forwarding_number !== $workspacePhone->e164)
+                                        <div>
+                                            <div class="tc-label-eyebrow-tight">Original line</div>
+                                            <div class="mt-1 font-semibold text-slate-950">{{ $workspacePhone->forwarding_number }}</div>
+                                        </div>
+                                    @endif
+                                </div>
+                            </div>
+
+                            <div class="flex flex-wrap gap-2">
+                                <x-ui.badge :tone="$isAssigned ? 'success' : 'warning'">{{ $isAssigned ? 'Assigned' : 'Unassigned' }}</x-ui.badge>
+                                <x-ui.badge :tone="$isVapiLinked ? 'info' : 'warning'">{{ $isVapiLinked ? 'Vapi linked' : 'Needs Vapi ID' }}</x-ui.badge>
+                                @if($isSmsReady)
+                                    <x-ui.badge tone="success">SMS ready</x-ui.badge>
+                                @elseif($workspacePhone->external_provider === 'twilio')
+                                    <x-ui.badge tone="warning">Twilio saved</x-ui.badge>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
         </x-ui.panel>
     </div>
 @endsection

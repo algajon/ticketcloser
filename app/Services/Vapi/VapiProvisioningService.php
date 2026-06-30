@@ -213,10 +213,12 @@ class VapiProvisioningService
         ]);
         $previousProvisioningMode = $record->provisioning_mode;
         $previousCredentialId = $record->vapi_credential_id;
+        $previousVapiPhoneNumberId = $record->vapi_phone_number_id;
         $record->assistant_id = $assistantConfig->id;
         $record->provisioning_mode = $input['provisioning_mode'] ?? $record->provisioning_mode ?? $workspace->preferredPhoneSetupMode();
         $record->external_provider = $input['external_provider'] ?? $record->external_provider ?? $workspace->preferredExternalPhoneProvider();
         $record->vapi_credential_id = $input['vapi_credential_id'] ?? $record->vapi_credential_id ?? $workspace->default_vapi_credential_id;
+        $providedVapiPhoneNumberId = $this->normalizeStoredPhoneNumber($input['vapi_phone_number_id'] ?? null);
 
         $areaCode = isset($input['area_code'])
             ? preg_replace('/\D+/', '', (string) $input['area_code'])
@@ -227,7 +229,28 @@ class VapiProvisioningService
                 $record->forwarding_number = $this->normalizeStoredPhoneNumber($input['forwarding_number']);
             }
 
-            if (filled($record->vapi_credential_id)) {
+            $routingNumber = preg_replace('/[^0-9+]/', '', (string) ($record->forwarding_number ?? ''));
+
+            if (filled($providedVapiPhoneNumberId)) {
+                if (
+                    filled($previousVapiPhoneNumberId)
+                    && $previousVapiPhoneNumberId !== $providedVapiPhoneNumberId
+                    && $previousProvisioningMode === 'vapi_instant'
+                ) {
+                    $this->deleteRemotePhoneNumberQuietly($previousVapiPhoneNumberId);
+                }
+
+                $pn = $this->vapi->updatePhoneNumber($providedVapiPhoneNumberId, [
+                    'name' => $workspace->name . ' Support',
+                    'serverUrl' => config('services.vapi.webhook_url'),
+                    'assistantId' => $assistantConfig->vapi_assistant_id,
+                ]);
+
+                $record->vapi_phone_number_id = $pn['id'] ?? $providedVapiPhoneNumberId;
+                $record->e164 = $pn['number'] ?? $pn['sipUri'] ?? $routingNumber ?: $record->e164;
+                $record->assistant_id = $assistantConfig->id;
+                $record->save();
+            } elseif (filled($record->vapi_credential_id)) {
                 $payload = [
                     'provider' => 'byo-phone-number',
                     'credentialId' => $record->vapi_credential_id,
@@ -236,7 +259,6 @@ class VapiProvisioningService
                     'serverUrl' => config('services.vapi.webhook_url'),
                 ];
 
-                $routingNumber = preg_replace('/[^0-9+]/', '', (string) ($record->forwarding_number ?? ''));
                 if ($routingNumber !== '') {
                     $payload['number'] = $routingNumber;
                 }
