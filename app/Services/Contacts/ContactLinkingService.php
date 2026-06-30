@@ -25,6 +25,26 @@ class ContactLinkingService
         'direction',
     ];
 
+    private const INVALID_NAME_PHRASES = [
+        'already on file',
+        'all on file',
+        'caller',
+        'current caller',
+        'customer',
+        'existing customer',
+        'existing caller',
+        'information on file',
+        'name on file',
+        'no name',
+        'not provided',
+        'not given',
+        'not shared',
+        'on file',
+        'same as file',
+        'tenant',
+        'unknown',
+    ];
+
     public function resolveForWorkspace(
         Workspace $workspace,
         ?string $phone,
@@ -283,7 +303,7 @@ class ContactLinkingService
                 && strlen(trim($incoming)) > strlen(trim($existing));
         }
 
-        return $this->nameStrengthScore($incoming) > $this->nameStrengthScore($existing) + 1;
+        return false;
     }
 
     private function namesLikelyMatch(?string $left, ?string $right): bool
@@ -299,9 +319,38 @@ class ContactLinkingService
             return true;
         }
 
+        if ($this->namesSharePrefix($left, $right)) {
+            return true;
+        }
+
         similar_text($left, $right, $similarity);
 
         return $similarity >= 82.0;
+    }
+
+    private function namesSharePrefix(string $left, string $right): bool
+    {
+        $leftParts = array_values(array_filter(explode(' ', $left)));
+        $rightParts = array_values(array_filter(explode(' ', $right)));
+
+        if (count($leftParts) === 0 || count($rightParts) === 0) {
+            return false;
+        }
+
+        $shorter = count($leftParts) <= count($rightParts) ? $leftParts : $rightParts;
+        $longer = count($leftParts) <= count($rightParts) ? $rightParts : $leftParts;
+
+        if (count($shorter) > 2 || count($longer) <= count($shorter)) {
+            return false;
+        }
+
+        foreach ($shorter as $index => $part) {
+            if (($longer[$index] ?? null) !== $part) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private function normalizeName(?string $value): string
@@ -323,6 +372,11 @@ class ContactLinkingService
         $value = preg_replace('/\s+/', ' ', $value) ?? '';
 
         if ($value === '') {
+            return null;
+        }
+
+        $normalizedPhrase = mb_strtolower($value);
+        if (in_array($normalizedPhrase, self::INVALID_NAME_PHRASES, true)) {
             return null;
         }
 

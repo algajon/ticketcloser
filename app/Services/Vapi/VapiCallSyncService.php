@@ -929,6 +929,29 @@ class VapiCallSyncService
             'teeth', 'there', 'time', 'to', 'today', 'tomorrow', 'trying', 'wall',
             'water', 'with', 'workflow', 'yesterday',
         ];
+        $invalidPhrases = [
+            'already on file',
+            'all on file',
+            'caller',
+            'current caller',
+            'customer',
+            'existing customer',
+            'existing caller',
+            'information on file',
+            'name on file',
+            'no name',
+            'not provided',
+            'not given',
+            'not shared',
+            'on file',
+            'same as file',
+            'tenant',
+            'unknown',
+        ];
+
+        if (in_array(strtolower($value), $invalidPhrases, true)) {
+            return null;
+        }
 
         if (count($parts) === 0 || count($parts) > 3) {
             return null;

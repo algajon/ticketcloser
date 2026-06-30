@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Jobs\ProcessEndCallReport;
 use App\Models\AssistantConfig;
 use App\Models\CallEvent;
+use App\Models\Contact;
 use App\Models\SupportCase;
 use App\Models\UsageEvent;
 use App\Models\Workspace;
@@ -234,6 +235,59 @@ class ProcessEndCallReportTest extends TestCase
         $case->refresh();
 
         $this->assertNotNull($case->contact_id);
+    }
+
+    /** @test */
+    public function it_does_not_rename_an_existing_contact_from_on_file_phrases(): void
+    {
+        $workspace = Workspace::factory()->create();
+
+        $contact = Contact::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Jon Nila',
+            'phone_e164' => '+15551112223',
+        ]);
+
+        $case = SupportCase::create([
+            'workspace_id' => $workspace->id,
+            'contact_id' => $contact->id,
+            'case_number' => 'TC-ENDCALL-FILE',
+            'title' => 'New ticket',
+            'description' => 'New case, no description',
+            'status' => SupportCase::STATUS_NEW,
+            'priority' => SupportCase::PRIORITY_NORMAL,
+            'source' => SupportCase::SOURCE_VOICE,
+            'external_call_id' => 'call_end_file',
+        ]);
+
+        $payload = [
+            'message' => [
+                'type' => 'end-of-call-report',
+                'call' => [
+                    'id' => 'call_end_file',
+                    'customer' => [
+                        'number' => '+15551112223',
+                    ],
+                ],
+                'artifact' => [
+                    'variableValues' => [
+                        'requesterName' => 'Already On File',
+                    ],
+                    'transcript' => "Caller: I am already on file.\nAssistant: I will use the details we have.",
+                ],
+                'analysis' => [
+                    'summary' => 'Caller asked the team to use the existing contact details on file.',
+                ],
+            ],
+        ];
+
+        (new ProcessEndCallReport($workspace, $payload))->handle(app(\App\Services\Vapi\VapiCallSyncService::class));
+
+        $contact->refresh();
+        $case->refresh();
+
+        $this->assertSame('Jon Nila', $contact->name);
+        $this->assertSame($contact->id, $case->contact_id);
     }
 
     /** @test */

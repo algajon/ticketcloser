@@ -664,7 +664,7 @@ class VapiProvisioningService
                     'properties' => [
                         'title' => ['type' => 'string', 'description' => 'Short issue title (one sentence)'],
                         'description' => ['type' => 'string', 'description' => 'Full description of the issue as reported by the caller'],
-                        'requesterName' => ['type' => 'string', 'description' => 'Caller name if they shared it during the conversation'],
+                        'requesterName' => ['type' => 'string', 'description' => 'Caller name only when they clearly shared a real person or business name. Never use placeholder or status phrases such as already on file, on file, unknown, caller, customer, tenant, not provided, or same as file.'],
                         'requesterEmail' => ['type' => 'string', 'description' => 'Caller email if they shared it and it matters for follow-up'],
                         'category' => ['type' => 'string', 'description' => 'Category such as maintenance, plumbing, hvac, electrical, lockout, billing, technical, or other'],
                         'priority' => ['type' => 'string', 'description' => 'Priority: low, normal, high, or critical'],
