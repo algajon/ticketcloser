@@ -243,6 +243,8 @@ Route::middleware(['auth', 'verified', 'workspace.ready', 'subscribed'])->prefix
     // Messaging setup and SMS confirmation readiness
     Route::get('/workspaces/{workspace:slug}/messaging', [MessagingController::class, 'index'])
         ->name('messaging.index');
+    Route::post('/workspaces/{workspace:slug}/messaging', [MessagingController::class, 'update'])
+        ->name('messaging.update');
 
     // Queues, Contacts, Call logs
     Route::get('/workspaces/{workspace:slug}/queues', [\App\Http\Controllers\QueuesController::class, 'index'])->name('queues.index');

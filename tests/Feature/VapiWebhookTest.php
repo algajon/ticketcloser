@@ -6,6 +6,8 @@ use App\Jobs\ProcessEndCallReport;
 use App\Models\AssistantConfig;
 use App\Models\CalendarConnection;
 use App\Models\Contact;
+use App\Models\MessageEvent;
+use App\Models\MessagingSetting;
 use App\Models\UsageEvent;
 use App\Models\Workspace;
 use App\Models\WorkspacePhoneNumber;
@@ -720,6 +722,17 @@ class VapiWebhookTest extends TestCase
 
         $caseNumber = json_decode($caseResponse->json('results.0.result'), true)['caseNumber'];
 
+        MessagingSetting::create([
+            'workspace_id' => $this->workspace->id,
+            'booking_confirmation_enabled' => true,
+            'booking_confirmation_template' => 'Hi {{customer_name}}, your visit is booked for {{appointment_time}}. {{ticket_number}} {{issue_label}} {{signature}}',
+            'signature' => '- Test Workspace',
+            'brand_voice' => 'brief',
+            'include_ticket_number' => true,
+            'include_issue_label' => true,
+            'reply_capture_enabled' => true,
+        ]);
+
         $response = $this->postJson('/api/webhooks/vapi', [
             'message' => [
                 'type' => 'tool-calls',
@@ -751,6 +764,16 @@ class VapiWebhookTest extends TestCase
             'workspace_id' => $this->workspace->id,
             'status' => 'pending',
         ]);
+
+        $message = MessageEvent::query()
+            ->where('workspace_id', $this->workspace->id)
+            ->where('support_case_id', \App\Models\SupportCase::where('case_number', $caseNumber)->value('id'))
+            ->firstOrFail();
+
+        $this->assertSame(MessageEvent::STATUS_QUEUED, $message->status);
+        $this->assertSame(MessageEvent::DIRECTION_OUTBOUND, $message->direction);
+        $this->assertStringContainsString('your visit is booked for Thu, Apr 2 at 2:00 PM', $message->body);
+        $this->assertStringContainsString($caseNumber, $message->body);
     }
 
     /** @test */

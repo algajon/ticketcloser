@@ -3,8 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Contact;
+use App\Models\AssistantConfig;
+use App\Models\MessageEvent;
+use App\Models\MessagingSetting;
 use App\Models\SupportCase;
 use App\Models\Workspace;
+use App\Models\WorkspacePhoneNumber;
 use App\Services\Assistants\AssistantScriptLocalizer;
 use App\Services\Contacts\ContactLinkingService;
 use App\Services\Meetings\MeetingBookingService;
@@ -133,8 +137,11 @@ class VapiWebhookController extends Controller
                             $operatorRoutingPrompt = $this->runtimeOperatorRoutingPrompt($workspacePhone->assistant, $workspace);
                             $operatorRoutingPrompt = $operatorRoutingPrompt !== '' ? "\n\n".$operatorRoutingPrompt : '';
                             $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference.]";
-                            $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Use any caller context already provided in the system note before deciding whether to call lookupContact or lookupCase.\n- If the system note already gives you the caller's identity or recent case context, do not call lookupContact or lookupCase at the start of the call.\n- Use lookupContact only if the existing caller context is missing, unclear, or the caller asks what details are on file.\n- Use lookupCase only if recent case history would genuinely help and it was not already provided in the system note.\n- After bookMeeting succeeds, use sms at most once to send a short confirmation text to the live caller number with the scheduled date/time and case number.\n- Never narrate lookupContact or lookupCase with phrases like 'Just a sec', 'One moment', 'Give me a moment', or 'Hold on a sec'.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
-                            $systemPrompt = $memory . $basePrompt . $toolRules . "\n\n".$this->silentHandoffGuardrailsPrompt() . "\n\n".$this->smsConfirmationGuardrailsPrompt() . $languageGuardrail . $operatorRoutingPrompt . $dateContext;
+                            $smsInstruction = MessagingSetting::forWorkspace($workspace)->booking_confirmation_enabled
+                                ? 'After bookMeeting succeeds, use sms at most once to send a short confirmation text to the live caller number using the workspace SMS template.'
+                                : 'Do not send SMS confirmations unless the caller explicitly asks for one; workspace automatic booking confirmations are turned off.';
+                            $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Use any caller context already provided in the system note before deciding whether to call lookupContact or lookupCase.\n- If the system note already gives you the caller's identity or recent case context, do not call lookupContact or lookupCase at the start of the call.\n- Use lookupContact only if the existing caller context is missing, unclear, or the caller asks what details are on file.\n- Use lookupCase only if recent case history would genuinely help and it was not already provided in the system note.\n- {$smsInstruction}\n- Never narrate lookupContact or lookupCase with phrases like 'Just a sec', 'One moment', 'Give me a moment', or 'Hold on a sec'.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
+                            $systemPrompt = $memory . $basePrompt . $toolRules . "\n\n".$this->silentHandoffGuardrailsPrompt() . "\n\n".$this->smsConfirmationGuardrailsPrompt($workspace) . $languageGuardrail . $operatorRoutingPrompt . $dateContext;
 
                             // Build toolIds array so Vapi doesn't strip tools when we override the model
                             $toolIds = array_filter([
@@ -369,6 +376,7 @@ class VapiWebhookController extends Controller
                         }
 
                         $booking = $meetingBooking->scheduleFromVoice($case, $args);
+                        $this->queueBookingConfirmationMessage($workspace, $case, $booking, $payload, is_array($callBlock) ? $callBlock : []);
 
                         $results[] = $this->successToolResult($toolCallId, $name, [
                             'success' => true,
@@ -604,19 +612,138 @@ class VapiWebhookController extends Controller
 PROMPT);
     }
 
-    private function smsConfirmationGuardrailsPrompt(): string
+    private function smsConfirmationGuardrailsPrompt(Workspace $workspace): string
     {
-        return trim(<<<'PROMPT'
+        $settings = MessagingSetting::forWorkspace($workspace);
+        $enabledLine = $settings->booking_confirmation_enabled
+            ? '- Automatic booking confirmation SMS is enabled for this workspace.'
+            : '- Automatic booking confirmation SMS is disabled. Only send SMS if the caller clearly asks for a text confirmation.';
+        $template = trim($settings->booking_confirmation_template ?: MessagingSetting::defaultTemplate());
+        $signature = trim((string) $settings->signature);
+        $brandVoice = MessagingSetting::BRAND_VOICES[$settings->brand_voice] ?? 'Warm and clear';
+        $ticketRule = $settings->include_ticket_number
+            ? '- Include the ticket or case number when available.'
+            : '- Do not include a ticket or case number unless the caller specifically asks for it.';
+        $issueRule = $settings->include_issue_label
+            ? '- Include a short, non-sensitive issue label when available.'
+            : '- Do not include the issue label; keep the message focused on the booking time.';
+        $replyRule = $settings->reply_capture_enabled
+            ? '- Invite simple replies only when useful, such as if the time needs to change.'
+            : '- Do not invite replies; keep the SMS as a confirmation only.';
+
+        return trim(<<<PROMPT
 [SYSTEM NOTE: SMS CONFIRMATION RULES]
+{$enabledLine}
 - The sms tool is only for short transactional confirmations, not general chatting or marketing.
 - Use sms only after bookMeeting has succeeded or after the assistant has clearly recorded a pending follow-up time.
 - Send at most one SMS per call unless the caller explicitly asks you to correct the confirmation.
 - Send the SMS to the live caller number. Do not ask for another phone number unless the caller says the current number is not the right one.
 - Keep the SMS under 320 characters.
-- Include the scheduled date and time, ticket or case number when available, and a short issue label.
+- Use this default workspace template as the structure: "{$template}"
+- Replace placeholders naturally: {{customer_name}}, {{workspace_name}}, {{appointment_time}}, {{ticket_number}}, {{issue_label}}, and {{signature}}.
+- Omit any placeholder cleanly if the value is unknown.
+- Signature to use when appropriate: "{$signature}"
+- Brand voice: {$brandVoice}.
+- Always include the scheduled date and time.
+{$ticketRule}
+{$issueRule}
+{$replyRule}
 - Do not include sensitive medical, financial, legal, or highly private details in SMS. Use a generic issue label instead.
 - Never promise an SMS was sent unless the sms tool succeeds.
 PROMPT);
+    }
+
+    private function queueBookingConfirmationMessage(
+        Workspace $workspace,
+        SupportCase $case,
+        array $booking,
+        array $payload,
+        array $callBlock
+    ): void {
+        try {
+            $settings = MessagingSetting::forWorkspace($workspace);
+
+            if (! $settings->booking_confirmation_enabled) {
+                return;
+            }
+
+            $suggestedEvent = $booking['suggestedEvent'] ?? null;
+
+            if (! $suggestedEvent || ! isset($suggestedEvent->id)) {
+                return;
+            }
+
+            $case->loadMissing(['contact']);
+
+            $assistantId = data_get($callBlock, 'assistantId');
+            $assistantConfig = $case->assistantConfig;
+
+            if (! $assistantConfig && filled($assistantId)) {
+                $assistantConfig = AssistantConfig::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('vapi_assistant_id', $assistantId)
+                    ->first();
+            }
+
+            $toPhone = $this->resolveCustomerNumber($payload) ?: $case->requester_phone ?: $case->contact?->phone_e164;
+            $fromPhone = $assistantConfig
+                ? WorkspacePhoneNumber::query()
+                    ->where('workspace_id', $workspace->id)
+                    ->where('assistant_id', $assistantConfig->id)
+                    ->where('is_active', true)
+                    ->latest('id')
+                    ->value('e164')
+                : null;
+
+            $startsAt = $booking['startsAt'] ?? $suggestedEvent->starts_at ?? null;
+            $appointmentTime = $startsAt
+                ? $startsAt->copy()->timezone($suggestedEvent->timezone ?: $workspace->default_timezone ?: config('app.timezone'))->format('D, M j \a\t g:i A')
+                : 'the scheduled time';
+
+            $body = $settings->renderPreview([
+                'customer_name' => $this->shortContactName($case->contact?->name) ?: 'there',
+                'workspace_name' => $workspace->name,
+                'appointment_time' => $appointmentTime,
+                'ticket_number' => $settings->include_ticket_number ? 'Ticket '.$case->case_number.'.' : '',
+                'issue_label' => $settings->include_issue_label ? $this->singleLine((string) ($case->title ?: $case->category ?: 'Follow-up')).'.' : '',
+                'signature' => $settings->signature ?: '',
+            ]);
+
+            $callId = data_get($callBlock, 'id') ?: ($case->external_call_id ?: 'suggested');
+            $externalMessageId = 'booking-confirmation:'.$callId.':'.$suggestedEvent->id;
+
+            MessageEvent::updateOrCreate(
+                [
+                    'workspace_id' => $workspace->id,
+                    'provider' => 'vapi',
+                    'external_message_id' => $externalMessageId,
+                ],
+                [
+                    'assistant_config_id' => $assistantConfig?->id,
+                    'contact_id' => $case->contact_id,
+                    'support_case_id' => $case->id,
+                    'calendar_event_id' => data_get($booking, 'calendarEvent.id'),
+                    'channel' => 'sms',
+                    'direction' => MessageEvent::DIRECTION_OUTBOUND,
+                    'status' => MessageEvent::STATUS_QUEUED,
+                    'from_phone' => is_scalar($fromPhone) ? (string) $fromPhone : null,
+                    'to_phone' => $toPhone,
+                    'body' => $body,
+                    'metadata' => [
+                        'source' => 'bookMeeting',
+                        'vapi_call_id' => data_get($callBlock, 'id') ?: $case->external_call_id,
+                        'suggested_event_id' => $suggestedEvent->id,
+                        'booking_status' => $booking['booked'] ? 'booked' : 'pending',
+                    ],
+                ]
+            );
+        } catch (\Throwable $e) {
+            Log::warning('VAPI_MESSAGE_EVENT_QUEUE_FAILED', [
+                'workspace_id' => $workspace->id,
+                'case_id' => $case->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function runtimeSmsToolForPhoneNumber(\App\Models\WorkspacePhoneNumber $phoneNumber): ?array

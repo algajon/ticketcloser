@@ -246,6 +246,16 @@ class Workspace extends Model
         return $this->hasMany(CallEvent::class);
     }
 
+    public function messagingSetting(): HasOne
+    {
+        return $this->hasOne(MessagingSetting::class);
+    }
+
+    public function messageEvents(): HasMany
+    {
+        return $this->hasMany(MessageEvent::class);
+    }
+
     public function feedbackEntries(): HasMany
     {
         return $this->hasMany(WorkspaceFeedback::class);

@@ -4,6 +4,7 @@ namespace App\Services\Vapi;
 
 use App\Models\AssistantConfig;
 use App\Models\AssistantPreset;
+use App\Models\MessagingSetting;
 use App\Models\VoiceConfig;
 use App\Models\Workspace;
 use App\Models\WorkspacePhoneNumber;
@@ -566,7 +567,7 @@ class VapiProvisioningService
         ];
     }
 
-    private function syncAssistantPayload(AssistantConfig $config, Workspace $workspace): void
+    public function syncAssistantPayload(AssistantConfig $config, Workspace $workspace): void
     {
         if (! $config->vapi_assistant_id) {
             return;
@@ -710,11 +711,11 @@ class VapiProvisioningService
             'workspace_name' => $workspace->name,
             'assistant_name' => $config->name,
         ]);
-        $systemPrompt .= "\n\n" . $this->toolExecutionGuardrailsPrompt();
+        $systemPrompt .= "\n\n" . $this->toolExecutionGuardrailsPrompt($workspace);
         $systemPrompt .= "\n\n" . $this->knownCallerGuardrailsPrompt();
         $systemPrompt .= "\n\n" . $this->humaneConversationGuardrailsPrompt();
         $systemPrompt .= "\n\n" . $this->silentHandoffGuardrailsPrompt();
-        $systemPrompt .= "\n\n" . $this->smsConfirmationGuardrailsPrompt();
+        $systemPrompt .= "\n\n" . $this->smsConfirmationGuardrailsPrompt($workspace);
 
         if (! empty($config->language_code)) {
             $systemPrompt .= "\n\n[SYSTEM NOTE: Keep caller-facing replies in {$config->language_code} unless the caller clearly switches language and the business supports that change.]";
@@ -1196,9 +1197,14 @@ Spoken style:
 PROMPT);
     }
 
-    private function toolExecutionGuardrailsPrompt(): string
+    private function toolExecutionGuardrailsPrompt(Workspace $workspace): string
     {
-        return trim(<<<'PROMPT'
+        $settings = MessagingSetting::forWorkspace($workspace);
+        $smsInstruction = $settings->booking_confirmation_enabled
+            ? '- After bookMeeting succeeds, use sms at most once to send a short confirmation text to the live caller number using the workspace SMS template.'
+            : '- Do not send SMS confirmations unless the caller explicitly asks for one; workspace automatic booking confirmations are turned off.';
+
+        return trim(<<<PROMPT
 [SYSTEM NOTE: TOOL EXECUTION RULES]
 - Never call createCase and bookMeeting in parallel.
 - If the caller wants both a case and a meeting, first confirm the summary, then call createCase exactly once.
@@ -1212,23 +1218,49 @@ PROMPT);
 - Never call lookupCase repeatedly once you already have enough recent case context.
 - If the caller asks for a meeting before a case exists, explain that you will log the request first and then handle the booking immediately after the case is created.
 - Never say the booking cannot happen just because the case has not been created yet.
-- After bookMeeting succeeds, use sms at most once to send a short confirmation text to the live caller number with the scheduled date/time and case number.
+{$smsInstruction}
 - Do not retry a tool after it succeeds.
 - If a tool fails, explain that briefly and decide the next step with the caller instead of repeatedly calling the same tool.
 - Never say "Just a sec", "One moment", or similar filler before using lookupContact or lookupCase. Do those lookups silently.
 PROMPT);
     }
 
-    private function smsConfirmationGuardrailsPrompt(): string
+    private function smsConfirmationGuardrailsPrompt(Workspace $workspace): string
     {
-        return trim(<<<'PROMPT'
+        $settings = MessagingSetting::forWorkspace($workspace);
+        $enabledLine = $settings->booking_confirmation_enabled
+            ? '- Automatic booking confirmation SMS is enabled for this workspace.'
+            : '- Automatic booking confirmation SMS is disabled. Only send SMS if the caller clearly asks for a text confirmation.';
+        $template = trim($settings->booking_confirmation_template ?: MessagingSetting::defaultTemplate());
+        $signature = trim((string) $settings->signature);
+        $brandVoice = MessagingSetting::BRAND_VOICES[$settings->brand_voice] ?? 'Warm and clear';
+        $ticketRule = $settings->include_ticket_number
+            ? '- Include the ticket or case number when available.'
+            : '- Do not include a ticket or case number unless the caller specifically asks for it.';
+        $issueRule = $settings->include_issue_label
+            ? '- Include a short, non-sensitive issue label when available.'
+            : '- Do not include the issue label; keep the message focused on the booking time.';
+        $replyRule = $settings->reply_capture_enabled
+            ? '- Invite simple replies only when useful, such as if the time needs to change.'
+            : '- Do not invite replies; keep the SMS as a confirmation only.';
+
+        return trim(<<<PROMPT
 [SYSTEM NOTE: SMS CONFIRMATION RULES]
+{$enabledLine}
 - The sms tool is only for short transactional confirmations, not general chatting or marketing.
 - Use sms only after bookMeeting has succeeded or after the assistant has clearly recorded a pending follow-up time.
 - Send at most one SMS per call unless the caller explicitly asks you to correct the confirmation.
 - Send the SMS to the live caller number. Do not ask for another phone number unless the caller says the current number is not the right one.
 - Keep the SMS under 320 characters.
-- Include the scheduled date and time, ticket or case number when available, and a short issue label.
+- Use this default workspace template as the structure: "{$template}"
+- Replace placeholders naturally: {{customer_name}}, {{workspace_name}}, {{appointment_time}}, {{ticket_number}}, {{issue_label}}, and {{signature}}.
+- Omit any placeholder cleanly if the value is unknown.
+- Signature to use when appropriate: "{$signature}"
+- Brand voice: {$brandVoice}.
+- Always include the scheduled date and time.
+{$ticketRule}
+{$issueRule}
+{$replyRule}
 - Do not include sensitive medical, financial, legal, or highly private details in SMS. Use a generic issue label instead.
 - Never promise an SMS was sent unless the sms tool succeeds.
 PROMPT);

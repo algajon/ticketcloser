@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\AssistantConfig;
 use App\Models\AssistantPreset;
+use App\Models\MessagingSetting;
 use App\Models\Workspace;
 use App\Models\WorkspacePhoneNumber;
 use App\Services\Vapi\VapiClient;
@@ -326,6 +327,17 @@ class AssistantVoiceQualityTest extends TestCase
             'is_active' => true,
         ]);
 
+        MessagingSetting::create([
+            'workspace_id' => $workspace->id,
+            'booking_confirmation_enabled' => true,
+            'booking_confirmation_template' => 'Hi {{customer_name}}, Northline booked {{appointment_time}}. {{ticket_number}} {{signature}}',
+            'signature' => '- Northline',
+            'brand_voice' => 'brief',
+            'include_ticket_number' => true,
+            'include_issue_label' => false,
+            'reply_capture_enabled' => true,
+        ]);
+
         $client = $this->createMock(VapiClient::class);
         $client->expects($this->exactly(4))
             ->method('createTool')
@@ -340,6 +352,8 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertStringContainsString('SMS CONFIRMATION RULES', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('After bookMeeting succeeds', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Keep the SMS under 320 characters', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Northline booked {{appointment_time}}', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Brand voice: Brief.', $payload['model']['messages'][0]['content']);
 
                 return true;
             }))
