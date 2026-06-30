@@ -664,7 +664,7 @@ class VapiProvisioningService
                     'properties' => [
                         'title' => ['type' => 'string', 'description' => 'Short issue title (one sentence)'],
                         'description' => ['type' => 'string', 'description' => 'Full description of the issue as reported by the caller'],
-                        'requesterName' => ['type' => 'string', 'description' => 'Caller name only when they clearly shared a real person or business name. Never use placeholder or status phrases such as already on file, on file, unknown, caller, customer, tenant, not provided, or same as file.'],
+                        'requesterName' => ['type' => 'string', 'description' => 'Caller name only when they clearly shared a real person or business name and the spelling is known from saved caller context or was confirmed with the caller. Never use placeholder or status phrases such as already on file, on file, unknown, caller, customer, tenant, not provided, or same as file.'],
                         'requesterEmail' => ['type' => 'string', 'description' => 'Caller email if they shared it and it matters for follow-up'],
                         'category' => ['type' => 'string', 'description' => 'Category such as maintenance, plumbing, hvac, electrical, lockout, billing, technical, or other'],
                         'priority' => ['type' => 'string', 'description' => 'Priority: low, normal, high, or critical'],
@@ -875,6 +875,7 @@ class VapiProvisioningService
         ]);
         $systemPrompt .= "\n\n" . $this->toolExecutionGuardrailsPrompt($workspace);
         $systemPrompt .= "\n\n" . $this->knownCallerGuardrailsPrompt();
+        $systemPrompt .= "\n\n" . $this->nameSpellingGuardrailsPrompt();
         $systemPrompt .= "\n\n" . $this->humaneConversationGuardrailsPrompt();
         $systemPrompt .= "\n\n" . $this->silentHandoffGuardrailsPrompt();
         $systemPrompt .= "\n\n" . $this->smsConfirmationGuardrailsPrompt($workspace);
@@ -1334,8 +1335,8 @@ Core behavior:
 1) Sound natural, clear, upbeat, and easy to follow, but never rushed.
 2) Never talk over the caller or treat a short pause like the end of their thought.
 3) Ask one question at a time.
-4) When the caller shares their full name and it matters for follow-up, politely confirm the spelling once.
-5) Capture the caller's name when it matters, and include requesterName in createCase if they shared it.
+4) When the caller shares a new or changed name and it matters for follow-up, politely confirm the spelling once before creating the case.
+5) Capture the caller's name when it matters, and include requesterName in createCase only when the spelling is known from saved caller context or was confirmed by the caller.
 6) The caller's phone number is usually already available from call metadata, so do not ask for it unless it is truly missing.
 7) If caller context is not already provided in your system note and you truly need to know whether the business already has caller details on file, silently use lookupContact before asking the caller to repeat identity details.
 8) If recent case history would help and it is not already provided in your system note, silently use lookupCase only after you know who the caller is.
@@ -1376,6 +1377,8 @@ PROMPT);
 - Use lookupContact only if caller context is missing, unclear, or the caller asks what details are on file.
 - Use lookupCase only if recent case history would help and it is not already provided in your system note.
 - Do not use lookupContact or lookupCase at the very start of the call when the system note already contains caller identity or recent case context.
+- If no saved caller name is available and the caller gives a name, confirm the spelling once before createCase.
+- If a saved caller name is available, use that saved spelling and only ask for spelling if the caller says the saved name is wrong, incomplete, or has changed.
 - Never call lookupContact repeatedly once you already have enough caller context.
 - Never call lookupCase repeatedly once you already have enough recent case context.
 - If the caller asks for a meeting before a case exists, explain that you will log the request first and then handle the booking immediately after the case is created.
@@ -1384,6 +1387,18 @@ PROMPT);
 - Do not retry a tool after it succeeds.
 - If a tool fails, explain that briefly and decide the next step with the caller instead of repeatedly calling the same tool.
 - Never say "Just a sec", "One moment", or similar filler before using lookupContact or lookupCase. Do those lookups silently.
+PROMPT);
+    }
+
+    private function nameSpellingGuardrailsPrompt(): string
+    {
+        return trim(<<<'PROMPT'
+[SYSTEM NOTE: NAME SPELLING RULES]
+- If the system note gives you a saved caller name, use that exact saved spelling for requesterName.
+- If the caller says the saved name is wrong, incomplete, or changed, ask them to spell the corrected name once before createCase.
+- If no saved caller name is available and the caller gives a name that matters for follow-up, ask them to spell it or spell it back for confirmation before createCase.
+- Keep the spelling check short and natural, such as "Could you spell that for me so I get it right?"
+- Never put placeholder phrases into requesterName, including "already on file", "on file", "unknown", "caller", "customer", "tenant", "not provided", or "same as file".
 PROMPT);
     }
 

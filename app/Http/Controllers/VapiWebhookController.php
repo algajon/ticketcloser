@@ -141,8 +141,8 @@ class VapiWebhookController extends Controller
                             $smsInstruction = MessagingSetting::forWorkspace($workspace)->booking_confirmation_enabled
                                 ? 'After bookMeeting succeeds, use sms at most once to send a short confirmation text to the live caller number using the workspace SMS template.'
                                 : 'Do not send SMS confirmations unless the caller explicitly asks for one; workspace automatic booking confirmations are turned off.';
-                            $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Use any caller context already provided in the system note before deciding whether to call lookupContact or lookupCase.\n- If the system note already gives you the caller's identity or recent case context, do not call lookupContact or lookupCase at the start of the call.\n- Use lookupContact only if the existing caller context is missing, unclear, or the caller asks what details are on file.\n- Use lookupCase only if recent case history would genuinely help and it was not already provided in the system note.\n- {$smsInstruction}\n- Never narrate lookupContact or lookupCase with phrases like 'Just a sec', 'One moment', 'Give me a moment', or 'Hold on a sec'.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
-                            $systemPrompt = $memory . $basePrompt . $toolRules . "\n\n".$this->silentHandoffGuardrailsPrompt() . "\n\n".$this->smsConfirmationGuardrailsPrompt($workspace) . $languageGuardrail . $operatorRoutingPrompt . $dateContext;
+                            $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Use any caller context already provided in the system note before deciding whether to call lookupContact or lookupCase.\n- If the system note already gives you the caller's identity or recent case context, do not call lookupContact or lookupCase at the start of the call.\n- Use lookupContact only if the existing caller context is missing, unclear, or the caller asks what details are on file.\n- Use lookupCase only if recent case history would genuinely help and it was not already provided in the system note.\n- If no saved caller name is available and the caller gives a name, confirm the spelling once before createCase.\n- If a saved caller name is available, use that saved spelling and only ask for spelling if the caller says the saved name is wrong, incomplete, or has changed.\n- {$smsInstruction}\n- Never narrate lookupContact or lookupCase with phrases like 'Just a sec', 'One moment', 'Give me a moment', or 'Hold on a sec'.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
+                            $systemPrompt = $memory . $basePrompt . $toolRules . "\n\n".$this->silentHandoffGuardrailsPrompt() . "\n\n".$this->nameSpellingGuardrailsPrompt() . "\n\n".$this->smsConfirmationGuardrailsPrompt($workspace) . $languageGuardrail . $operatorRoutingPrompt . $dateContext;
 
                             // Build toolIds array so Vapi doesn't strip tools when we override the model
                             $toolIds = array_filter([
@@ -660,6 +660,18 @@ PROMPT);
 {$replyRule}
 - Do not include sensitive medical, financial, legal, or highly private details in SMS. Use a generic issue label instead.
 - Never promise an SMS was sent unless the sms tool succeeds.
+PROMPT);
+    }
+
+    private function nameSpellingGuardrailsPrompt(): string
+    {
+        return trim(<<<'PROMPT'
+[SYSTEM NOTE: NAME SPELLING RULES]
+- If the system note gives you a saved caller name, use that exact saved spelling for requesterName.
+- If the caller says the saved name is wrong, incomplete, or changed, ask them to spell the corrected name once before createCase.
+- If no saved caller name is available and the caller gives a name that matters for follow-up, ask them to spell it or spell it back for confirmation before createCase.
+- Keep the spelling check short and natural, such as "Could you spell that for me so I get it right?"
+- Never put placeholder phrases into requesterName, including "already on file", "on file", "unknown", "caller", "customer", "tenant", "not provided", or "same as file".
 PROMPT);
     }
 

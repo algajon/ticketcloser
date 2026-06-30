@@ -356,6 +356,22 @@ class VapiWebhookTest extends TestCase
             'answer immediately that you have them as Nick Dillon',
             $response->json('assistantOverrides.model.messages.0.content')
         );
+        $this->assertStringContainsString(
+            'NAME SPELLING RULES',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'use that exact saved spelling for requesterName',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'confirm the spelling once before createCase',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'Never put placeholder phrases into requesterName',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
     }
 
     /** @test */
