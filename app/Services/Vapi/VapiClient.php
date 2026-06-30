@@ -44,6 +44,12 @@ class VapiClient
     }
 
     /** @throws RequestException */
+    public function createChat(array $payload): array
+    {
+        return $this->http()->post('/chat', $payload)->throw()->json();
+    }
+
+    /** @throws RequestException */
     public function updateAssistant(string $id, array $payload): array
     {
         return $this->http()->patch("/assistant/{$id}", $payload)->throw()->json();

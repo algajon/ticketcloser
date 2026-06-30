@@ -11,6 +11,7 @@ use App\Models\MessagingSetting;
 use App\Models\UsageEvent;
 use App\Models\Workspace;
 use App\Models\WorkspacePhoneNumber;
+use App\Services\Vapi\VapiClient;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Queue;
@@ -721,6 +722,18 @@ class VapiWebhookTest extends TestCase
         ]);
 
         $caseNumber = json_decode($caseResponse->json('results.0.result'), true)['caseNumber'];
+        $assistant = AssistantConfig::query()
+            ->where('workspace_id', $this->workspace->id)
+            ->where('vapi_assistant_id', 'ast-1234')
+            ->firstOrFail();
+
+        WorkspacePhoneNumber::create([
+            'workspace_id' => $this->workspace->id,
+            'assistant_id' => $assistant->id,
+            'e164' => '+18005550123',
+            'vapi_phone_number_id' => 'pn_sms_direct_123',
+            'is_active' => true,
+        ]);
 
         MessagingSetting::create([
             'workspace_id' => $this->workspace->id,
@@ -732,6 +745,25 @@ class VapiWebhookTest extends TestCase
             'include_issue_label' => true,
             'reply_capture_enabled' => true,
         ]);
+
+        config(['services.vapi.key' => 'test-vapi-key']);
+
+        $vapiClient = $this->createMock(VapiClient::class);
+        $vapiClient->expects($this->once())
+            ->method('createChat')
+            ->with($this->callback(function (array $payload) {
+                $this->assertSame('ast-1234', $payload['assistantId']);
+                $this->assertSame('twilio.sms', data_get($payload, 'transport.type'));
+                $this->assertSame('pn_sms_direct_123', data_get($payload, 'transport.phoneNumberId'));
+                $this->assertFalse(data_get($payload, 'transport.useLLMGeneratedMessageForOutbound'));
+                $this->assertSame('+15551230000', data_get($payload, 'transport.customer.number'));
+                $this->assertStringContainsString('your visit is booked for Thu, Apr 2 at 2:00 PM', $payload['input']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'chat_sms_123', 'sessionId' => 'session_sms_123']);
+
+        $this->app->instance(VapiClient::class, $vapiClient);
 
         $response = $this->postJson('/api/webhooks/vapi', [
             'message' => [
@@ -770,8 +802,10 @@ class VapiWebhookTest extends TestCase
             ->where('support_case_id', \App\Models\SupportCase::where('case_number', $caseNumber)->value('id'))
             ->firstOrFail();
 
-        $this->assertSame(MessageEvent::STATUS_QUEUED, $message->status);
+        $this->assertSame(MessageEvent::STATUS_SENT, $message->status);
         $this->assertSame(MessageEvent::DIRECTION_OUTBOUND, $message->direction);
+        $this->assertNotNull($message->sent_at);
+        $this->assertSame('chat_sms_123', data_get($message->metadata, 'vapi_chat_id'));
         $this->assertStringContainsString('your visit is booked for Thu, Apr 2 at 2:00 PM', $message->body);
         $this->assertStringContainsString($caseNumber, $message->body);
     }

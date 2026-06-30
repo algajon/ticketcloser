@@ -13,6 +13,7 @@ use App\Services\Assistants\AssistantScriptLocalizer;
 use App\Services\Contacts\ContactLinkingService;
 use App\Services\Meetings\MeetingBookingService;
 use App\Services\Tickets\TicketCreationService;
+use App\Services\Vapi\VapiClient;
 use App\Support\RegionalPilotStackCatalog;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -686,14 +687,15 @@ PROMPT);
             }
 
             $toPhone = $this->resolveCustomerNumber($payload) ?: $case->requester_phone ?: $case->contact?->phone_e164;
-            $fromPhone = $assistantConfig
+            $fromPhoneNumber = $assistantConfig
                 ? WorkspacePhoneNumber::query()
                     ->where('workspace_id', $workspace->id)
                     ->where('assistant_id', $assistantConfig->id)
                     ->where('is_active', true)
                     ->latest('id')
-                    ->value('e164')
+                    ->first()
                 : null;
+            $fromPhone = $fromPhoneNumber?->e164;
 
             $startsAt = $booking['startsAt'] ?? $suggestedEvent->starts_at ?? null;
             $appointmentTime = $startsAt
@@ -712,7 +714,7 @@ PROMPT);
             $callId = data_get($callBlock, 'id') ?: ($case->external_call_id ?: 'suggested');
             $externalMessageId = 'booking-confirmation:'.$callId.':'.$suggestedEvent->id;
 
-            MessageEvent::updateOrCreate(
+            $messageEvent = MessageEvent::updateOrCreate(
                 [
                     'workspace_id' => $workspace->id,
                     'provider' => 'vapi',
@@ -737,10 +739,100 @@ PROMPT);
                     ],
                 ]
             );
+
+            $this->sendQueuedBookingConfirmation($messageEvent, $assistantConfig, $fromPhoneNumber, $case);
         } catch (\Throwable $e) {
             Log::warning('VAPI_MESSAGE_EVENT_QUEUE_FAILED', [
                 'workspace_id' => $workspace->id,
                 'case_id' => $case->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
+    }
+
+    private function sendQueuedBookingConfirmation(
+        MessageEvent $messageEvent,
+        ?AssistantConfig $assistantConfig,
+        ?WorkspacePhoneNumber $fromPhoneNumber,
+        SupportCase $case
+    ): void {
+        $metadata = is_array($messageEvent->metadata) ? $messageEvent->metadata : [];
+
+        if (in_array($messageEvent->status, [
+            MessageEvent::STATUS_SENT,
+            MessageEvent::STATUS_DELIVERED,
+            MessageEvent::STATUS_OPENED,
+            MessageEvent::STATUS_CLICKED,
+            MessageEvent::STATUS_REPLIED,
+        ], true)) {
+            return;
+        }
+
+        if (blank(config('services.vapi.key'))) {
+            $messageEvent->update([
+                'metadata' => [
+                    ...$metadata,
+                    'provider_send_skipped' => 'missing_vapi_key',
+                ],
+            ]);
+
+            return;
+        }
+
+        if (! $assistantConfig?->vapi_assistant_id || ! $fromPhoneNumber?->vapi_phone_number_id || blank($messageEvent->to_phone) || blank($messageEvent->body)) {
+            $messageEvent->update([
+                'status' => MessageEvent::STATUS_FAILED,
+                'failed_at' => now(),
+                'metadata' => [
+                    ...$metadata,
+                    'provider_error' => 'Missing assistant, SMS phone number, recipient, or message body.',
+                ],
+            ]);
+
+            return;
+        }
+
+        try {
+            $response = app(VapiClient::class)->createChat([
+                'assistantId' => $assistantConfig->vapi_assistant_id,
+                'name' => 'Booking confirmation '.$case->case_number,
+                'input' => $messageEvent->body,
+                'transport' => [
+                    'type' => 'twilio.sms',
+                    'phoneNumberId' => $fromPhoneNumber->vapi_phone_number_id,
+                    'customer' => array_filter([
+                        'number' => $messageEvent->to_phone,
+                        'name' => $case->contact?->name,
+                    ], fn ($value) => filled($value)),
+                    'useLLMGeneratedMessageForOutbound' => false,
+                ],
+            ]);
+
+            $messageEvent->update([
+                'status' => MessageEvent::STATUS_SENT,
+                'sent_at' => now(),
+                'failed_at' => null,
+                'metadata' => [
+                    ...$metadata,
+                    'vapi_chat_id' => data_get($response, 'id'),
+                    'vapi_session_id' => data_get($response, 'sessionId'),
+                    'provider_response' => $response,
+                ],
+            ]);
+        } catch (\Throwable $e) {
+            $messageEvent->update([
+                'status' => MessageEvent::STATUS_FAILED,
+                'failed_at' => now(),
+                'metadata' => [
+                    ...$metadata,
+                    'provider_error' => $e->getMessage(),
+                ],
+            ]);
+
+            Log::warning('VAPI_SMS_CONFIRMATION_SEND_FAILED', [
+                'message_event_id' => $messageEvent->id,
+                'workspace_id' => $messageEvent->workspace_id,
+                'support_case_id' => $messageEvent->support_case_id,
                 'error' => $e->getMessage(),
             ]);
         }
