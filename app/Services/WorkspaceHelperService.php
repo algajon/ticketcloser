@@ -137,6 +137,7 @@ PROMPT;
             str_contains($normalized, 'assistant') || str_contains($normalized, 'prompt') => ['assistants', 'new_assistant'],
             str_contains($normalized, 'recording') || str_contains($normalized, 'transcript') || str_contains($normalized, 'call') => ['calls', 'calls_analytics'],
             str_contains($normalized, 'ticket') || str_contains($normalized, 'case') => ['cases'],
+            str_contains($normalized, 'sms') || str_contains($normalized, 'text') || str_contains($normalized, 'message') => ['messaging'],
             str_contains($normalized, 'phone') || str_contains($normalized, 'number') => ['phone_numbers'],
             str_contains($normalized, 'meeting') || str_contains($normalized, 'calendar') => ['calendar'],
             str_contains($normalized, 'billing') || str_contains($normalized, 'plan') => ['billing'],

@@ -133,8 +133,8 @@ class VapiWebhookController extends Controller
                             $operatorRoutingPrompt = $this->runtimeOperatorRoutingPrompt($workspacePhone->assistant, $workspace);
                             $operatorRoutingPrompt = $operatorRoutingPrompt !== '' ? "\n\n".$operatorRoutingPrompt : '';
                             $dateContext = "\n\n[SYSTEM NOTE: Today is " . now()->format('l, F j, Y') . ". The current time is " . now()->format('g:i A T') . ". Always use this exact date as your reference.]";
-                            $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Use any caller context already provided in the system note before deciding whether to call lookupContact or lookupCase.\n- If the system note already gives you the caller's identity or recent case context, do not call lookupContact or lookupCase at the start of the call.\n- Use lookupContact only if the existing caller context is missing, unclear, or the caller asks what details are on file.\n- Use lookupCase only if recent case history would genuinely help and it was not already provided in the system note.\n- Never narrate lookupContact or lookupCase with phrases like 'Just a sec', 'One moment', 'Give me a moment', or 'Hold on a sec'.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
-                            $systemPrompt = $memory . $basePrompt . $toolRules . "\n\n".$this->silentHandoffGuardrailsPrompt() . $languageGuardrail . $operatorRoutingPrompt . $dateContext;
+                            $toolRules = "\n\n[SYSTEM NOTE: TOOL EXECUTION RULES]\n- Never call createCase and bookMeeting in parallel.\n- If the caller wants both a case and a meeting, confirm the summary, call createCase once, wait for the case number, then call bookMeeting.\n- Use any caller context already provided in the system note before deciding whether to call lookupContact or lookupCase.\n- If the system note already gives you the caller's identity or recent case context, do not call lookupContact or lookupCase at the start of the call.\n- Use lookupContact only if the existing caller context is missing, unclear, or the caller asks what details are on file.\n- Use lookupCase only if recent case history would genuinely help and it was not already provided in the system note.\n- After bookMeeting succeeds, use sms at most once to send a short confirmation text to the live caller number with the scheduled date/time and case number.\n- Never narrate lookupContact or lookupCase with phrases like 'Just a sec', 'One moment', 'Give me a moment', or 'Hold on a sec'.\n- Do not retry a tool after it succeeds.\n- If a tool fails, explain that briefly instead of looping on the same tool.\n";
+                            $systemPrompt = $memory . $basePrompt . $toolRules . "\n\n".$this->silentHandoffGuardrailsPrompt() . "\n\n".$this->smsConfirmationGuardrailsPrompt() . $languageGuardrail . $operatorRoutingPrompt . $dateContext;
 
                             // Build toolIds array so Vapi doesn't strip tools when we override the model
                             $toolIds = array_filter([
@@ -169,6 +169,10 @@ class VapiWebhookController extends Controller
 
                             foreach ($this->runtimeOperatorHandoffTools($workspacePhone->assistant, $workspace) as $handoffTool) {
                                 $modelOverride['tools'][] = $handoffTool;
+                            }
+
+                            if ($smsTool = $this->runtimeSmsToolForPhoneNumber($workspacePhone)) {
+                                $modelOverride['tools'][] = $smsTool;
                             }
 
                             // Preserve the inline transferCall tool if a fallback phone is configured
@@ -598,6 +602,62 @@ class VapiWebhookController extends Controller
 - If this assistant receives a caller from another tickIt operator or assistant, do not greet the caller again, do not mention a transfer, and do not make small talk.
 - Continue directly with the next useful question for this assistant's task, using any route choice or caller context already present in the conversation.
 PROMPT);
+    }
+
+    private function smsConfirmationGuardrailsPrompt(): string
+    {
+        return trim(<<<'PROMPT'
+[SYSTEM NOTE: SMS CONFIRMATION RULES]
+- The sms tool is only for short transactional confirmations, not general chatting or marketing.
+- Use sms only after bookMeeting has succeeded or after the assistant has clearly recorded a pending follow-up time.
+- Send at most one SMS per call unless the caller explicitly asks you to correct the confirmation.
+- Send the SMS to the live caller number. Do not ask for another phone number unless the caller says the current number is not the right one.
+- Keep the SMS under 320 characters.
+- Include the scheduled date and time, ticket or case number when available, and a short issue label.
+- Do not include sensitive medical, financial, legal, or highly private details in SMS. Use a generic issue label instead.
+- Never promise an SMS was sent unless the sms tool succeeds.
+PROMPT);
+    }
+
+    private function runtimeSmsToolForPhoneNumber(\App\Models\WorkspacePhoneNumber $phoneNumber): ?array
+    {
+        if (! $phoneNumber->is_active || blank($phoneNumber->vapi_phone_number_id)) {
+            return null;
+        }
+
+        $from = $this->normalizeSmsPhoneNumber($phoneNumber->e164);
+
+        if ($from === null) {
+            return null;
+        }
+
+        return [
+            'type' => 'sms',
+            'metadata' => [
+                'from' => $from,
+            ],
+        ];
+    }
+
+    private function normalizeSmsPhoneNumber(?string $phoneNumber): ?string
+    {
+        $phoneNumber = trim((string) $phoneNumber);
+
+        if ($phoneNumber === '') {
+            return null;
+        }
+
+        $normalized = preg_replace('/[^0-9+]/', '', $phoneNumber);
+
+        if (! is_string($normalized) || $normalized === '') {
+            return null;
+        }
+
+        if (str_starts_with($normalized, '+')) {
+            return $normalized;
+        }
+
+        return strlen($normalized) >= 10 ? '+'.$normalized : null;
     }
 
     private function runtimeOperatorHandoffTools(\App\Models\AssistantConfig $assistant, Workspace $workspace): array

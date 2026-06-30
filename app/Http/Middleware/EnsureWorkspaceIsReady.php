@@ -18,6 +18,7 @@ class EnsureWorkspaceIsReady
         'app.onboarding.*',
         'app.assistant.*',
         'app.phone_numbers.*',
+        'app.messaging.*',
         'logout',
     ];
 

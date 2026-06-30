@@ -14,6 +14,7 @@ use App\Http\Controllers\BillingController;
 use App\Http\Controllers\AdminBillingController;
 use App\Http\Controllers\PromptWriterController;
 use App\Http\Controllers\CalendarController;
+use App\Http\Controllers\MessagingController;
 use App\Http\Controllers\AdminPresetController;
 use App\Http\Controllers\SettingsController;
 use App\Http\Controllers\WorkspaceFeedbackController;
@@ -238,6 +239,10 @@ Route::middleware(['auth', 'verified', 'workspace.ready', 'subscribed'])->prefix
         ->name('phone_numbers.store');
     Route::delete('/workspaces/{workspace:slug}/phone-numbers/{phoneNumber}', [VoiceAssistantController::class, 'destroyPhoneNumber'])
         ->name('phone_numbers.destroy');
+
+    // Messaging setup and SMS confirmation readiness
+    Route::get('/workspaces/{workspace:slug}/messaging', [MessagingController::class, 'index'])
+        ->name('messaging.index');
 
     // Queues, Contacts, Call logs
     Route::get('/workspaces/{workspace:slug}/queues', [\App\Http\Controllers\QueuesController::class, 'index'])->name('queues.index');

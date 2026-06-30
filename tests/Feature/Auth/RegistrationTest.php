@@ -41,6 +41,7 @@ class RegistrationTest extends TestCase
         $this->assertNotNull($user->terms_accepted_at);
         $this->assertSame('2026-03-31', $user->terms_version);
         $this->assertNull($user->marketing_opted_in_at);
+        $this->assertNull($user->welcome_email_sent_at);
         $this->assertDatabaseHas('workspace_memberships', [
             'user_id' => $user->id,
             'role' => 'owner',
@@ -48,9 +49,7 @@ class RegistrationTest extends TestCase
         Mail::assertSent(OtpVerificationMail::class, function (OtpVerificationMail $mail) use ($user) {
             return $mail->hasTo($user->email) && $mail->otpCode === $user->otp_code;
         });
-        Mail::assertSent(WelcomeToTickItMail::class, function (WelcomeToTickItMail $mail) use ($user) {
-            return $mail->hasTo($user->email) && $mail->user->is($user);
-        });
+        Mail::assertNotSent(WelcomeToTickItMail::class);
         $response->assertRedirect(route('dashboard', absolute: false));
     }
 

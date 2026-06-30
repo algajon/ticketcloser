@@ -44,6 +44,11 @@ return [
 
     'server_api_token' => env('SERVER_API_TOKEN'),
 
+    'tickit_sales' => [
+        'email' => env('TICKIT_SALES_EMAIL', 'jon@ticketcloser.online'),
+        'calendly_url' => env('TICKIT_SALES_CALENDLY_URL'),
+    ],
+
     // ── Stripe ──────────────────────────────────────────────────────
     'stripe' => [
         'key' => env('STRIPE_KEY'),

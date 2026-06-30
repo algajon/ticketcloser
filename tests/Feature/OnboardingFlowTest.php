@@ -2,11 +2,13 @@
 
 namespace Tests\Feature;
 
+use App\Mail\WelcomeToTickItMail;
 use App\Models\IntakeConfig;
 use App\Models\User;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class OnboardingFlowTest extends TestCase
@@ -15,6 +17,8 @@ class OnboardingFlowTest extends TestCase
 
     public function test_saving_workspace_setup_applies_use_case_defaults_and_redirects_to_plans_for_free_workspace(): void
     {
+        Mail::fake();
+
         $user = User::factory()->create();
         $user->markEmailAsVerified();
         $workspace = Workspace::factory()->create([
@@ -57,6 +61,12 @@ class OnboardingFlowTest extends TestCase
         $this->assertContains('Property or building', $intakeConfig->required_fields);
         $this->assertContains('maintenance', $intakeConfig->category_options);
         $this->assertSame('critical', $intakeConfig->priority_rules['no heat']);
+        Mail::assertSent(WelcomeToTickItMail::class, function (WelcomeToTickItMail $mail) use ($user, $workspace) {
+            return $mail->hasTo($user->email)
+                && $mail->user->is($user)
+                && $mail->workspace->is($workspace);
+        });
+        $this->assertNotNull($user->fresh()->welcome_email_sent_at);
     }
 
     public function test_other_workflow_requires_custom_details(): void

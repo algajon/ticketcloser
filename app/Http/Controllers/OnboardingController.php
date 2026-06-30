@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\IntakeConfig;
 use App\Models\Workspace;
+use App\Services\WelcomeEmailService;
 use App\Support\RegionalPilotStackCatalog;
 use App\Support\WorkspaceUseCaseCatalog;
 use Illuminate\Http\Request;
@@ -58,7 +59,7 @@ class OnboardingController extends Controller
         ));
     }
 
-    public function saveCompany(Request $request)
+    public function saveCompany(Request $request, WelcomeEmailService $welcomeEmail)
     {
         $workspace = $this->workspaceOrFail($request);
         $selectedUseCase = (string) $request->input('use_case', 'customer_support');
@@ -150,6 +151,8 @@ class OnboardingController extends Controller
                 'priority_rules' => $definition['priority_rules'],
             ]
         );
+
+        $welcomeEmail->sendIfReady($request->user(), $workspace);
 
         if (! $workspace->canCreateAssistants()) {
             return redirect()

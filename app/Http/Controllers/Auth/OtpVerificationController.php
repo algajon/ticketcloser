@@ -3,13 +3,14 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\Mail\OtpVerificationMail;
+use App\Services\WelcomeEmailService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
-use App\Mail\OtpVerificationMail;
 
 class OtpVerificationController extends Controller
 {
-    public function verify(Request $request)
+    public function verify(Request $request, WelcomeEmailService $welcomeEmail)
     {
         $request->validate([
             'otp' => ['required', 'string', 'size:6'],
@@ -26,6 +27,8 @@ class OtpVerificationController extends Controller
             $user->otp_code = null;
             $user->otp_expires_at = null;
             $user->save();
+
+            $welcomeEmail->sendIfReady($user);
 
             return redirect()->intended(route('dashboard', absolute: false));
         }

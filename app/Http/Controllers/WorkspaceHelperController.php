@@ -46,6 +46,7 @@ class WorkspaceHelperController extends Controller
                 ? ['label' => 'Create assistant', 'href' => route('app.assistant.create', $workspace)]
                 : ['label' => 'View plans', 'href' => route('app.billing.plans')],
             'phone_numbers' => ['label' => 'Manage phone numbers', 'href' => route('app.phone_numbers.index', $workspace)],
+            'messaging' => ['label' => 'Open messaging', 'href' => route('app.messaging.index', $workspace)],
             'calls' => ['label' => 'Open calls', 'href' => route('app.calls.index', $workspace)],
             'calls_analytics' => ['label' => 'View call analytics', 'href' => route('app.calls.analytics', $workspace)],
             'calendar' => ['label' => 'Open calendar', 'href' => route('app.calendar.index')],

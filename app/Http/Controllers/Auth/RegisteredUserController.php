@@ -4,7 +4,6 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Mail\OtpVerificationMail;
-use App\Mail\WelcomeToTickItMail;
 use App\Models\IntakeConfig;
 use App\Models\User;
 use App\Models\VoiceConfig;
@@ -92,7 +91,6 @@ class RegisteredUserController extends Controller
         $user->save();
 
         Mail::to($user->email)->send(new OtpVerificationMail($otp));
-        Mail::to($user->email)->send(new WelcomeToTickItMail($user, $workspace));
 
         Auth::login($user);
         $request->session()->put('current_workspace_id', $workspace->id);

@@ -314,8 +314,19 @@ class VapiWebhookTest extends TestCase
             ['tool_case_123', 'tool_booking_123', 'tool_case_lookup_123'],
             array_values(array_filter($response->json('assistantOverrides.model.toolIds')))
         );
+        $smsTool = collect($response->json('assistantOverrides.model.tools') ?? [])->firstWhere('type', 'sms');
+        $this->assertNotNull($smsTool);
+        $this->assertSame('+18005550199', $smsTool['metadata']['from']);
         $this->assertStringContainsString(
             'Keep caller-facing replies in fr-FR',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'SMS CONFIRMATION RULES',
+            $response->json('assistantOverrides.model.messages.0.content')
+        );
+        $this->assertStringContainsString(
+            'After bookMeeting succeeds',
             $response->json('assistantOverrides.model.messages.0.content')
         );
         $this->assertStringContainsString(

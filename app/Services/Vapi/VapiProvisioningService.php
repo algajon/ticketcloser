@@ -272,6 +272,10 @@ class VapiProvisioningService
             $record->is_active = filled($record->vapi_phone_number_id) || filled($record->forwarding_number) || filled($record->e164);
             $record->save();
 
+            if (filled($record->vapi_phone_number_id) && filled($record->e164)) {
+                $this->syncAssistantPayload($assistantConfig->fresh() ?? $assistantConfig, $workspace);
+            }
+
             return $record->fresh();
         }
 
@@ -308,6 +312,10 @@ class VapiProvisioningService
         if (array_key_exists('forwarding_number', $input)) {
             $record->forwarding_number = $this->normalizeStoredPhoneNumber($input['forwarding_number']);
             $record->save();
+        }
+
+        if (filled($record->vapi_phone_number_id) && filled($record->e164)) {
+            $this->syncAssistantPayload($assistantConfig->fresh() ?? $assistantConfig, $workspace);
         }
 
         return $record->fresh();
@@ -558,6 +566,68 @@ class VapiProvisioningService
         ];
     }
 
+    private function syncAssistantPayload(AssistantConfig $config, Workspace $workspace): void
+    {
+        if (! $config->vapi_assistant_id) {
+            return;
+        }
+
+        $this->vapi->updateAssistant($config->vapi_assistant_id, $this->buildAssistantPayload(
+            $config,
+            $config->vapi_tool_id,
+            $config->vapi_booking_tool_id,
+            $config->vapi_lookup_tool_id,
+            $config->vapi_case_lookup_tool_id,
+            $workspace
+        ));
+    }
+
+    private function smsToolForAssistant(AssistantConfig $config): ?array
+    {
+        $from = WorkspacePhoneNumber::query()
+            ->where('workspace_id', $config->workspace_id)
+            ->where('assistant_id', $config->id)
+            ->where('is_active', true)
+            ->whereNotNull('vapi_phone_number_id')
+            ->whereNotNull('e164')
+            ->latest('id')
+            ->value('e164');
+
+        $from = $this->normalizeSmsPhoneNumber(is_scalar($from) ? (string) $from : null);
+
+        if ($from === null) {
+            return null;
+        }
+
+        return [
+            'type' => 'sms',
+            'metadata' => [
+                'from' => $from,
+            ],
+        ];
+    }
+
+    private function normalizeSmsPhoneNumber(?string $phoneNumber): ?string
+    {
+        $phoneNumber = trim((string) $phoneNumber);
+
+        if ($phoneNumber === '') {
+            return null;
+        }
+
+        $normalized = preg_replace('/[^0-9+]/', '', $phoneNumber);
+
+        if (! is_string($normalized) || $normalized === '') {
+            return null;
+        }
+
+        if (str_starts_with($normalized, '+')) {
+            return $normalized;
+        }
+
+        return strlen($normalized) >= 10 ? '+'.$normalized : null;
+    }
+
     private function buildLookupContactToolPayload(string $workspaceSlug, string $integrationToken): array
     {
         $webhookUrl = config('services.vapi.webhook_url');
@@ -644,6 +714,7 @@ class VapiProvisioningService
         $systemPrompt .= "\n\n" . $this->knownCallerGuardrailsPrompt();
         $systemPrompt .= "\n\n" . $this->humaneConversationGuardrailsPrompt();
         $systemPrompt .= "\n\n" . $this->silentHandoffGuardrailsPrompt();
+        $systemPrompt .= "\n\n" . $this->smsConfirmationGuardrailsPrompt();
 
         if (! empty($config->language_code)) {
             $systemPrompt .= "\n\n[SYSTEM NOTE: Keep caller-facing replies in {$config->language_code} unless the caller clearly switches language and the business supports that change.]";
@@ -689,6 +760,10 @@ class VapiProvisioningService
 
         foreach ($this->operatorHandoffTools($config, $workspace) as $operatorHandoffTool) {
             $model['tools'][] = $operatorHandoffTool;
+        }
+
+        if ($smsTool = $this->smsToolForAssistant($config)) {
+            $model['tools'][] = $smsTool;
         }
 
         if (! empty($config->fallback_phone)) {
@@ -1108,6 +1183,7 @@ Core behavior:
 12) After createCase returns a case number, tell the caller the case number and the next step in one clean sentence.
 13) If the caller wants a follow-up meeting, book it only after the case exists.
 14) If the caller asks to book the meeting before a case exists, explain that you will log the request first and then book the follow-up right after.
+15) After bookMeeting succeeds, use the sms tool once to send the caller a short confirmation text with the scheduled date and time, the ticket or case number when available, and a brief issue label.
 
 Spoken style:
 - Keep responses short and easy to hear.
@@ -1136,9 +1212,25 @@ PROMPT);
 - Never call lookupCase repeatedly once you already have enough recent case context.
 - If the caller asks for a meeting before a case exists, explain that you will log the request first and then handle the booking immediately after the case is created.
 - Never say the booking cannot happen just because the case has not been created yet.
+- After bookMeeting succeeds, use sms at most once to send a short confirmation text to the live caller number with the scheduled date/time and case number.
 - Do not retry a tool after it succeeds.
 - If a tool fails, explain that briefly and decide the next step with the caller instead of repeatedly calling the same tool.
 - Never say "Just a sec", "One moment", or similar filler before using lookupContact or lookupCase. Do those lookups silently.
+PROMPT);
+    }
+
+    private function smsConfirmationGuardrailsPrompt(): string
+    {
+        return trim(<<<'PROMPT'
+[SYSTEM NOTE: SMS CONFIRMATION RULES]
+- The sms tool is only for short transactional confirmations, not general chatting or marketing.
+- Use sms only after bookMeeting has succeeded or after the assistant has clearly recorded a pending follow-up time.
+- Send at most one SMS per call unless the caller explicitly asks you to correct the confirmation.
+- Send the SMS to the live caller number. Do not ask for another phone number unless the caller says the current number is not the right one.
+- Keep the SMS under 320 characters.
+- Include the scheduled date and time, ticket or case number when available, and a short issue label.
+- Do not include sensitive medical, financial, legal, or highly private details in SMS. Use a generic issue label instead.
+- Never promise an SMS was sent unless the sms tool succeeds.
 PROMPT);
     }
 

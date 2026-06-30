@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AssistantConfig;
 use App\Models\AssistantPreset;
 use App\Models\Workspace;
+use App\Models\WorkspacePhoneNumber;
 use App\Services\Vapi\VapiClient;
 use App\Services\Vapi\VapiProvisioningService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -298,6 +299,55 @@ class AssistantVoiceQualityTest extends TestCase
         $service->provisionAssistantAndToolForConfig($assistant, $workspace, [
             'name' => 'Front Desk',
             'first_message' => 'Northline Support, this is Maya speaking. How can I help today?',
+        ]);
+    }
+
+    public function test_assistant_sync_adds_vapi_sms_tool_when_live_number_is_assigned(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Maintenance Desk',
+            'preset_key' => 'steady_operator',
+            'language_code' => 'en-US',
+        ]);
+
+        WorkspacePhoneNumber::create([
+            'workspace_id' => $workspace->id,
+            'assistant_id' => $assistant->id,
+            'vapi_phone_number_id' => 'pn_sms_123',
+            'e164' => '+18005550123',
+            'is_active' => true,
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $smsTool = collect($payload['model']['tools'] ?? [])->firstWhere('type', 'sms');
+
+                $this->assertNotNull($smsTool);
+                $this->assertSame('+18005550123', $smsTool['metadata']['from']);
+                $this->assertStringContainsString('SMS CONFIRMATION RULES', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('After bookMeeting succeeds', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Keep the SMS under 320 characters', $payload['model']['messages'][0]['content']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-sms-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($assistant, $workspace, [
+            'name' => 'Maintenance Desk',
         ]);
     }
 

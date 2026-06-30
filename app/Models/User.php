@@ -31,6 +31,7 @@ class User extends Authenticatable implements MustVerifyEmail
         'terms_accepted_at',
         'terms_version',
         'marketing_opted_in_at',
+        'welcome_email_sent_at',
     ];
 
     /**
@@ -63,6 +64,7 @@ class User extends Authenticatable implements MustVerifyEmail
             'otp_expires_at' => 'datetime',
             'terms_accepted_at' => 'datetime',
             'marketing_opted_in_at' => 'datetime',
+            'welcome_email_sent_at' => 'datetime',
         ];
     }
 

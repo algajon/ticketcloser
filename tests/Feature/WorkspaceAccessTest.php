@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Mail\WelcomeToTickItMail;
 use App\Models\IntakeConfig;
 use App\Models\User;
 use App\Models\VoiceConfig;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 class WorkspaceAccessTest extends TestCase
@@ -70,6 +72,8 @@ class WorkspaceAccessTest extends TestCase
 
     public function test_creating_a_workspace_applies_use_case_defaults_and_redirects_to_plans_for_free_workspace(): void
     {
+        Mail::fake();
+
         $user = User::factory()->create();
         $user->markEmailAsVerified();
 
@@ -102,6 +106,12 @@ class WorkspaceAccessTest extends TestCase
         $this->assertStringContainsString('inbound it support calls', strtolower($intakeConfig->system_prompt));
         $this->assertContains('System affected', $intakeConfig->required_fields);
         $this->assertTrue(VoiceConfig::query()->where('workspace_id', $workspace->id)->exists());
+        Mail::assertSent(WelcomeToTickItMail::class, function (WelcomeToTickItMail $mail) use ($user, $workspace) {
+            return $mail->hasTo($user->email)
+                && $mail->user->is($user)
+                && $mail->workspace->is($workspace);
+        });
+        $this->assertNotNull($user->fresh()->welcome_email_sent_at);
     }
 
     public function test_free_users_cannot_create_a_second_workspace(): void

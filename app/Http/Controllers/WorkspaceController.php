@@ -6,6 +6,7 @@ use App\Models\IntakeConfig;
 use App\Models\VoiceConfig;
 use App\Models\Workspace;
 use App\Models\WorkspaceMembership;
+use App\Services\WelcomeEmailService;
 use App\Support\RegionalPilotStackCatalog;
 use App\Support\WorkspaceUseCaseCatalog;
 use Illuminate\Http\Request;
@@ -56,7 +57,7 @@ class WorkspaceController extends Controller
         ));
     }
 
-    public function store(Request $request)
+    public function store(Request $request, WelcomeEmailService $welcomeEmail)
     {
         if ($request->user()->hasReachedWorkspaceLimit()) {
             return redirect()
@@ -175,6 +176,7 @@ class WorkspaceController extends Controller
         );
 
         $request->session()->put('current_workspace_id', $workspace->id);
+        $welcomeEmail->sendIfReady($request->user(), $workspace);
 
         if (! $workspace->canCreateAssistants()) {
             return redirect()
