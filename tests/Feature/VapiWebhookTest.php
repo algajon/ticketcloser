@@ -731,6 +731,8 @@ class VapiWebhookTest extends TestCase
             'workspace_id' => $this->workspace->id,
             'assistant_id' => $assistant->id,
             'e164' => '+18005550123',
+            'provisioning_mode' => 'external_provider',
+            'external_provider' => 'twilio',
             'vapi_phone_number_id' => 'pn_sms_direct_123',
             'is_active' => true,
         ]);
@@ -791,6 +793,8 @@ class VapiWebhookTest extends TestCase
         $this->assertTrue($parsed['success']);
         $this->assertArrayHasKey('suggestedEventId', $parsed);
         $this->assertNull($parsed['calendarEventId']);
+        $this->assertSame(MessageEvent::STATUS_SENT, $parsed['smsConfirmation']['status']);
+        $this->assertStringContainsString('your visit is booked for Thu, Apr 2 at 2:00 PM', $parsed['smsConfirmation']['body']);
         $this->assertDatabaseHas('suggested_events', [
             'id' => $parsed['suggestedEventId'],
             'workspace_id' => $this->workspace->id,

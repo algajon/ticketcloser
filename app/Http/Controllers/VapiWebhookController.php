@@ -377,7 +377,7 @@ class VapiWebhookController extends Controller
                         }
 
                         $booking = $meetingBooking->scheduleFromVoice($case, $args);
-                        $this->queueBookingConfirmationMessage($workspace, $case, $booking, $payload, is_array($callBlock) ? $callBlock : []);
+                        $messageEvent = $this->queueBookingConfirmationMessage($workspace, $case, $booking, $payload, is_array($callBlock) ? $callBlock : []);
 
                         $results[] = $this->successToolResult($toolCallId, $name, [
                             'success' => true,
@@ -385,6 +385,15 @@ class VapiWebhookController extends Controller
                             'message' => $booking['message'],
                             'suggestedEventId' => $booking['suggestedEvent']->id,
                             'calendarEventId' => $booking['calendarEvent']?->id,
+                            'smsConfirmation' => $messageEvent ? [
+                                'status' => $messageEvent->status,
+                                'messageEventId' => $messageEvent->id,
+                                'to' => $messageEvent->to_phone,
+                                'body' => $messageEvent->body,
+                                'instruction' => $messageEvent->status === MessageEvent::STATUS_QUEUED
+                                    ? 'Immediately call the sms tool once with this exact body before ending the call.'
+                                    : null,
+                            ] : null,
                         ]);
                     } else {
                         $results[] = $this->errorToolResult($toolCallId, $name, "Unknown tool: {$name}");
@@ -660,18 +669,18 @@ PROMPT);
         array $booking,
         array $payload,
         array $callBlock
-    ): void {
+    ): ?MessageEvent {
         try {
             $settings = MessagingSetting::forWorkspace($workspace);
 
             if (! $settings->booking_confirmation_enabled) {
-                return;
+                return null;
             }
 
             $suggestedEvent = $booking['suggestedEvent'] ?? null;
 
             if (! $suggestedEvent || ! isset($suggestedEvent->id)) {
-                return;
+                return null;
             }
 
             $case->loadMissing(['contact']);
@@ -741,12 +750,16 @@ PROMPT);
             );
 
             $this->sendQueuedBookingConfirmation($messageEvent, $assistantConfig, $fromPhoneNumber, $case);
+
+            return $messageEvent->fresh();
         } catch (\Throwable $e) {
             Log::warning('VAPI_MESSAGE_EVENT_QUEUE_FAILED', [
                 'workspace_id' => $workspace->id,
                 'case_id' => $case->id,
                 'error' => $e->getMessage(),
             ]);
+
+            return null;
         }
     }
 
@@ -773,6 +786,18 @@ PROMPT);
                 'metadata' => [
                     ...$metadata,
                     'provider_send_skipped' => 'missing_vapi_key',
+                ],
+            ]);
+
+            return;
+        }
+
+        if (! $fromPhoneNumber || ! $this->canDirectSendSmsViaVapiChat($fromPhoneNumber)) {
+            $messageEvent->update([
+                'metadata' => [
+                    ...$metadata,
+                    'provider_send_skipped' => 'direct_sms_requires_twilio_transport',
+                    'assistant_sms_instruction' => 'The assigned number is not a Twilio-backed SMS transport. The assistant should call the built-in sms tool with the queued body during the live call.',
                 ],
             ]);
 
@@ -836,6 +861,12 @@ PROMPT);
                 'error' => $e->getMessage(),
             ]);
         }
+    }
+
+    private function canDirectSendSmsViaVapiChat(WorkspacePhoneNumber $phoneNumber): bool
+    {
+        return $phoneNumber->provisioning_mode !== 'vapi_instant'
+            && $phoneNumber->external_provider === 'twilio';
     }
 
     private function runtimeSmsToolForPhoneNumber(\App\Models\WorkspacePhoneNumber $phoneNumber): ?array
