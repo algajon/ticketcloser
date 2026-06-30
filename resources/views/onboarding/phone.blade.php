@@ -21,7 +21,6 @@
             'vapi_phone_number_id',
             $phone?->provisioning_mode === 'external_provider' ? $phone?->vapi_phone_number_id : null
         );
-        $twilioAccountSid = old('twilio_account_sid');
         $existingNumberCountry = old(
             'existing_number_country',
             $defaultExistingNumberCountry ?? \App\Support\RegionalPilotStackCatalog::inferExistingNumberCountry(
@@ -193,7 +192,7 @@
                     externalProvider: @js($externalProvider),
                     vapiCredentialId: @js($vapiCredentialId),
                     vapiPhoneNumberId: @js($vapiPhoneNumberId),
-                    twilioAccountSid: @js($twilioAccountSid),
+                    twilioAccountSid: '',
                     twilioAuthToken: '',
                     existingNumberCountry: @js($existingNumberCountry),
                     workspaceHasDefaultVapiCredential: @js($workspaceHasDefaultVapiCredential),
@@ -437,16 +436,18 @@
 
                 <div class="grid gap-4 md:grid-cols-2" x-show="provisioningMode === 'external_provider' && externalProvider === 'twilio'" x-transition>
                     <div class="tc-field">
-                        <label for="twilio_account_sid" class="tc-field-label">Twilio Account SID</label>
-                        <input id="twilio_account_sid" name="twilio_account_sid" type="text" class="tc-input" x-model="twilioAccountSid" value="{{ old('twilio_account_sid') }}" placeholder="AC..." autocomplete="off" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
+                        <input type="hidden" name="twilio_account_sid" x-model="twilioAccountSid" />
+                        <label for="twilio_sid_entry" class="tc-field-label">Twilio Account SID</label>
+                        <input id="twilio_sid_entry" name="tc_twilio_sid_entry" type="text" class="tc-input" x-model="twilioAccountSid" placeholder="ACe4a5..." autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" inputmode="text" pattern="AC[a-zA-Z0-9]+" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
                         @if($errors->first('twilio_account_sid'))
                             <p class="tc-error">{{ $errors->first('twilio_account_sid') }}</p>
                         @endif
                     </div>
 
                     <div class="tc-field">
-                        <label for="twilio_auth_token" class="tc-field-label">Twilio Auth Token</label>
-                        <input id="twilio_auth_token" name="twilio_auth_token" type="password" class="tc-input" x-model="twilioAuthToken" placeholder="Used once; not stored by tickIt" autocomplete="off" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
+                        <input type="hidden" name="twilio_auth_token" x-model="twilioAuthToken" />
+                        <label for="twilio_token_entry" class="tc-field-label">Twilio Auth Token</label>
+                        <input id="twilio_token_entry" name="tc_twilio_token_entry" type="password" class="tc-input" x-model="twilioAuthToken" placeholder="Used once; not stored by tickIt" autocomplete="new-password" autocapitalize="off" autocorrect="off" spellcheck="false" @disabled(!$config?->vapi_assistant_id || $phoneNumbersLockedForFreePlan) />
                         @if($errors->first('twilio_auth_token'))
                             <p class="tc-error">{{ $errors->first('twilio_auth_token') }}</p>
                         @endif

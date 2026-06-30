@@ -591,7 +591,7 @@ class PhoneNumbersPageTest extends TestCase
             ->with($this->callback(function (array $payload) use ($assistant, $workspace) {
                 return $payload['provider'] === 'twilio'
                     && $payload['number'] === '+13613263105'
-                    && $payload['twilioAccountSid'] === 'AC123'
+                    && $payload['twilioAccountSid'] === 'ACTestOnlySidNeverReal123'
                     && $payload['twilioAuthToken'] === 'token_secret'
                     && $payload['smsEnabled'] === true
                     && $payload['assistantId'] === $assistant->vapi_assistant_id
@@ -614,7 +614,7 @@ class PhoneNumbersPageTest extends TestCase
                 'external_provider' => 'twilio',
                 'existing_number_country' => 'us',
                 'forwarding_number' => '+1 (361) 326 3105',
-                'twilio_account_sid' => 'AC123',
+                'twilio_account_sid' => 'ACTestOnlySidNeverReal123',
                 'twilio_auth_token' => 'token_secret',
             ]);
 
@@ -680,7 +680,7 @@ class PhoneNumbersPageTest extends TestCase
             ->with('pn_twilio_existing_123', $this->callback(function (array $payload) use ($assistant, $workspace) {
                 return ! isset($payload['provider'])
                     && $payload['number'] === '+13613263105'
-                    && $payload['twilioAccountSid'] === 'AC123'
+                    && $payload['twilioAccountSid'] === 'ACTestOnlySidNeverReal123'
                     && $payload['twilioAuthToken'] === 'token_secret'
                     && $payload['smsEnabled'] === true
                     && $payload['assistantId'] === $assistant->vapi_assistant_id
@@ -704,7 +704,7 @@ class PhoneNumbersPageTest extends TestCase
                 'external_provider' => 'twilio',
                 'existing_number_country' => 'us',
                 'forwarding_number' => '+1 (361) 326 3105',
-                'twilio_account_sid' => 'AC123',
+                'twilio_account_sid' => 'ACTestOnlySidNeverReal123',
                 'twilio_auth_token' => 'token_secret',
             ]);
 
@@ -722,6 +722,60 @@ class PhoneNumbersPageTest extends TestCase
             'vapi_phone_number_id' => 'pn_twilio_existing_123',
             'e164' => '+13613263105',
         ]);
+    }
+
+    public function test_twilio_import_rejects_login_email_autofilled_as_account_sid(): void
+    {
+        $user = User::factory()->create();
+        $workspace = Workspace::factory()->create([
+            'plan_key' => 'startup',
+            'primary_market' => 'global',
+        ]);
+
+        WorkspaceMembership::create([
+            'workspace_id' => $workspace->id,
+            'user_id' => $user->id,
+            'role' => WorkspaceMembership::ROLE_OWNER,
+        ]);
+
+        Subscription::create([
+            'workspace_id' => $workspace->id,
+            'stripe_subscription_id' => 'sub_phone_twilio_email_sid',
+            'plan_key' => 'startup',
+            'status' => 'active',
+        ]);
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Property Maintenance Assistant',
+            'vapi_assistant_id' => 'asst_pm_789',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->never())->method('listPhoneNumbers');
+        $client->expects($this->never())->method('createPhoneNumber');
+        $client->expects($this->never())->method('updatePhoneNumber');
+
+        $this->app->instance(VapiClient::class, $client);
+
+        $response = $this
+            ->actingAs($user)
+            ->from(route('app.phone_numbers.index', $workspace))
+            ->post(route('app.phone_numbers.store', $workspace), [
+                'assistant_id' => $assistant->id,
+                'provisioning_mode' => 'external_provider',
+                'external_provider' => 'twilio',
+                'existing_number_country' => 'us',
+                'forwarding_number' => '+1 (361) 326 3105',
+                'twilio_account_sid' => 'algajon123@gmail.com',
+                'twilio_auth_token' => 'token_secret',
+            ]);
+
+        $response
+            ->assertRedirect(route('app.phone_numbers.index', $workspace, false))
+            ->assertSessionHasErrors([
+                'twilio_account_sid' => 'Twilio Account SIDs start with AC. Paste the Account SID from Twilio, not your login email.',
+            ]);
     }
 
     public function test_twilio_import_rejects_a_vapi_id_for_a_different_number(): void

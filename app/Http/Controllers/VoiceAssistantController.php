@@ -349,6 +349,17 @@ class VoiceAssistantController extends Controller
         if (
             $setupMode === 'external_provider'
             && ($data['external_provider'] ?? null) === 'twilio'
+            && filled($data['twilio_account_sid'])
+            && ! preg_match('/^AC[a-zA-Z0-9]{8,}$/', $data['twilio_account_sid'])
+        ) {
+            return back()
+                ->withErrors(['twilio_account_sid' => 'Twilio Account SIDs start with AC. Paste the Account SID from Twilio, not your login email.'])
+                ->withInput();
+        }
+
+        if (
+            $setupMode === 'external_provider'
+            && ($data['external_provider'] ?? null) === 'twilio'
             && blank($data['vapi_phone_number_id'])
             && blank($data['twilio_auth_token'])
         ) {
