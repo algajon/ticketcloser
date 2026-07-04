@@ -26,10 +26,6 @@ class VapiProvisioningService
     private const HUMANE_DEFAULT_BACKOFF_SECONDS = 1.2;
     private const HUMANE_MIN_BACKOFF_SECONDS = 1.0;
     private const HUMANE_MAX_BACKOFF_SECONDS = 2.5;
-    private const HUMANE_DEFAULT_VOICE_SPEED = 1.0;
-    private const HUMANE_MIN_VOICE_SPEED = 0.94;
-    private const HUMANE_MAX_VOICE_SPEED = 1.04;
-
     public function __construct(
         private readonly VapiClient $vapi,
         private readonly ?AssistantScriptLocalizer $scriptLocalizer = null,
@@ -1278,12 +1274,9 @@ PROMPT);
             $voiceId = $defaultVoice['voiceId'];
         }
 
-        $speed = $this->humaneVoiceSpeed($defaultVoice['speed'] ?? self::HUMANE_DEFAULT_VOICE_SPEED);
-
         return [
             'provider' => $voiceProvider,
             'voiceId' => $voiceId,
-            'speed' => round($speed, 2),
         ] + ($voiceProvider === 'vapi' ? ['version' => 2] : []);
     }
 
@@ -1579,15 +1572,6 @@ PROMPT);
         return $stopSpeakingPlan;
     }
 
-    private function humaneVoiceSpeed(float|int|string|null $speed): float
-    {
-        return $this->clampFloat(
-            is_numeric($speed) ? (float) $speed : self::HUMANE_DEFAULT_VOICE_SPEED,
-            self::HUMANE_MIN_VOICE_SPEED,
-            self::HUMANE_MAX_VOICE_SPEED,
-        );
-    }
-
     private function clampFloat(float $value, float $min, float $max): float
     {
         return round(min(max($value, $min), $max), 2);
@@ -1635,7 +1619,7 @@ PROMPT);
         if (str_starts_with($languageCode, 'en-')) {
             return [
                 'provider' => 'deepgram',
-                'voiceId' => $this->defaultDeepgramVoiceForPreset($presetKey),
+                'voiceId' => $this->defaultDeepgramVoiceForPreset($presetKey, $languageCode),
                 'speed' => match ($presetKey) {
                     'steady_operator' => 0.98,
                     'premium_concierge' => 0.98,
@@ -1677,11 +1661,31 @@ PROMPT);
         }
 
         if ($voiceProvider === 'deepgram') {
-            $voiceId = $this->supportsCatalogVoice('deepgram', $voiceId)
-                ? $voiceId
-                : $this->defaultDeepgramVoiceForPreset($presetKey);
+            if ($this->supportsCatalogVoice('deepgram', $voiceId, $languageCode)) {
+                return ['deepgram', $voiceId];
+            }
 
-            return ['deepgram', $voiceId];
+            $voiceId = $this->defaultDeepgramVoiceForPreset($presetKey, $languageCode);
+
+            if ($voiceId) {
+                return ['deepgram', $voiceId];
+            }
+
+            $standardVoice = RegionalPilotStackCatalog::standardVoiceProfile(
+                $languageCode,
+                $presetKey,
+                $workspace->primaryMarket(),
+            );
+
+            if (is_array($standardVoice)) {
+                return [$standardVoice['provider'] ?? null, $standardVoice['voiceId'] ?? null];
+            }
+
+            $voiceId = $this->supportsOpenAiVoice($voiceId)
+                ? $voiceId
+                : $this->defaultOpenAiVoiceForPreset($presetKey);
+
+            return ['openai', $voiceId];
         }
 
         return [$voiceProvider, $voiceId];
@@ -1722,25 +1726,61 @@ PROMPT);
             : 'marin';
     }
 
-    private function defaultDeepgramVoiceForPreset(?string $presetKey): string
+    private function defaultDeepgramVoiceForPreset(?string $presetKey, ?string $languageCode = 'en-US'): ?string
     {
-        return match (AssistantPreset::normalizeKey($presetKey)) {
-            'steady_operator' => 'aura-2-arcas-en',
-            'confident_closer' => 'aura-2-apollo-en',
-            'premium_concierge' => 'aura-2-helena-en',
-            default => 'aura-2-andromeda-en',
+        $presetKey = AssistantPreset::normalizeKey($presetKey);
+        $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode($languageCode, 'en-US') ?: 'en-US';
+
+        return match (explode('-', $languageCode)[0] ?? 'en') {
+            'en' => match ($presetKey) {
+                'steady_operator' => 'aura-2-arcas-en',
+                'confident_closer' => 'aura-2-apollo-en',
+                'premium_concierge' => 'aura-2-helena-en',
+                default => 'aura-2-andromeda-en',
+            },
+            'es' => match ($presetKey) {
+                'steady_operator', 'confident_closer' => 'aura-2-nestor-es',
+                'premium_concierge' => 'aura-2-carina-es',
+                default => 'aura-2-agustina-es',
+            },
+            'fr' => match ($presetKey) {
+                'steady_operator', 'confident_closer' => 'aura-2-hector-fr',
+                default => 'aura-2-agathe-fr',
+            },
+            'de' => match ($presetKey) {
+                'steady_operator', 'confident_closer' => 'aura-2-fabian-de',
+                'premium_concierge' => 'aura-2-elara-de',
+                default => 'aura-2-viktoria-de',
+            },
+            'ja' => match ($presetKey) {
+                'steady_operator', 'confident_closer' => 'aura-2-fujin-ja',
+                default => 'aura-2-izanami-ja',
+            },
+            default => null,
         };
     }
 
-    private function supportsCatalogVoice(string $provider, ?string $voiceId): bool
+    private function supportsCatalogVoice(string $provider, ?string $voiceId, ?string $languageCode = null): bool
     {
         if (! $voiceId) {
             return false;
         }
 
-        return collect(RegionalPilotStackCatalog::voiceCatalog())->contains(function (array $voice) use ($provider, $voiceId) {
-            return ($voice['provider'] ?? null) === $provider
-                && strcasecmp((string) ($voice['voiceId'] ?? ''), $voiceId) === 0;
+        return collect(RegionalPilotStackCatalog::voiceCatalog())->contains(function (array $voice) use ($provider, $voiceId, $languageCode) {
+            if (($voice['provider'] ?? null) !== $provider || strcasecmp((string) ($voice['voiceId'] ?? ''), $voiceId) !== 0) {
+                return false;
+            }
+
+            if (! $languageCode) {
+                return true;
+            }
+
+            $voiceLanguage = RegionalPilotStackCatalog::normalizeLanguageCode($voice['language'] ?? null);
+            $requestedLanguage = RegionalPilotStackCatalog::normalizeLanguageCode($languageCode);
+
+            return $voiceLanguage === $requestedLanguage
+                || ($voiceLanguage === 'multi' && $requestedLanguage !== null)
+                || (str_starts_with((string) $voiceLanguage, 'en-') && str_starts_with((string) $requestedLanguage, 'en-'));
         });
     }
 

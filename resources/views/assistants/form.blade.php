@@ -371,6 +371,7 @@
                                 <option :value="language.value" x-text="language.label"></option>
                             </template>
                         </select>
+                        <p class="mt-2 tc-help" x-text="languageSupportSummary"></p>
                     </div>
 
                     <div class="tc-field">
@@ -947,7 +948,23 @@
                     return this.voices;
                 },
                 get languageOptions() {
-                    return this.allLanguageOptions;
+                    if (!this.selectedProvider) {
+                        return this.allLanguageOptions;
+                    }
+
+                    const options = this.allLanguageOptions.filter((language) =>
+                        this.providerSupportsLanguage(this.selectedProvider, language.value)
+                    );
+
+                    return options.length ? options : this.allLanguageOptions;
+                },
+                get languageSupportSummary() {
+                    if (!this.selectedProvider) {
+                        return 'Choose a language that has a matching voice and transcription path.';
+                    }
+
+                    const count = this.languageOptions.length;
+                    return `${this.providerLabel(this.selectedProvider)} supports ${count} ${count === 1 ? 'language' : 'languages'} in this setup.`;
                 },
                 voiceMatchesLanguage(voice, languageCode = this.selectedLanguageCode) {
                     if (!languageCode || !voice.language || voice.language === 'multi') {
@@ -961,7 +978,13 @@
                     const selectedFamily = String(languageCode).split('-')[0];
                     const voiceFamily = String(voice.language).split('-')[0];
 
-                    return selectedFamily !== '' && selectedFamily === voiceFamily;
+                    return selectedFamily === 'en' && voiceFamily === 'en';
+                },
+                providerSupportsLanguage(provider, languageCode) {
+                    return this.compatibleVoices.some((voice) =>
+                        voice.provider === provider
+                        && this.voiceMatchesLanguage(voice, languageCode)
+                    );
                 },
                 get filteredVoices() {
                     return this.compatibleVoices.filter((voice) => {
@@ -987,6 +1010,10 @@
 
                     if (!providerHasLanguage || !this.providerAllowed(this.selectedProvider)) {
                         this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
+                    }
+
+                    if (!this.providerSupportsLanguage(this.selectedProvider, this.selectedLanguageCode)) {
+                        this.selectedLanguageCode = this.languageOptions[0]?.value || 'en-US';
                     }
 
                     this.promptWriter.language = this.selectedLanguageCode || this.promptWriter.language;

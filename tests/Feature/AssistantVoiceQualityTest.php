@@ -43,7 +43,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('gpt-4o-mini', $payload['model']['model']);
                 $this->assertSame('deepgram', $payload['voice']['provider']);
                 $this->assertSame('aura-2-helena-en', $payload['voice']['voiceId']);
-                $this->assertSame(0.98, $payload['voice']['speed']);
+                $this->assertArrayNotHasKey('speed', $payload['voice']);
                 $this->assertStringContainsString('RETURNING CALLER RULES', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Use any caller context already provided in your system note first', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Nice to speak with you again', $payload['model']['messages'][0]['content']);
@@ -145,7 +145,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('gpt-realtime-2025-08-28', $payload['model']['model']);
                 $this->assertSame('openai', $payload['voice']['provider']);
                 $this->assertSame('marin', $payload['voice']['voiceId']);
-                $this->assertSame(1.0, $payload['voice']['speed']);
+                $this->assertArrayNotHasKey('speed', $payload['voice']);
                 $this->assertArrayNotHasKey('transcriber', $payload);
                 $this->assertSame(0.6, $payload['model']['temperature']);
                 $this->assertSame(380, $payload['model']['maxTokens']);
@@ -198,7 +198,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('gpt-4o-mini', $payload['model']['model']);
                 $this->assertSame('vapi', $payload['voice']['provider']);
                 $this->assertSame('Emma', $payload['voice']['voiceId']);
-                $this->assertSame(1.0, $payload['voice']['speed']);
+                $this->assertArrayNotHasKey('speed', $payload['voice']);
 
                 return true;
             }))
@@ -562,6 +562,105 @@ class AssistantVoiceQualityTest extends TestCase
             'language_code' => 'de-DE',
             'preset_key' => 'steady_operator',
         ]);
+    }
+
+    public function test_german_assistants_can_use_matching_deepgram_aura_voice_without_speed(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'German Aura Desk',
+            'preset_key' => 'steady_operator',
+            'language_code' => 'de-DE',
+            'voice_provider' => 'deepgram',
+            'voice_id' => 'aura-2-fabian-de',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $this->assertSame('deepgram', $payload['voice']['provider']);
+                $this->assertSame('aura-2-fabian-de', $payload['voice']['voiceId']);
+                $this->assertArrayNotHasKey('speed', $payload['voice']);
+                $this->assertSame('de', $payload['transcriber']['language']);
+                $this->assertStringContainsString('Keep caller-facing replies in de-DE', $payload['model']['messages'][0]['content']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-de-deepgram-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($assistant, $workspace, [
+            'name' => 'German Aura Desk',
+            'language_code' => 'de-DE',
+            'voice_provider' => 'deepgram',
+            'voice_id' => 'aura-2-fabian-de',
+            'preset_key' => 'steady_operator',
+        ]);
+
+        $assistant->refresh();
+        $this->assertSame('de-DE', $assistant->language_code);
+        $this->assertSame('deepgram', $assistant->voice_provider);
+        $this->assertSame('aura-2-fabian-de', $assistant->voice_id);
+    }
+
+    public function test_unsupported_deepgram_language_falls_back_to_matching_curated_voice_path(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Hindi Aura Desk',
+            'preset_key' => 'bright_guide',
+            'language_code' => 'hi-IN',
+            'voice_provider' => 'deepgram',
+            'voice_id' => 'missing-aura-voice',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $this->assertSame('azure', $payload['voice']['provider']);
+                $this->assertSame('hi-IN-SwaraNeural', $payload['voice']['voiceId']);
+                $this->assertArrayNotHasKey('speed', $payload['voice']);
+                $this->assertSame('hi', $payload['transcriber']['language']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-hi-curated-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($assistant, $workspace, [
+            'name' => 'Hindi Aura Desk',
+            'language_code' => 'hi-IN',
+            'voice_provider' => 'deepgram',
+            'voice_id' => 'missing-aura-voice',
+            'preset_key' => 'bright_guide',
+        ]);
+
+        $assistant->refresh();
+        $this->assertSame('hi-IN', $assistant->language_code);
+        $this->assertSame('azure', $assistant->voice_provider);
+        $this->assertSame('hi-IN-SwaraNeural', $assistant->voice_id);
     }
 
     public function test_non_english_standard_models_can_use_openai_multilingual_tts_voices(): void
