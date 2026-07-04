@@ -1661,6 +1661,8 @@ PROMPT);
         }
 
         if ($voiceProvider === 'deepgram') {
+            $voiceId = $this->normalizeDeepgramVoiceId($voiceId);
+
             if ($this->supportsCatalogVoice('deepgram', $voiceId, $languageCode)) {
                 return ['deepgram', $voiceId];
             }
@@ -1726,6 +1728,36 @@ PROMPT);
             : 'marin';
     }
 
+    private function normalizeDeepgramVoiceId(?string $voiceId): ?string
+    {
+        $voiceId = trim((string) $voiceId);
+
+        if ($voiceId === '') {
+            return null;
+        }
+
+        $legacyMap = [
+            'aura-2-thalia-en' => 'thalia',
+            'aura-2-andromeda-en' => 'andromeda',
+            'aura-2-helena-en' => 'helena',
+            'aura-2-arcas-en' => 'arcas',
+            'aura-2-apollo-en' => 'apollo',
+            'aura-2-aries-en' => 'aries',
+            'aura-2-celeste-es' => 'celeste',
+            'aura-2-estrella-es' => 'estrella',
+            'aura-2-nestor-es' => 'nestor',
+            'aura-2-sirio-es' => 'sirio',
+            'aura-2-carina-es' => 'carina',
+            'aura-2-alvaro-es' => 'alvaro',
+            'aura-2-diana-es' => 'diana',
+            'aura-2-aquila-es' => 'aquila',
+            'aura-2-selena-es' => 'selena',
+            'aura-2-javier-es' => 'javier',
+        ];
+
+        return $legacyMap[strtolower($voiceId)] ?? $voiceId;
+    }
+
     private function defaultDeepgramVoiceForPreset(?string $presetKey, ?string $languageCode = 'en-US'): ?string
     {
         $presetKey = AssistantPreset::normalizeKey($presetKey);
@@ -1733,28 +1765,15 @@ PROMPT);
 
         return match (explode('-', $languageCode)[0] ?? 'en') {
             'en' => match ($presetKey) {
-                'steady_operator' => 'aura-2-arcas-en',
-                'confident_closer' => 'aura-2-apollo-en',
-                'premium_concierge' => 'aura-2-helena-en',
-                default => 'aura-2-andromeda-en',
+                'steady_operator' => 'arcas',
+                'confident_closer' => 'apollo',
+                'premium_concierge' => 'helena',
+                default => 'andromeda',
             },
             'es' => match ($presetKey) {
-                'steady_operator', 'confident_closer' => 'aura-2-nestor-es',
-                'premium_concierge' => 'aura-2-carina-es',
-                default => 'aura-2-agustina-es',
-            },
-            'fr' => match ($presetKey) {
-                'steady_operator', 'confident_closer' => 'aura-2-hector-fr',
-                default => 'aura-2-agathe-fr',
-            },
-            'de' => match ($presetKey) {
-                'steady_operator', 'confident_closer' => 'aura-2-fabian-de',
-                'premium_concierge' => 'aura-2-elara-de',
-                default => 'aura-2-viktoria-de',
-            },
-            'ja' => match ($presetKey) {
-                'steady_operator', 'confident_closer' => 'aura-2-fujin-ja',
-                default => 'aura-2-izanami-ja',
+                'steady_operator', 'confident_closer' => 'nestor',
+                'premium_concierge' => 'carina',
+                default => 'alvaro',
             },
             default => null,
         };
