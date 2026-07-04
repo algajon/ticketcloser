@@ -1624,12 +1624,24 @@ PROMPT);
 
         if ($isRealtimeModel) {
             return match ($presetKey) {
-                'premium_concierge' => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.0],
-                'bright_guide' => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.0],
-                'steady_operator' => ['provider' => 'openai', 'voiceId' => 'alloy', 'speed' => 0.98],
-                'confident_closer' => ['provider' => 'openai', 'voiceId' => 'alloy', 'speed' => 1.0],
-                default => ['provider' => 'openai', 'voiceId' => 'shimmer', 'speed' => 1.0],
+                'premium_concierge' => ['provider' => 'openai', 'voiceId' => 'marin', 'speed' => 1.0],
+                'bright_guide' => ['provider' => 'openai', 'voiceId' => 'marin', 'speed' => 1.0],
+                'steady_operator' => ['provider' => 'openai', 'voiceId' => 'cedar', 'speed' => 0.98],
+                'confident_closer' => ['provider' => 'openai', 'voiceId' => 'cedar', 'speed' => 1.0],
+                default => ['provider' => 'openai', 'voiceId' => 'marin', 'speed' => 1.0],
             };
+        }
+
+        if (str_starts_with($languageCode, 'en-')) {
+            return [
+                'provider' => 'deepgram',
+                'voiceId' => $this->defaultDeepgramVoiceForPreset($presetKey),
+                'speed' => match ($presetKey) {
+                    'steady_operator' => 0.98,
+                    'premium_concierge' => 0.98,
+                    default => 1.0,
+                },
+            ];
         }
 
         if ($standardVoice) {
@@ -1664,6 +1676,14 @@ PROMPT);
             return ['openai', $voiceId];
         }
 
+        if ($voiceProvider === 'deepgram') {
+            $voiceId = $this->supportsCatalogVoice('deepgram', $voiceId)
+                ? $voiceId
+                : $this->defaultDeepgramVoiceForPreset($presetKey);
+
+            return ['deepgram', $voiceId];
+        }
+
         return [$voiceProvider, $voiceId];
     }
 
@@ -1673,12 +1693,26 @@ PROMPT);
             return false;
         }
 
-        return $this->supportsOpenAiVoice($voiceId);
+        return in_array($voiceId, ['alloy', 'echo', 'shimmer', 'marin', 'cedar'], true);
     }
 
     private function supportsOpenAiVoice(?string $voiceId): bool
     {
-        return in_array($voiceId, ['alloy', 'echo', 'shimmer', 'marin', 'cedar'], true);
+        return in_array($voiceId, [
+            'alloy',
+            'ash',
+            'ballad',
+            'coral',
+            'echo',
+            'fable',
+            'nova',
+            'onyx',
+            'sage',
+            'shimmer',
+            'verse',
+            'marin',
+            'cedar',
+        ], true);
     }
 
     private function defaultOpenAiVoiceForPreset(?string $presetKey): string
@@ -1686,6 +1720,28 @@ PROMPT);
         return in_array(AssistantPreset::normalizeKey($presetKey), ['steady_operator', 'confident_closer'], true)
             ? 'cedar'
             : 'marin';
+    }
+
+    private function defaultDeepgramVoiceForPreset(?string $presetKey): string
+    {
+        return match (AssistantPreset::normalizeKey($presetKey)) {
+            'steady_operator' => 'aura-2-arcas-en',
+            'confident_closer' => 'aura-2-apollo-en',
+            'premium_concierge' => 'aura-2-helena-en',
+            default => 'aura-2-andromeda-en',
+        };
+    }
+
+    private function supportsCatalogVoice(string $provider, ?string $voiceId): bool
+    {
+        if (! $voiceId) {
+            return false;
+        }
+
+        return collect(RegionalPilotStackCatalog::voiceCatalog())->contains(function (array $voice) use ($provider, $voiceId) {
+            return ($voice['provider'] ?? null) === $provider
+                && strcasecmp((string) ($voice['voiceId'] ?? ''), $voiceId) === 0;
+        });
     }
 
     private function buildFirstMessage(AssistantConfig $config, Workspace $workspace): string

@@ -41,8 +41,8 @@ class AssistantVoiceQualityTest extends TestCase
             ->method('createAssistant')
             ->with($this->callback(function (array $payload): bool {
                 $this->assertSame('gpt-4o-mini', $payload['model']['model']);
-                $this->assertSame('vapi', $payload['voice']['provider']);
-                $this->assertSame('Clara', $payload['voice']['voiceId']);
+                $this->assertSame('deepgram', $payload['voice']['provider']);
+                $this->assertSame('aura-2-helena-en', $payload['voice']['voiceId']);
                 $this->assertSame(0.98, $payload['voice']['speed']);
                 $this->assertStringContainsString('RETURNING CALLER RULES', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Use any caller context already provided in your system note first', $payload['model']['messages'][0]['content']);
@@ -144,7 +144,7 @@ class AssistantVoiceQualityTest extends TestCase
             ->with($this->callback(function (array $payload): bool {
                 $this->assertSame('gpt-realtime-2025-08-28', $payload['model']['model']);
                 $this->assertSame('openai', $payload['voice']['provider']);
-                $this->assertSame('shimmer', $payload['voice']['voiceId']);
+                $this->assertSame('marin', $payload['voice']['voiceId']);
                 $this->assertSame(1.0, $payload['voice']['speed']);
                 $this->assertArrayNotHasKey('transcriber', $payload);
                 $this->assertSame(0.6, $payload['model']['temperature']);
@@ -234,7 +234,7 @@ class AssistantVoiceQualityTest extends TestCase
             'language_code' => 'en-US',
             'model_name' => 'gpt-4.1',
             'voice_provider' => 'openai',
-            'voice_id' => 'marin',
+            'voice_id' => 'coral',
         ]);
 
         $client = $this->createMock(VapiClient::class);
@@ -246,7 +246,7 @@ class AssistantVoiceQualityTest extends TestCase
             ->with($this->callback(function (array $payload): bool {
                 $this->assertSame('gpt-4.1', $payload['model']['model']);
                 $this->assertSame('openai', $payload['voice']['provider']);
-                $this->assertSame('marin', $payload['voice']['voiceId']);
+                $this->assertSame('coral', $payload['voice']['voiceId']);
 
                 return true;
             }))
@@ -257,13 +257,13 @@ class AssistantVoiceQualityTest extends TestCase
             'name' => 'Admin Trial Line',
             'model_name' => 'gpt-4.1',
             'voice_provider' => 'openai',
-            'voice_id' => 'marin',
+            'voice_id' => 'coral',
         ]);
 
         $assistant->refresh();
         $this->assertSame('gpt-4.1', $assistant->model_name);
         $this->assertSame('openai', $assistant->voice_provider);
-        $this->assertSame('marin', $assistant->voice_id);
+        $this->assertSame('coral', $assistant->voice_id);
     }
 
     public function test_custom_first_message_is_used_for_standard_models_too(): void

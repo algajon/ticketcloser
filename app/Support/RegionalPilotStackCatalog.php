@@ -207,19 +207,35 @@ class RegionalPilotStackCatalog
     public static function voiceCatalog(): array
     {
         $voices = [
-            ['voiceId' => 'Emma', 'name' => 'Emma', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'default'],
-            ['voiceId' => 'Clara', 'name' => 'Clara', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'premium'],
-            ['voiceId' => 'Savannah', 'name' => 'Savannah', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'operator'],
-            ['voiceId' => 'Rohan', 'name' => 'Rohan', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'operator'],
-            ['voiceId' => 'Elliot', 'name' => 'Elliot', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'operator'],
-            ['voiceId' => 'Kai', 'name' => 'Kai', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'operator'],
-            ['voiceId' => 'Nico', 'name' => 'Nico', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'default'],
-            ['voiceId' => 'Neil', 'name' => 'Neil', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'default'],
-            ['voiceId' => 'marin', 'name' => 'Marin', 'provider' => 'openai', 'language' => 'multi', 'role' => 'premium'],
-            ['voiceId' => 'cedar', 'name' => 'Cedar', 'provider' => 'openai', 'language' => 'multi', 'role' => 'operator'],
-            ['voiceId' => 'echo', 'name' => 'Echo', 'provider' => 'openai', 'language' => 'multi', 'role' => 'default'],
-            ['voiceId' => 'alloy', 'name' => 'Alloy', 'provider' => 'openai', 'language' => 'multi', 'role' => 'operator'],
-            ['voiceId' => 'shimmer', 'name' => 'Shimmer', 'provider' => 'openai', 'language' => 'multi', 'role' => 'default'],
+            ['voiceId' => 'Emma', 'name' => 'Emma', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'default', 'style' => 'Clean, friendly front-desk voice', 'priceMetric' => '~$0.01/min voice'],
+            ['voiceId' => 'Clara', 'name' => 'Clara', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'premium', 'style' => 'Warm concierge voice', 'priceMetric' => '~$0.01/min voice'],
+            ['voiceId' => 'Savannah', 'name' => 'Savannah', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'operator', 'style' => 'Steady support operator', 'priceMetric' => '~$0.01/min voice'],
+            ['voiceId' => 'Rohan', 'name' => 'Rohan', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'operator', 'style' => 'Measured operator voice', 'priceMetric' => '~$0.01/min voice'],
+            ['voiceId' => 'Elliot', 'name' => 'Elliot', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'operator', 'style' => 'Confident closer voice', 'priceMetric' => '~$0.01/min voice'],
+            ['voiceId' => 'Kai', 'name' => 'Kai', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'operator', 'style' => 'Calm intake voice', 'priceMetric' => '~$0.01/min voice'],
+            ['voiceId' => 'Nico', 'name' => 'Nico', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'default', 'style' => 'Neutral assistant voice', 'priceMetric' => '~$0.01/min voice'],
+            ['voiceId' => 'Neil', 'name' => 'Neil', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'default', 'style' => 'Grounded assistant voice', 'priceMetric' => '~$0.01/min voice'],
+
+            ['voiceId' => 'marin', 'name' => 'Marin', 'provider' => 'openai', 'language' => 'multi', 'role' => 'premium', 'style' => 'Best-quality OpenAI voice; polished and natural', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'cedar', 'name' => 'Cedar', 'provider' => 'openai', 'language' => 'multi', 'role' => 'operator', 'style' => 'Best-quality OpenAI voice; steady and clear', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'alloy', 'name' => 'Alloy', 'provider' => 'openai', 'language' => 'multi', 'role' => 'operator', 'style' => 'Balanced and familiar', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'ash', 'name' => 'Ash', 'provider' => 'openai', 'language' => 'multi', 'role' => 'operator', 'style' => 'Low-key and controlled', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'ballad', 'name' => 'Ballad', 'provider' => 'openai', 'language' => 'multi', 'role' => 'premium', 'style' => 'Expressive and polished', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'coral', 'name' => 'Coral', 'provider' => 'openai', 'language' => 'multi', 'role' => 'default', 'style' => 'Bright and approachable', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'echo', 'name' => 'Echo', 'provider' => 'openai', 'language' => 'multi', 'role' => 'default', 'style' => 'Crisp and direct', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'fable', 'name' => 'Fable', 'provider' => 'openai', 'language' => 'multi', 'role' => 'premium', 'style' => 'Characterful and clear', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'nova', 'name' => 'Nova', 'provider' => 'openai', 'language' => 'multi', 'role' => 'default', 'style' => 'Friendly and energetic', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'onyx', 'name' => 'Onyx', 'provider' => 'openai', 'language' => 'multi', 'role' => 'operator', 'style' => 'Deep and authoritative', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'sage', 'name' => 'Sage', 'provider' => 'openai', 'language' => 'multi', 'role' => 'default', 'style' => 'Calm and professional', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'shimmer', 'name' => 'Shimmer', 'provider' => 'openai', 'language' => 'multi', 'role' => 'default', 'style' => 'Soft and welcoming', 'priceMetric' => 'TTS: $15/1M chars'],
+            ['voiceId' => 'verse', 'name' => 'Verse', 'provider' => 'openai', 'language' => 'multi', 'role' => 'premium', 'style' => 'Smooth and expressive', 'priceMetric' => 'TTS: $15/1M chars'],
+
+            ['voiceId' => 'aura-2-thalia-en', 'name' => 'Thalia', 'provider' => 'deepgram', 'language' => 'en-US', 'role' => 'default', 'style' => 'Clear, confident, energetic customer-service voice', 'priceMetric' => 'Aura-2: $0.030/1k chars', 'recommended' => true],
+            ['voiceId' => 'aura-2-andromeda-en', 'name' => 'Andromeda', 'provider' => 'deepgram', 'language' => 'en-US', 'role' => 'default', 'style' => 'Casual, expressive, comfortable IVR voice', 'priceMetric' => 'Aura-2: $0.030/1k chars', 'recommended' => true],
+            ['voiceId' => 'aura-2-helena-en', 'name' => 'Helena', 'provider' => 'deepgram', 'language' => 'en-US', 'role' => 'premium', 'style' => 'Caring, natural, friendly support voice', 'priceMetric' => 'Aura-2: $0.030/1k chars', 'recommended' => true],
+            ['voiceId' => 'aura-2-arcas-en', 'name' => 'Arcas', 'provider' => 'deepgram', 'language' => 'en-US', 'role' => 'operator', 'style' => 'Natural, smooth, clear operator voice', 'priceMetric' => 'Aura-2: $0.030/1k chars', 'recommended' => true],
+            ['voiceId' => 'aura-2-apollo-en', 'name' => 'Apollo', 'provider' => 'deepgram', 'language' => 'en-US', 'role' => 'operator', 'style' => 'Confident, comfortable, casual voice', 'priceMetric' => 'Aura-2: $0.030/1k chars', 'recommended' => true],
+            ['voiceId' => 'aura-2-aries-en', 'name' => 'Aries', 'provider' => 'deepgram', 'language' => 'en-US', 'role' => 'premium', 'style' => 'Warm, energetic, caring voice', 'priceMetric' => 'Aura-2: $0.030/1k chars', 'recommended' => true],
         ];
 
         foreach (self::languageDefinitions() as $code => $definition) {
@@ -234,6 +250,8 @@ class RegionalPilotStackCatalog
                     'provider' => $profile['provider'] ?? 'azure',
                     'language' => $code,
                     'role' => $role,
+                    'style' => $profile['style'] ?? 'Localized neural voice',
+                    'priceMetric' => $profile['priceMetric'] ?? '~$0.01/min voice',
                 ];
             }
         }

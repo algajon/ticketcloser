@@ -97,7 +97,7 @@
         );
         $selectedProviderValue = old(
             'voice_provider',
-            $config->voice_provider ?? ($freeWorkspaceDefaultVoice['provider'] ?? 'vapi')
+            $config->voice_provider ?? ($workspaceIsFree ? ($freeWorkspaceDefaultVoice['provider'] ?? 'vapi') : '')
         );
         $selectedVoiceValue = old('voice_id', $config->voice_id ?? '');
         $languageOptionsJson = \App\Support\RegionalPilotStackCatalog::languageOptions($workspace->primaryMarket());
@@ -157,11 +157,21 @@
                 'provider' => $provider,
                 'language' => $v['language'] ?? $v['accent'] ?? '',
                 'role' => $v['role'] ?? 'default',
-                'priceMetric' => match ($provider) {
+                'style' => $v['style'] ?? '',
+                'recommended' => (bool) ($v['recommended'] ?? false),
+                'priceMetric' => $v['priceMetric'] ?? match ($provider) {
                     'vapi' => '~$0.01/min voice',
-                    'openai' => '~$0.02/min voice',
+                    'openai' => 'TTS: $15/1M chars',
                     'azure' => '~$0.01/min voice',
+                    'deepgram' => 'Aura-2: $0.030/1k chars',
                     default => 'Voice cost varies',
+                },
+                'priceDetail' => $v['priceDetail'] ?? match ($provider) {
+                    'openai' => 'OpenAI TTS is billed per generated character. Marin and Cedar are the best-quality picks.',
+                    'deepgram' => 'Deepgram Aura-2 is billed per generated character. These are the most natural English options in our catalog.',
+                    'azure' => 'Azure neural voices are shown as an estimated per-minute voice cost.',
+                    'vapi' => 'Vapi curated voices are shown as an estimated per-minute voice cost.',
+                    default => 'Provider pricing varies by account and usage.',
                 },
             ];
         })->values()->all();
@@ -295,7 +305,7 @@
                         @if($workspaceIsFree)
                             Free workspaces use the Standard engine. You can still preview the premium engines below, then upgrade when you are ready.
                         @else
-                            Prices are estimated per active call minute. Add Vapi platform (~$0.05/min) and transcription (~$0.01/min).
+                            Model prices are estimated per active call minute. Voice cards show the provider billing unit where available.
                         @endif
                     </p>
 
@@ -340,6 +350,7 @@
                                         <div class="text-sm font-semibold text-slate-950" x-text="provider.label"></div>
                                         <p class="mt-1 text-xs leading-5 text-slate-500" x-text="provider.help"></p>
                                         <p class="mt-1 text-xs font-semibold text-slate-700" x-text="provider.priceMetric"></p>
+                                        <p x-show="provider.locked" class="mt-1 text-xs font-semibold text-slate-500" x-text="provider.lockReason"></p>
                                     </div>
                                     <div class="shrink-0 text-right">
                                         <span
@@ -350,7 +361,7 @@
                                 </button>
                             </template>
                         </div>
-                        <p class="mt-2 tc-help" x-show="providerOptions.some((provider) => provider.locked)">Upgrade to unlock the locked voice providers.</p>
+                        <p class="mt-2 tc-help" x-show="providerOptions.some((provider) => provider.locked)">Some providers are limited by plan or by realtime-model compatibility.</p>
                     </div>
 
                     <div class="tc-field">
@@ -383,6 +394,8 @@
                         <span class="tc-accent-text-soft whitespace-nowrap">/</span>
                         <span class="whitespace-nowrap" x-text="selectedVoicePriceMetric"></span>
                     </div>
+                    <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedVoiceStyle" x-text="selectedVoiceStyle"></p>
+                    <p class="tc-accent-text-soft mt-1 text-xs leading-5" x-show="selectedVoicePriceDetail" x-text="selectedVoicePriceDetail"></p>
                     <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedModel.voiceMode === 'realtime'">Realtime audio is the premium voice path and usually costs more per call minute.</p>
                 </div>
 
@@ -776,17 +789,21 @@
                 vapi: 'Vapi curated',
                 openai: 'OpenAI voice',
                 azure: 'Azure neural',
+                deepgram: 'Deepgram Aura-2',
             };
             const providerHelp = {
-                vapi: 'Curated voices through Vapi.',
-                openai: 'OpenAI TTS voices.',
-                azure: 'Azure multilingual neural voices.',
+                vapi: 'Curated Vapi voices. Fast setup, simple pricing.',
+                openai: 'OpenAI TTS voices. Marin and Cedar are the best-quality picks.',
+                azure: 'Azure multilingual neural voices for localized language coverage.',
+                deepgram: 'Aura-2 voices. Strong naturalness for English support and intake calls.',
             };
             const providerPriceMetrics = {
                 vapi: '~$0.01/min voice',
-                openai: '~$0.02/min voice',
+                openai: 'TTS: $15/1M chars',
                 azure: '~$0.01/min voice',
+                deepgram: 'Aura-2: $0.030/1k chars',
             };
+            const realtimeCompatibleVoiceIds = ['alloy', 'echo', 'shimmer', 'marin', 'cedar'];
             const freeWorkspace = @js($workspaceIsFree);
 
             return {
@@ -891,18 +908,40 @@
 
                     return Boolean(this.standardLanguageVoice());
                 },
+                providerAllowedForModel(provider) {
+                    if (this.selectedModel.voiceMode !== 'realtime') {
+                        return true;
+                    }
+
+                    return provider === 'openai';
+                },
+                providerAllowed(provider) {
+                    return this.providerAllowedOnFree(provider) && this.providerAllowedForModel(provider);
+                },
+                providerLockReason(provider) {
+                    if (!this.providerAllowedOnFree(provider)) {
+                        return 'Upgrade to unlock this voice provider.';
+                    }
+
+                    if (!this.providerAllowedForModel(provider)) {
+                        return 'Realtime audio currently requires an OpenAI realtime-compatible voice.';
+                    }
+
+                    return '';
+                },
                 get providerOptions() {
                     return Array.from(new Set(this.voices.map((voice) => voice.provider))).map((provider) => ({
                         value: provider,
                         label: this.providerLabel(provider),
                         help: providerHelp[provider] || 'Voice provider',
                         priceMetric: providerPriceMetrics[provider] || 'Provider pricing varies',
-                        locked: !this.providerAllowedOnFree(provider),
+                        locked: !this.providerAllowed(provider),
+                        lockReason: this.providerLockReason(provider),
                     }));
                 },
                 get compatibleVoices() {
                     if (this.selectedModel.voiceMode === 'realtime') {
-                        return this.voices.filter((voice) => voice.provider === 'openai' && ['alloy', 'echo', 'shimmer', 'marin', 'cedar'].includes(voice.id));
+                        return this.voices.filter((voice) => voice.provider === 'openai' && realtimeCompatibleVoiceIds.includes(voice.id));
                     }
 
                     return this.voices;
@@ -910,23 +949,29 @@
                 get languageOptions() {
                     return this.allLanguageOptions;
                 },
+                voiceMatchesLanguage(voice, languageCode = this.selectedLanguageCode) {
+                    if (!languageCode || !voice.language || voice.language === 'multi') {
+                        return true;
+                    }
+
+                    if (voice.language === languageCode) {
+                        return true;
+                    }
+
+                    const selectedFamily = String(languageCode).split('-')[0];
+                    const voiceFamily = String(voice.language).split('-')[0];
+
+                    return selectedFamily !== '' && selectedFamily === voiceFamily;
+                },
                 get filteredVoices() {
                     return this.compatibleVoices.filter((voice) => {
-                        if (this.selectedVoiceId && voice.id === this.selectedVoiceId) {
-                            return true;
-                        }
-
                         const providerMatches = !this.selectedProvider || voice.provider === this.selectedProvider;
-                        const languageMatches = !this.selectedLanguageCode
-                            || voice.language === this.selectedLanguageCode
-                            || voice.language === 'multi';
+                        const languageMatches = this.voiceMatchesLanguage(voice);
                         return providerMatches && languageMatches;
                     });
                 },
                 handleModelChange(shouldAdjustVoice = true) {
-                    if (this.selectedModel.voiceMode === 'realtime') {
-                        this.selectedProvider = 'openai';
-                    } else if (!this.providerAllowedOnFree(this.selectedProvider)) {
+                    if (!this.providerAllowed(this.selectedProvider)) {
                         this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
                     }
 
@@ -937,10 +982,10 @@
                 handleProviderChange(shouldAdjustVoice = true) {
                     const providerHasLanguage = this.compatibleVoices.some((voice) =>
                         voice.provider === this.selectedProvider
-                        && (voice.language === this.selectedLanguageCode || voice.language === 'multi')
+                        && this.voiceMatchesLanguage(voice)
                     );
 
-                    if (!providerHasLanguage && (!editingAssistantId || !this.selectedProvider)) {
+                    if (!providerHasLanguage || !this.providerAllowed(this.selectedProvider)) {
                         this.selectedProvider = this.recommendedVoiceForCurrentState().provider;
                     }
 
@@ -1003,10 +1048,10 @@
                     const recommended = this.recommendedVoiceForCurrentState();
                     const providerHasLanguage = this.compatibleVoices.some((voice) =>
                         voice.provider === this.selectedProvider
-                        && (voice.language === this.selectedLanguageCode || voice.language === 'multi')
+                        && this.voiceMatchesLanguage(voice)
                     );
 
-                    if (!providerHasLanguage && this.providerAllowedOnFree(recommended.provider)) {
+                    if ((!providerHasLanguage || !this.providerAllowed(this.selectedProvider)) && this.providerAllowed(recommended.provider)) {
                         this.selectedProvider = recommended.provider;
                     }
 
@@ -1028,15 +1073,50 @@
                     }
                 },
                 recommendedVoiceForCurrentState() {
+                    const prefersOperatorVoice = ['steady_operator', 'confident_closer'].includes(this.selectedPresetKey);
+                    const preferredRole = this.selectedPresetKey === 'premium_concierge'
+                        ? 'premium'
+                        : (prefersOperatorVoice ? 'operator' : 'default');
+
                     if (this.selectedModel.voiceMode === 'realtime') {
-                        return ['steady_operator', 'confident_closer'].includes(this.selectedPresetKey)
+                        return prefersOperatorVoice
                             ? { provider: 'openai', id: 'alloy' }
                             : { provider: 'openai', id: 'shimmer' };
                     }
 
-                    const prefersOperatorVoice = ['steady_operator', 'confident_closer'].includes(this.selectedPresetKey);
-
                     if (!freeWorkspace) {
+                        const localizedStandardVoices = this.voices.filter((voice) =>
+                            voice.provider === 'azure' && voice.language === this.selectedLanguageCode
+                        );
+
+                        if (this.selectedLanguageCode && !String(this.selectedLanguageCode).startsWith('en-') && localizedStandardVoices.length) {
+                            const preferredLocalizedVoice = localizedStandardVoices.find((voice) => voice.role === preferredRole)
+                                || localizedStandardVoices.find((voice) => voice.role === 'default')
+                                || localizedStandardVoices[0];
+
+                            return {
+                                provider: 'azure',
+                                id: preferredLocalizedVoice.id,
+                            };
+                        }
+
+                        const deepgramVoice = this.voices.find((voice) =>
+                            voice.provider === 'deepgram'
+                            && voice.role === preferredRole
+                            && this.voiceMatchesLanguage(voice)
+                        ) || this.voices.find((voice) =>
+                            voice.provider === 'deepgram'
+                            && voice.recommended
+                            && this.voiceMatchesLanguage(voice)
+                        );
+
+                        if (deepgramVoice) {
+                            return {
+                                provider: 'deepgram',
+                                id: deepgramVoice.id,
+                            };
+                        }
+
                         return {
                             provider: 'openai',
                             id: prefersOperatorVoice ? 'cedar' : 'marin',
@@ -1084,6 +1164,10 @@
                         this.selectedProvider = recommended.provider;
                     }
 
+                    if (!this.providerAllowed(this.selectedProvider)) {
+                        this.selectedProvider = recommended.provider;
+                    }
+
                     const preferredVoice = this.filteredVoices.find((voice) => voice.id === recommended.id);
 
                     if (forceRecommended && preferredVoice) {
@@ -1104,8 +1188,17 @@
                 get selectedVoicePriceMetric() {
                     return this.selectedVoice?.priceMetric || providerPriceMetrics[this.selectedProvider] || 'Provider pricing varies';
                 },
+                get selectedVoicePriceDetail() {
+                    return this.selectedVoice?.priceDetail || '';
+                },
+                get selectedVoiceStyle() {
+                    return this.selectedVoice?.style || '';
+                },
                 voiceOptionLabel(voice) {
-                    return `${voice.name} - ${this.providerLabel(voice.provider)} - ${voice.priceMetric}`;
+                    const recommended = voice.recommended ? 'recommended' : '';
+                    return [voice.name, this.providerLabel(voice.provider), voice.priceMetric, recommended]
+                        .filter(Boolean)
+                        .join(' - ');
                 },
                 toggleTool(tool) {
                     if (this.promptWriter.toolsEnabled.includes(tool)) {
