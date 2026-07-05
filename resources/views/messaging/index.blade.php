@@ -22,6 +22,18 @@
         $includeIssueValue = old('include_issue_label', $settings->include_issue_label) ? true : false;
         $replyCaptureValue = old('reply_capture_enabled', $settings->reply_capture_enabled) ? true : false;
         $replyMessages = $recentMessages->filter(fn ($message) => $message->direction === \App\Models\MessageEvent::DIRECTION_INBOUND || filled($message->response_body))->take(4);
+        $messageTokens = [
+            ['key' => 'customer_name', 'label' => 'Caller name', 'sample' => 'Maria'],
+            ['key' => 'workspace_name', 'label' => 'Business name', 'sample' => $workspace->name],
+            ['key' => 'appointment_time', 'label' => 'Appointment time', 'sample' => 'Tue, Jul 7 at 2:30 PM'],
+            ['key' => 'ticket_number', 'label' => 'Ticket number', 'sample' => 'TC-1042'],
+            ['key' => 'issue_label', 'label' => 'Issue summary', 'sample' => 'Kitchen leak'],
+            ['key' => 'signature', 'label' => 'Signature', 'sample' => $signatureValue],
+        ];
+        $friendlyTemplateValue = collect($messageTokens)->reduce(
+            fn (string $template, array $token) => str_replace('{{'.$token['key'].'}}', '['.$token['label'].']', $template),
+            $templateValue,
+        );
     @endphp
 
     <div class="space-y-6">
@@ -34,20 +46,62 @@
 
         <div class="grid items-start gap-6 xl:grid-cols-[minmax(0,1.12fr)_minmax(360px,0.88fr)]">
             <div class="space-y-6">
-                <x-ui.panel title="Customize messages" description="This template is added to your Vapi assistant instructions and used after a meeting is booked.">
+                <x-ui.panel title="Customize messages" description="Write the confirmation callers receive after a meeting is booked.">
                     <form
                         method="POST"
                         action="{{ route('app.messaging.update', $workspace) }}"
-                        class="space-y-6"
+                        class="space-y-8"
                         x-data="{
-                            template: @js($templateValue),
+                            messageTokens: @js($messageTokens),
+                            templateDisplay: @js($friendlyTemplateValue),
                             signature: @js($signatureValue),
                             bookingEnabled: @js($bookingEnabledValue),
                             includeTicket: @js($includeTicketValue),
                             includeIssue: @js($includeIssueValue),
                             replyCapture: @js($replyCaptureValue),
+                            rawTemplate() {
+                                let output = this.templateDisplay || '';
+                                const open = String.fromCharCode(123, 123);
+                                const close = String.fromCharCode(125, 125);
+
+                                this.messageTokens.forEach((token) => {
+                                    output = output.replaceAll('[' + token.label + ']', open + token.key + close);
+                                });
+
+                                return output;
+                            },
+                            insertToken(key) {
+                                const token = this.messageTokens.find((item) => item.key === key);
+
+                                if (!token) {
+                                    return;
+                                }
+
+                                const textarea = this.$refs.templateInput;
+                                const insert = '[' + token.label + ']';
+
+                                if (!textarea) {
+                                    this.templateDisplay = (this.templateDisplay ? this.templateDisplay + ' ' : '') + insert;
+                                    return;
+                                }
+
+                                const start = textarea.selectionStart ?? this.templateDisplay.length;
+                                const end = textarea.selectionEnd ?? this.templateDisplay.length;
+                                const before = this.templateDisplay.slice(0, start);
+                                const after = this.templateDisplay.slice(end);
+                                const prefix = before && !before.endsWith(' ') && !before.endsWith('\n') ? ' ' : '';
+                                const suffix = after && !after.startsWith(' ') && !after.startsWith('\n') && !after.startsWith('.') ? ' ' : '';
+
+                                this.templateDisplay = before + prefix + insert + suffix + after;
+
+                                this.$nextTick(() => {
+                                    const cursor = (before + prefix + insert).length;
+                                    textarea.focus();
+                                    textarea.setSelectionRange(cursor, cursor);
+                                });
+                            },
                             renderPreview() {
-                                let output = this.template || '';
+                                let output = this.rawTemplate();
                                 const open = String.fromCharCode(123, 123);
                                 const close = String.fromCharCode(125, 125);
                                 const values = {
@@ -72,21 +126,31 @@
                     >
                         @csrf
 
-                        <div class="grid gap-5 lg:grid-cols-[minmax(0,1fr)_330px]">
-                            <div class="space-y-5">
+                        <div class="grid gap-8 2xl:grid-cols-[minmax(0,1fr)_minmax(380px,0.72fr)]">
+                            <div class="space-y-6">
+                                <input type="hidden" name="booking_confirmation_template" :value="rawTemplate()">
+
                                 <div class="tc-field">
-                                    <label for="booking_confirmation_template" class="tc-field-label">Booking confirmation text</label>
+                                    <label for="booking_confirmation_template_display" class="tc-field-label">Booking confirmation text</label>
                                     <textarea
-                                        id="booking_confirmation_template"
-                                        name="booking_confirmation_template"
-                                        rows="5"
+                                        id="booking_confirmation_template_display"
+                                        x-ref="templateInput"
+                                        rows="6"
                                         class="tc-textarea"
-                                        x-model="template"
-                                        placeholder="Hi @{{customer_name}}, your follow-up is booked for @{{appointment_time}}."
-                                    >{{ $templateValue }}</textarea>
-                                    <div class="mt-3 flex flex-wrap gap-2 text-xs">
-                                        @foreach(['customer_name', 'workspace_name', 'appointment_time', 'ticket_number', 'issue_label', 'signature'] as $token)
-                                            <span class="tc-pill-mini border border-slate-200 bg-slate-50 text-slate-600">{!! '&#123;&#123;'.$token.'&#125;&#125;' !!}</span>
+                                        x-model="templateDisplay"
+                                        placeholder="Hi [Caller name], your follow-up is booked for [Appointment time]."
+                                    ></textarea>
+                                    <p class="mt-2 text-sm leading-6 text-slate-500">Use the buttons below to add details. Callers only see the finished message, never the bracketed labels.</p>
+                                    <div class="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                                        @foreach($messageTokens as $token)
+                                            <button
+                                                type="button"
+                                                class="rounded-2xl border border-slate-200 bg-white px-3 py-3 text-left transition hover:border-orange-200 hover:bg-orange-50/60"
+                                                @click="insertToken(@js($token['key']))"
+                                            >
+                                                <span class="block text-sm font-semibold text-slate-900">{{ $token['label'] }}</span>
+                                                <span class="mt-1 block truncate text-xs text-slate-500">Example: {{ $token['sample'] ?: 'your saved value' }}</span>
+                                            </button>
                                         @endforeach
                                     </div>
                                     @error('booking_confirmation_template')
@@ -116,43 +180,43 @@
                                     </div>
                                 </div>
 
-                                <div class="grid gap-3 md:grid-cols-2">
-                                    <label class="tc-meta-card-white flex cursor-pointer items-start gap-3">
+                                <div class="grid gap-4 lg:grid-cols-2">
+                                    <label class="tc-meta-card-white flex cursor-pointer items-start gap-3 !p-5">
                                         <input type="checkbox" name="booking_confirmation_enabled" value="1" class="mt-1 rounded border-slate-300 text-orange-600 focus:ring-orange-500" x-model="bookingEnabled">
                                         <span>
                                             <span class="block text-sm font-semibold text-slate-950">Auto-send after booking</span>
-                                            <span class="mt-1 block text-sm leading-6 text-slate-600">When `bookMeeting` succeeds, Vapi can send this confirmation once.</span>
+                                            <span class="mt-2 block text-sm leading-6 text-slate-600">When a booking is confirmed, Vapi can send this text once.</span>
                                         </span>
                                     </label>
 
-                                    <label class="tc-meta-card-white flex cursor-pointer items-start gap-3">
+                                    <label class="tc-meta-card-white flex cursor-pointer items-start gap-3 !p-5">
                                         <input type="checkbox" name="reply_capture_enabled" value="1" class="mt-1 rounded border-slate-300 text-orange-600 focus:ring-orange-500" x-model="replyCapture">
                                         <span>
                                             <span class="block text-sm font-semibold text-slate-950">Invite useful replies</span>
-                                            <span class="mt-1 block text-sm leading-6 text-slate-600">Let callers reply if the appointment time or details need correction.</span>
+                                            <span class="mt-2 block text-sm leading-6 text-slate-600">Let callers reply if the appointment time or details need correction.</span>
                                         </span>
                                     </label>
 
-                                    <label class="tc-meta-card-white flex cursor-pointer items-start gap-3">
+                                    <label class="tc-meta-card-white flex cursor-pointer items-start gap-3 !p-5">
                                         <input type="checkbox" name="include_ticket_number" value="1" class="mt-1 rounded border-slate-300 text-orange-600 focus:ring-orange-500" x-model="includeTicket">
                                         <span>
                                             <span class="block text-sm font-semibold text-slate-950">Include ticket number</span>
-                                            <span class="mt-1 block text-sm leading-6 text-slate-600">Adds the case reference when one exists.</span>
+                                            <span class="mt-2 block text-sm leading-6 text-slate-600">Adds the case reference when one exists.</span>
                                         </span>
                                     </label>
 
-                                    <label class="tc-meta-card-white flex cursor-pointer items-start gap-3">
+                                    <label class="tc-meta-card-white flex cursor-pointer items-start gap-3 !p-5">
                                         <input type="checkbox" name="include_issue_label" value="1" class="mt-1 rounded border-slate-300 text-orange-600 focus:ring-orange-500" x-model="includeIssue">
                                         <span>
                                             <span class="block text-sm font-semibold text-slate-950">Include issue label</span>
-                                            <span class="mt-1 block text-sm leading-6 text-slate-600">Keeps the reminder useful without exposing sensitive details.</span>
+                                            <span class="mt-2 block text-sm leading-6 text-slate-600">Keeps the reminder useful without exposing sensitive details.</span>
                                         </span>
                                     </label>
                                 </div>
                             </div>
 
-                            <div class="rounded-[1.6rem] border border-slate-200 bg-slate-950 p-4 text-white shadow-[0_24px_70px_-34px_rgba(15,23,42,0.45)]">
-                                <div class="mb-4 flex items-center justify-between gap-3">
+                            <div class="rounded-[1.9rem] border border-slate-200 bg-slate-950 p-5 text-white shadow-[0_24px_70px_-34px_rgba(15,23,42,0.45)]">
+                                <div class="mb-5 flex items-center justify-between gap-3">
                                     <div>
                                         <div class="text-[0.68rem] font-semibold uppercase tracking-[0.2em] text-slate-400">Chat preview</div>
                                         <div class="mt-1 text-sm font-semibold">Caller phone</div>
@@ -160,16 +224,16 @@
                                     <x-ui.badge :tone="$readyForMessaging ? 'success' : 'warning'">{{ $readyForMessaging ? 'Live' : 'Setup needed' }}</x-ui.badge>
                                 </div>
 
-                                <div class="space-y-3 rounded-[1.25rem] bg-white/7 p-4">
+                                <div class="space-y-4 rounded-[1.35rem] bg-white/7 p-5">
                                     <div class="max-w-[82%] rounded-2xl rounded-bl-md bg-white/10 px-4 py-3 text-sm leading-6 text-slate-200">
                                         Thanks, Tuesday at 2:30 works.
                                     </div>
-                                    <div class="ml-auto max-w-[88%] rounded-2xl rounded-br-md bg-orange-500 px-4 py-3 text-sm font-medium leading-6 text-white shadow-[0_18px_40px_-24px_rgba(249,115,22,0.75)]">
+                                    <div class="ml-auto max-w-[90%] rounded-2xl rounded-br-md bg-orange-500 px-4 py-3 text-sm font-medium leading-6 text-white shadow-[0_18px_40px_-24px_rgba(249,115,22,0.75)]">
                                         <span x-text="renderPreview()">{{ $messagePreview }}</span>
                                     </div>
                                 </div>
 
-                                <div class="mt-4 flex items-center justify-between gap-3 text-xs text-slate-400">
+                                <div class="mt-5 flex items-center justify-between gap-3 text-xs text-slate-400">
                                     <span x-text="remaining() + ' chars left before 320'"></span>
                                     <span>{{ $settings->updated_at ? 'Updated '.$settings->updated_at->diffForHumans() : 'Default template' }}</span>
                                 </div>

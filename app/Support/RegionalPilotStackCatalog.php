@@ -204,7 +204,7 @@ class RegionalPilotStackCatalog
         return is_array($profile) && ($profile['provider'] ?? null) === 'azure';
     }
 
-    public static function voiceCatalog(): array
+    public static function voiceCatalog(array $elevenLabsVoiceIds = []): array
     {
         $voices = [
             ['voiceId' => 'Emma', 'name' => 'Emma', 'provider' => 'vapi', 'language' => 'en-US', 'role' => 'default', 'style' => 'Clean, friendly front-desk voice', 'priceMetric' => '~$0.01/min voice'],
@@ -259,7 +259,7 @@ class RegionalPilotStackCatalog
             }
         }
 
-        $voices = array_merge($voices, ElevenLabsVoiceCatalog::voices());
+        $voices = array_merge($voices, ElevenLabsVoiceCatalog::voices($elevenLabsVoiceIds));
 
         return collect($voices)
             ->unique(fn (array $voice) => implode('|', [

@@ -18,6 +18,28 @@
         $ws = $workspace;
         $assistants = $configs ?? collect();
         $phones = $phonesByAssistant ?? collect();
+        $voiceCatalog = collect($voices ?? [])->mapWithKeys(function (array $voice) {
+            $provider = (string) ($voice['provider'] ?? '');
+            $voiceId = (string) ($voice['voiceId'] ?? $voice['id'] ?? '');
+
+            return [strtolower($provider).'|'.strtolower($voiceId) => $voice];
+        });
+        $providerLabels = [
+            'vapi' => 'Vapi curated',
+            'openai' => 'OpenAI voice',
+            'azure' => 'Azure neural',
+            'deepgram' => 'Deepgram Aura-2',
+            '11labs' => 'ElevenLabs',
+            'elevenlabs' => 'ElevenLabs',
+            'eleven_labs' => 'ElevenLabs',
+        ];
+        $voiceForAssistant = function ($assistant) use ($voiceCatalog) {
+            $provider = strtolower((string) ($assistant->voice_provider ?? ''));
+            $voiceId = strtolower((string) ($assistant->voice_id ?? ''));
+
+            return $voiceCatalog->get($provider.'|'.$voiceId)
+                ?: ($provider === 'elevenlabs' ? $voiceCatalog->get('11labs|'.$voiceId) : null);
+        };
     @endphp
 
     @if($assistants->isEmpty())
@@ -36,6 +58,21 @@
                     $phone = $phones->get($assistant->id);
                     $modelDefinition = collect(\App\Models\AssistantConfig::modelOptions())
                         ->firstWhere('value', \App\Models\AssistantConfig::normalizedModelName($assistant->model_name));
+                    $voiceDefinition = $voiceForAssistant($assistant);
+                    $voiceProvider = strtolower((string) ($assistant->voice_provider ?? ''));
+                    $voiceProviderLabel = $providerLabels[$voiceProvider] ?? ($assistant->voice_provider ?? 'Default');
+                    $voiceName = $voiceDefinition['name'] ?? (
+                        in_array($voiceProvider, ['11labs', 'elevenlabs', 'eleven_labs'], true)
+                            ? 'Saved ElevenLabs voice'
+                            : ($assistant->voice_id ?? 'Automatic')
+                    );
+                    $voiceMeta = collect([
+                        filled($voiceDefinition['accent'] ?? null) ? ($voiceDefinition['accent'].' accent') : null,
+                        $voiceDefinition['gender'] ?? null,
+                        $assistant->language_code
+                            ? (\App\Support\RegionalPilotStackCatalog::languageLabel($assistant->language_code) ?? strtoupper($assistant->language_code))
+                            : null,
+                    ])->filter()->values();
                 @endphp
 
                 <div class="tc-assistant-card">
@@ -90,13 +127,13 @@
                         <div>
                             <div class="text-[0.72rem] font-semibold uppercase tracking-[0.18em] text-slate-500">Voice</div>
                             <div class="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1">
-                                <span class="whitespace-nowrap">{{ $assistant->voice_provider ?? 'Default' }}</span>
+                                <span class="whitespace-nowrap">{{ $voiceName }}</span>
                                 <span class="whitespace-nowrap text-slate-400">/</span>
-                                <span class="whitespace-nowrap">{{ $assistant->voice_id ?? 'Automatic' }}</span>
-                                @if($assistant->language_code)
+                                <span class="whitespace-nowrap">{{ $voiceProviderLabel }}</span>
+                                @foreach($voiceMeta as $meta)
                                     <span class="whitespace-nowrap text-slate-400">/</span>
-                                    <span class="whitespace-nowrap">{{ \App\Support\RegionalPilotStackCatalog::languageLabel($assistant->language_code) ?? strtoupper($assistant->language_code) }}</span>
-                                @endif
+                                    <span class="whitespace-nowrap">{{ $meta }}</span>
+                                @endforeach
                             </div>
                         </div>
 

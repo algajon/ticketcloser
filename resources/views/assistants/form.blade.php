@@ -150,12 +150,24 @@
 
         $voicesJson = collect($voices ?? [])->map(function ($v) {
             $provider = $v['provider'] ?? 'unknown';
+            $voiceId = (string) ($v['voiceId'] ?? $v['id'] ?? '');
+            $name = trim((string) ($v['name'] ?? ''));
+
+            if ($provider === '11labs' && ($name === '' || $name === $voiceId)) {
+                $name = 'Saved ElevenLabs voice';
+            }
 
             return [
-                'id' => $v['voiceId'] ?? $v['id'] ?? '',
-                'name' => $v['name'] ?? $v['voiceId'] ?? 'Unknown',
+                'id' => $voiceId,
+                'name' => $name !== '' ? $name : ($voiceId ?: 'Unknown voice'),
                 'provider' => $provider,
                 'language' => $v['language'] ?? $v['accent'] ?? '',
+                'supportedLanguages' => array_values(array_filter((array) ($v['supportedLanguages'] ?? []))),
+                'accent' => $v['accent'] ?? '',
+                'gender' => $v['gender'] ?? '',
+                'description' => $v['description'] ?? '',
+                'category' => $v['category'] ?? '',
+                'previewUrl' => $v['previewUrl'] ?? $v['preview_url'] ?? '',
                 'role' => $v['role'] ?? 'default',
                 'style' => $v['style'] ?? '',
                 'recommended' => (bool) ($v['recommended'] ?? false),
@@ -378,7 +390,7 @@
 
                     <div class="tc-field">
                         <label for="voice_id" class="tc-field-label">Voice</label>
-                        <select id="voice_id" name="voice_id" class="tc-input" x-model="selectedVoiceId">
+                        <select id="voice_id" name="voice_id" class="tc-input" x-model="selectedVoiceId" @change="stopVoicePreview()">
                             <option value="">Select a voice</option>
                             <template x-for="voice in filteredVoices" :key="voice.id">
                                 <option :value="voice.id" x-text="voiceOptionLabel(voice)"></option>
@@ -393,12 +405,17 @@
                     <div class="tc-accent-text-strong mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm">
                         <span class="whitespace-nowrap" x-text="providerLabel(selectedProvider)"></span>
                         <span class="tc-accent-text-soft whitespace-nowrap">/</span>
-                        <span class="whitespace-nowrap" x-text="languageLabel(selectedLanguageCode)"></span>
+                        <span class="whitespace-nowrap" x-text="selectedVoiceMeta"></span>
                         <span class="tc-accent-text-soft whitespace-nowrap">/</span>
                         <span class="whitespace-nowrap" x-text="selectedVoicePriceMetric"></span>
                     </div>
                     <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedVoiceStyle" x-text="selectedVoiceStyle"></p>
                     <p class="tc-accent-text-soft mt-1 text-xs leading-5" x-show="selectedVoicePriceDetail" x-text="selectedVoicePriceDetail"></p>
+                    <div class="mt-3 flex flex-wrap items-center gap-3" x-show="selectedVoicePreviewUrl">
+                        <button type="button" class="tc-btn-secondary !px-4 !py-2 text-xs" @click="toggleVoicePreview()" x-text="voicePreviewPlaying ? 'Stop sample' : 'Play voice sample'"></button>
+                        <span class="text-xs leading-5 tc-accent-text-soft">Uses ElevenLabs hosted preview audio, not generated speech.</span>
+                    </div>
+                    <p class="mt-2 text-xs leading-5 text-red-600" x-show="voicePreviewError" x-text="voicePreviewError"></p>
                     <p class="tc-accent-text-strong mt-2 text-sm leading-6" x-show="selectedModel.voiceMode === 'realtime'">Realtime audio is the premium voice path and usually costs more per call minute.</p>
                 </div>
 
@@ -825,6 +842,10 @@
                 selectedProvider: @js($selectedProviderValue),
                 selectedLanguageCode: @js($selectedLanguageValue),
                 selectedVoiceId: @js($selectedVoiceValue),
+                voicePreviewAudio: null,
+                voicePreviewVoiceId: '',
+                voicePreviewPlaying: false,
+                voicePreviewError: '',
                 promptWriterOpen: false,
                 selectedPresetKey: @js($selectedPresetKey),
                 presetMap,
@@ -972,6 +993,28 @@
                     return `${this.providerLabel(this.selectedProvider)} supports ${count} ${count === 1 ? 'language' : 'languages'} in this setup.`;
                 },
                 voiceMatchesLanguage(voice, languageCode = this.selectedLanguageCode) {
+                    const supportedLanguages = Array.isArray(voice.supportedLanguages)
+                        ? voice.supportedLanguages.filter(Boolean)
+                        : [];
+
+                    if (supportedLanguages.length) {
+                        if (!languageCode || supportedLanguages.includes('multi')) {
+                            return true;
+                        }
+
+                        if (supportedLanguages.includes(languageCode)) {
+                            return true;
+                        }
+
+                        const selectedFamily = String(languageCode).split('-')[0];
+
+                        return supportedLanguages.some((supportedLanguage) => {
+                            const supportedFamily = String(supportedLanguage).split('-')[0];
+
+                            return selectedFamily === supportedFamily;
+                        });
+                    }
+
                     if (!languageCode || !voice.language || voice.language === 'multi') {
                         return true;
                     }
@@ -1008,6 +1051,8 @@
                     }
                 },
                 handleProviderChange(shouldAdjustVoice = true) {
+                    this.stopVoicePreview();
+
                     const providerHasLanguage = this.compatibleVoices.some((voice) =>
                         voice.provider === this.selectedProvider
                         && this.voiceMatchesLanguage(voice)
@@ -1076,6 +1121,7 @@
                     this.handleProviderChange();
                 },
                 handleLanguageChange() {
+                    this.stopVoicePreview();
                     this.promptWriter.language = this.selectedLanguageCode;
                     const recommended = this.recommendedVoiceForCurrentState();
                     const providerHasLanguage = this.compatibleVoices.some((voice) =>
@@ -1215,7 +1261,22 @@
                     return this.selectedVoice ? this.selectedVoice.name : 'No voice selected';
                 },
                 get selectedVoice() {
-                    return this.voices.find((item) => item.id === this.selectedVoiceId) || null;
+                    return this.voices.find((item) =>
+                        item.id === this.selectedVoiceId && item.provider === this.selectedProvider
+                    ) || this.voices.find((item) => item.id === this.selectedVoiceId) || (
+                        this.selectedProvider === '11labs' && this.selectedVoiceId
+                            ? {
+                                id: this.selectedVoiceId,
+                                name: 'Saved ElevenLabs voice',
+                                provider: '11labs',
+                                language: 'multi',
+                                supportedLanguages: [],
+                                style: 'Saved ElevenLabs voice from your connected account.',
+                                priceMetric: providerPriceMetrics['11labs'],
+                                priceDetail: 'Live calls use your ElevenLabs character quota. Preview unavailable until voice metadata refreshes.',
+                            }
+                            : null
+                    );
                 },
                 get selectedVoicePriceMetric() {
                     return this.selectedVoice?.priceMetric || providerPriceMetrics[this.selectedProvider] || 'Provider pricing varies';
@@ -1226,11 +1287,77 @@
                 get selectedVoiceStyle() {
                     return this.selectedVoice?.style || '';
                 },
+                get selectedVoicePreviewUrl() {
+                    return this.selectedVoice?.previewUrl || '';
+                },
+                get selectedVoiceMeta() {
+                    if (!this.selectedVoice) {
+                        return this.languageLabel(this.selectedLanguageCode);
+                    }
+
+                    const parts = [
+                        this.selectedVoice.accent ? `${this.selectedVoice.accent} accent` : '',
+                        this.selectedVoice.gender || '',
+                        this.languageLabel(this.selectedLanguageCode),
+                    ];
+
+                    return parts.filter(Boolean).join(' / ');
+                },
                 voiceOptionLabel(voice) {
                     const recommended = voice.recommended ? 'recommended' : '';
-                    return [voice.name, this.providerLabel(voice.provider), voice.priceMetric, recommended]
+                    const accent = voice.accent ? `${voice.accent} accent` : '';
+                    const gender = voice.gender || '';
+
+                    return [voice.name, accent, gender, this.providerLabel(voice.provider), voice.priceMetric, recommended]
                         .filter(Boolean)
                         .join(' - ');
+                },
+                toggleVoicePreview() {
+                    if (!this.selectedVoicePreviewUrl) {
+                        return;
+                    }
+
+                    if (
+                        this.voicePreviewAudio
+                        && this.voicePreviewVoiceId === this.selectedVoiceId
+                        && this.voicePreviewPlaying
+                    ) {
+                        this.stopVoicePreview();
+                        return;
+                    }
+
+                    this.stopVoicePreview();
+                    this.voicePreviewError = '';
+                    this.voicePreviewVoiceId = this.selectedVoiceId;
+                    this.voicePreviewAudio = new Audio(this.selectedVoicePreviewUrl);
+                    this.voicePreviewAudio.addEventListener('ended', () => {
+                        this.voicePreviewPlaying = false;
+                    }, { once: true });
+                    this.voicePreviewAudio.addEventListener('error', () => {
+                        this.voicePreviewPlaying = false;
+                        this.voicePreviewError = 'Voice sample could not be played from ElevenLabs.';
+                    }, { once: true });
+
+                    const playPromise = this.voicePreviewAudio.play();
+                    this.voicePreviewPlaying = true;
+
+                    if (playPromise && typeof playPromise.catch === 'function') {
+                        playPromise.catch(() => {
+                            this.voicePreviewPlaying = false;
+                            this.voicePreviewError = 'Browser blocked the voice sample. Try clicking Play again.';
+                        });
+                    }
+                },
+                stopVoicePreview() {
+                    if (this.voicePreviewAudio) {
+                        this.voicePreviewAudio.pause();
+                        this.voicePreviewAudio.currentTime = 0;
+                    }
+
+                    this.voicePreviewAudio = null;
+                    this.voicePreviewVoiceId = '';
+                    this.voicePreviewPlaying = false;
+                    this.voicePreviewError = '';
                 },
                 toggleTool(tool) {
                     if (this.promptWriter.toolsEnabled.includes(tool)) {

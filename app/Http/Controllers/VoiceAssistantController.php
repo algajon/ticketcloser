@@ -38,8 +38,11 @@ class VoiceAssistantController extends Controller
             ->get(['assistant_id', 'e164'])
             ->keyBy('assistant_id');
 
-        // Use hardcoded voices for consistent picker experience
-        $voices = self::vapiVoices();
+        $voices = self::vapiVoices(
+            $configs->filter(fn (AssistantConfig $config) => $this->isElevenLabsProvider($config->voice_provider))
+                ->pluck('voice_id')
+                ->all()
+        );
         $assistantCreationLocked = ! $workspace->canCreateAssistants();
 
         return view('assistants.index', compact('workspace', 'configs', 'voices', 'phonesByAssistant', 'assistantCreationLocked'));
@@ -484,7 +487,9 @@ class VoiceAssistantController extends Controller
         abort_if($assistant->workspace_id !== $workspace->id, 404);
 
         $config = $assistant;
-        $voices = self::vapiVoices();
+        $voices = self::vapiVoices(
+            $this->isElevenLabsProvider($config->voice_provider) ? [$config->voice_id] : []
+        );
         $presets = AssistantPreset::ensureDefaults();
         $assistantRouteOptions = $this->assistantRouteOptions($workspace, $config);
 
@@ -595,9 +600,14 @@ class VoiceAssistantController extends Controller
     /**
      * Hardcoded Vapi voice catalogue (Vapi has no list-voices API).
      */
-    private static function vapiVoices(): array
+    private static function vapiVoices(array $elevenLabsVoiceIds = []): array
     {
-        return RegionalPilotStackCatalog::voiceCatalog();
+        return RegionalPilotStackCatalog::voiceCatalog($elevenLabsVoiceIds);
+    }
+
+    private function isElevenLabsProvider(?string $provider): bool
+    {
+        return in_array(strtolower(trim((string) $provider)), ['11labs', 'elevenlabs', 'eleven_labs'], true);
     }
 
     private function assistantRouteOptions(Workspace $workspace, ?AssistantConfig $current = null): array
