@@ -293,6 +293,7 @@ class AssistantVoiceQualityTest extends TestCase
             ->with($this->callback(function (array $payload): bool {
                 $this->assertSame('deepgram', $payload['voice']['provider']);
                 $this->assertSame('helena', $payload['voice']['voiceId']);
+                $this->assertSame('aura-2', $payload['voice']['model']);
                 $this->assertArrayNotHasKey('speed', $payload['voice']);
 
                 return true;
@@ -311,6 +312,54 @@ class AssistantVoiceQualityTest extends TestCase
         $assistant->refresh();
         $this->assertSame('deepgram', $assistant->voice_provider);
         $this->assertSame('helena', $assistant->voice_id);
+    }
+
+    public function test_deepgram_apollo_voice_is_sent_with_aura_2_model_for_vapi_validation(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Sales Desk',
+            'preset_key' => 'confident_closer',
+            'language_code' => 'en-US',
+            'voice_provider' => 'deepgram',
+            'voice_id' => 'apollo',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $this->assertSame('deepgram', $payload['voice']['provider']);
+                $this->assertSame('apollo', $payload['voice']['voiceId']);
+                $this->assertSame('aura-2', $payload['voice']['model']);
+                $this->assertArrayNotHasKey('speed', $payload['voice']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-apollo-aura-2']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($assistant, $workspace, [
+            'name' => 'Sales Desk',
+            'language_code' => 'en-US',
+            'voice_provider' => 'deepgram',
+            'voice_id' => 'apollo',
+            'preset_key' => 'confident_closer',
+        ]);
+
+        $assistant->refresh();
+        $this->assertSame('deepgram', $assistant->voice_provider);
+        $this->assertSame('apollo', $assistant->voice_id);
     }
 
     public function test_custom_first_message_is_used_for_standard_models_too(): void

@@ -1274,10 +1274,20 @@ PROMPT);
             $voiceId = $defaultVoice['voiceId'];
         }
 
-        return [
+        $voice = [
             'provider' => $voiceProvider,
             'voiceId' => $voiceId,
-        ] + ($voiceProvider === 'vapi' ? ['version' => 2] : []);
+        ];
+
+        if ($voiceProvider === 'vapi') {
+            $voice['version'] = 2;
+        }
+
+        if ($voiceProvider === 'deepgram') {
+            $voice['model'] = 'aura-2';
+        }
+
+        return $voice;
     }
 
     private function transcriberBlock(AssistantConfig $config, Workspace $workspace): array
