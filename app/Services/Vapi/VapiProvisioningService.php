@@ -944,13 +944,14 @@ class VapiProvisioningService
             'name' => $config->name,
             'model' => $model,
             'firstMessage' => $firstMessage,
+            'firstMessageMode' => 'assistant-speaks-first',
         ];
 
         if ($this->isOperatorRouteDestination($config, $workspace)) {
             if ($this->operatorRoutingEnabled($config)) {
                 $payload['firstMessage'] = $this->operatorDestinationFirstMessage($config, $workspace);
                 $payload['firstMessageMode'] = 'assistant-speaks-first';
-            } else {
+            } elseif (! $this->hasActiveDirectPhoneNumber($config, $workspace)) {
                 $payload['firstMessage'] = '';
                 $payload['firstMessageMode'] = 'assistant-speaks-first-with-model-generated-message';
             }
@@ -1189,6 +1190,15 @@ PROMPT);
                 return collect($this->operatorRoutes($operator))
                     ->contains(fn (array $route): bool => (int) ($route['assistant_id'] ?? 0) === (int) $config->id);
             });
+    }
+
+    private function hasActiveDirectPhoneNumber(AssistantConfig $config, Workspace $workspace): bool
+    {
+        return WorkspacePhoneNumber::query()
+            ->where('workspace_id', $workspace->id)
+            ->where('assistant_id', $config->id)
+            ->where('is_active', true)
+            ->exists();
     }
 
     private function operatorDestinationFirstMessage(AssistantConfig $config, Workspace $workspace): string

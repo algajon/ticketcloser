@@ -442,6 +442,7 @@ class AssistantVoiceQualityTest extends TestCase
             ->method('createAssistant')
             ->with($this->callback(function (array $payload): bool {
                 $this->assertSame('Northline Support, this is Maya speaking. How can I help today?{{ knownCallerSuffix | default: "" }}', $payload['firstMessage']);
+                $this->assertSame('assistant-speaks-first', $payload['firstMessageMode']);
 
                 return true;
             }))
@@ -1059,6 +1060,71 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('assistant-speaks-first-with-model-generated-message', $payload['firstMessageMode']);
                 $this->assertStringContainsString('SILENT HANDOFF RULES', $payload['model']['messages'][0]['content']);
                 $this->assertStringContainsString('Continue directly with the next useful question', $payload['model']['messages'][0]['content']);
+
+                return true;
+            }));
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($salesAssistant, $workspace, ['name' => 'Sales Desk']);
+    }
+
+    public function test_operator_route_destination_with_direct_phone_keeps_configured_first_message(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $salesAssistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Sales Desk',
+            'language_code' => 'en-US',
+            'first_message' => 'Thanks for calling sales. How can I help?',
+            'vapi_assistant_id' => 'asst_sales_123',
+        ]);
+
+        WorkspacePhoneNumber::create([
+            'workspace_id' => $workspace->id,
+            'assistant_id' => $salesAssistant->id,
+            'e164' => '+13613263105',
+            'provisioning_mode' => 'twilio-import',
+            'external_provider' => 'twilio',
+            'vapi_phone_number_id' => 'pn_sales_123',
+            'is_active' => true,
+        ]);
+
+        AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Main Operator',
+            'preset_key' => 'steady_operator',
+            'language_code' => 'en-US',
+            'intake_params' => [
+                'operator' => [
+                    'enabled' => true,
+                    'routes' => [
+                        [
+                            'label' => 'Sales',
+                            'keywords' => 'sales, pricing, quote',
+                            'assistant_id' => $salesAssistant->id,
+                            'language_code' => 'en-US',
+                        ],
+                    ],
+                ],
+            ],
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('updateAssistant')
+            ->with('asst_sales_123', $this->callback(function (array $payload): bool {
+                $this->assertSame('Thanks for calling sales. How can I help?{{ knownCallerSuffix | default: "" }}', $payload['firstMessage']);
+                $this->assertSame('assistant-speaks-first', $payload['firstMessageMode']);
+                $this->assertStringContainsString('SILENT HANDOFF RULES', $payload['model']['messages'][0]['content']);
 
                 return true;
             }));
