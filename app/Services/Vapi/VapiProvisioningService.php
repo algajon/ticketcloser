@@ -1329,12 +1329,17 @@ PROMPT);
 
         $payload = [
             'provider' => $transcriber['provider'],
-            'model' => $transcriber['model'],
             'language' => $transcriber['language'],
-            'smartFormat' => true,
-            'numerals' => true,
-            'keyterm' => $keyterms,
         ];
+
+        if (($transcriber['provider'] ?? null) === 'deepgram') {
+            $payload['model'] = $transcriber['model'];
+            $payload['smartFormat'] = true;
+            $payload['numerals'] = true;
+            $payload['keyterm'] = $keyterms;
+        } elseif (! empty($transcriber['model'])) {
+            $payload['model'] = $transcriber['model'];
+        }
 
         if (! empty($transcriber['fallback'])) {
             $payload['fallbackPlan'] = [

@@ -129,6 +129,7 @@ class RegionalPilotStackCatalog
             'es-ES' => ' Me alegra hablar contigo de nuevo, ' . $shortName . '.',
             'fr-FR', 'fr-CA' => ' Ravi de vous reparler, ' . $shortName . '.',
             'de-DE' => ' Schön, wieder mit Ihnen zu sprechen, ' . $shortName . '.',
+            'sq-AL' => ' Më vjen mirë që flasim përsëri, ' . $shortName . '.',
             'hi-IN' => ' आपसे फिर बात करके खुशी हुई, ' . $shortName . '.',
             'bn-BD' => ' আপনার সঙ্গে আবার কথা বলে ভালো লাগছে, ' . $shortName . '.',
             'zh-CN' => ' 很高兴再次和您通话，' . $shortName . '。',
@@ -158,15 +159,19 @@ class RegionalPilotStackCatalog
 
         $definition = self::languageDefinitions()[$languageCode] ?? self::languageDefinitions()['en-US'];
 
+        $transcriber = $definition['transcriber'];
+
         return [
-            'provider' => 'deepgram',
-            'model' => $definition['transcriber']['model'],
-            'language' => $definition['transcriber']['language'],
-            'label' => $definition['transcriber']['label'],
-            'fallback' => [
-                'provider' => 'azure',
-                'language' => $definition['transcriber']['fallback_language'],
-            ],
+            'provider' => $transcriber['provider'] ?? 'deepgram',
+            'model' => $transcriber['model'] ?? null,
+            'language' => $transcriber['language'],
+            'label' => $transcriber['label'],
+            'fallback' => $transcriber['fallback'] ?? (isset($transcriber['fallback_language'])
+                ? [
+                    'provider' => 'azure',
+                    'language' => $transcriber['fallback_language'],
+                ]
+                : null),
         ];
     }
 
@@ -602,7 +607,7 @@ class RegionalPilotStackCatalog
         $market = self::normalizeMarket($market);
         $priority = $market === self::UAE
             ? ['ar-AE', 'en-GB', 'en-US']
-            : ['en-US', 'zh-CN', 'hi-IN', 'es-ES', 'fr-FR', 'ar-AE', 'bn-BD', 'pt-BR', 'ru-RU', 'ur-PK', 'id-ID', 'de-DE', 'ja-JP', 'ko-KR', 'fr-CA', 'en-GB'];
+            : ['en-US', 'zh-CN', 'hi-IN', 'es-ES', 'fr-FR', 'ar-AE', 'bn-BD', 'pt-BR', 'ru-RU', 'ur-PK', 'id-ID', 'de-DE', 'sq-AL', 'ja-JP', 'ko-KR', 'fr-CA', 'en-GB'];
 
         $codes = array_keys(self::languageDefinitions());
 
@@ -726,6 +731,20 @@ class RegionalPilotStackCatalog
                 'standard_voices' => [
                     'default' => ['provider' => 'azure', 'voiceId' => 'de-DE-KlarissaNeural', 'name' => 'Klarissa Neural', 'speed' => 1.0],
                     'operator' => ['provider' => 'azure', 'voiceId' => 'de-DE-KlausNeural', 'name' => 'Klaus Neural', 'speed' => 0.98],
+                ],
+            ],
+            'sq-AL' => [
+                'label' => 'Albanian',
+                'aliases' => ['sq', 'albanian', 'albanian albania', 'shqip', 'shqiperi', 'shqiperia'],
+                'transcriber' => [
+                    'provider' => 'azure',
+                    'language' => 'sq-AL',
+                    'label' => 'Azure Speech (Albanian)',
+                    'fallback' => null,
+                ],
+                'standard_voices' => [
+                    'default' => ['provider' => 'azure', 'voiceId' => 'sq-AL-AnilaNeural', 'name' => 'Anila Neural', 'speed' => 1.0, 'style' => 'Warm Albanian front-desk voice'],
+                    'operator' => ['provider' => 'azure', 'voiceId' => 'sq-AL-IlirNeural', 'name' => 'Ilir Neural', 'speed' => 1.0, 'style' => 'Clear Albanian operator voice'],
                 ],
             ],
             'hi-IN' => [
@@ -868,6 +887,7 @@ class RegionalPilotStackCatalog
                 'fr-FR' => "Bonjour, merci d'avoir appelé le service maintenance. Quel problème puis-je vous aider à signaler aujourd'hui ?",
                 'fr-CA' => "Bonjour, merci d'avoir appelé le service de maintenance. Quel problème puis-je vous aider à signaler aujourd'hui ?",
                 'de-DE' => 'Hallo, danke für Ihren Anruf bei der Instandhaltung. Wobei kann ich Ihnen heute helfen?',
+                'sq-AL' => 'Përshëndetje, faleminderit që telefonuat mirëmbajtjen. Për cilin problem mund t’ju ndihmoj sot?',
                 'hi-IN' => 'नमस्ते, मेंटेनेंस टीम को कॉल करने के लिए धन्यवाद। आज मैं किस समस्या को दर्ज करने में आपकी मदद करूँ?',
                 'bn-BD' => 'হ্যালো, মেইনটেন্যান্স টিমে কল করার জন্য ধন্যবাদ। আজ কোন সমস্যাটি জানাতে আমি আপনাকে সাহায্য করতে পারি?',
                 'zh-CN' => '您好，感谢致电维修服务。请问今天我可以帮您登记什么问题？',
@@ -888,6 +908,7 @@ class RegionalPilotStackCatalog
             'fr-FR' => "Bonjour, merci d'avoir appelé le support. Comment puis-je vous aider aujourd'hui ?",
             'fr-CA' => "Bonjour, merci d'avoir appelé le support. Comment puis-je vous aider aujourd'hui ?",
             'de-DE' => 'Hallo, danke für Ihren Anruf beim Support. Wie kann ich Ihnen heute helfen?',
+            'sq-AL' => 'Përshëndetje, faleminderit që telefonuat mbështetjen. Si mund t’ju ndihmoj sot?',
             'hi-IN' => 'नमस्ते, सपोर्ट पर कॉल करने के लिए धन्यवाद। आज मैं आपकी कैसे मदद करूँ?',
             'bn-BD' => 'হ্যালো, সাপোর্টে কল করার জন্য ধন্যবাদ। আজ আমি কীভাবে সাহায্য করতে পারি?',
             'zh-CN' => '您好，感谢致电客服。请问今天我可以如何帮助您？',

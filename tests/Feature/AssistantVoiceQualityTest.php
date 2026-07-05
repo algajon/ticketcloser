@@ -67,6 +67,47 @@ class AssistantVoiceQualityTest extends TestCase
         $service->provisionAssistantAndToolForConfig($assistant, $workspace, ['name' => 'Front Desk']);
     }
 
+    public function test_albanian_assistants_use_azure_voice_and_transcription(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Albanian Desk',
+            'preset_key' => 'bright_guide',
+            'language_code' => 'sq-AL',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $this->assertSame('azure', $payload['voice']['provider']);
+                $this->assertSame('sq-AL-AnilaNeural', $payload['voice']['voiceId']);
+                $this->assertArrayNotHasKey('speed', $payload['voice']);
+                $this->assertSame('azure', $payload['transcriber']['provider']);
+                $this->assertSame('sq-AL', $payload['transcriber']['language']);
+                $this->assertArrayNotHasKey('model', $payload['transcriber']);
+                $this->assertArrayNotHasKey('keyterm', $payload['transcriber']);
+                $this->assertArrayNotHasKey('fallbackPlan', $payload['transcriber']);
+                $this->assertStringStartsWith('Përshëndetje, faleminderit që telefonuat mbështetjen.', $payload['firstMessage']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($assistant, $workspace, ['name' => 'Albanian Desk']);
+    }
+
     public function test_aggressive_timing_overrides_are_clamped_to_humane_defaults(): void
     {
         $workspace = Workspace::factory()->create([
