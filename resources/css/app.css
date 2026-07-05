@@ -137,6 +137,7 @@ body[data-app-accent='purple'] {
 
     .tc-shell-rhythm {
         --tc-shell-gap: 1.5rem;
+        --tc-page-stack-gap: 1.25rem;
         --tc-shell-top-offset: 0.375rem;
     }
 
@@ -221,7 +222,7 @@ body[data-app-accent='purple'] {
 
     .tc-page-stack {
         @apply flex flex-col;
-        gap: var(--tc-shell-gap);
+        gap: var(--tc-page-stack-gap);
     }
 
     .tc-shell-header-wrap {
@@ -304,6 +305,7 @@ body[data-app-accent='purple'] {
     @media (min-width: 640px) {
         .tc-shell-rhythm {
             --tc-shell-gap: 1.75rem;
+            --tc-page-stack-gap: 1.25rem;
             --tc-shell-top-offset: 0.5rem;
         }
     }
@@ -311,6 +313,7 @@ body[data-app-accent='purple'] {
     @media (min-width: 1024px) {
         .tc-shell-rhythm {
             --tc-shell-gap: 2rem;
+            --tc-page-stack-gap: 1rem;
             --tc-shell-top-offset: 0.625rem;
         }
     }
