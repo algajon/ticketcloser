@@ -1287,6 +1287,15 @@ PROMPT);
             $voice['model'] = 'aura-2';
         }
 
+        if ($voiceProvider === '11labs') {
+            $voice['model'] = $this->catalogVoiceModel($voiceProvider, $voiceId) ?? 'eleven_flash_v2_5';
+            $voice['stability'] = 0.5;
+            $voice['similarityBoost'] = 0.75;
+            $voice['style'] = 0.0;
+            $voice['useSpeakerBoost'] = true;
+            $voice['optimizeStreamingLatency'] = 3;
+        }
+
         return $voice;
     }
 
@@ -1659,7 +1668,7 @@ PROMPT);
         string $modelName,
         ?string $presetKey,
     ): array {
-        $voiceProvider = trim((string) $voiceProvider) !== '' ? trim((string) $voiceProvider) : null;
+        $voiceProvider = $this->normalizeVoiceProvider($voiceProvider);
         $voiceId = trim((string) $voiceId) !== '' ? trim((string) $voiceId) : null;
 
         if ($voiceProvider === 'openai') {
@@ -1700,7 +1709,31 @@ PROMPT);
             return ['openai', $voiceId];
         }
 
+        if ($voiceProvider === '11labs') {
+            if ($this->supportsCatalogVoice('11labs', $voiceId, $languageCode)) {
+                return ['11labs', $voiceId];
+            }
+
+            $voiceId = $this->defaultElevenLabsVoiceForPreset($presetKey);
+
+            return ['11labs', $voiceId];
+        }
+
         return [$voiceProvider, $voiceId];
+    }
+
+    private function normalizeVoiceProvider(?string $voiceProvider): ?string
+    {
+        $voiceProvider = strtolower(trim((string) $voiceProvider));
+
+        if ($voiceProvider === '') {
+            return null;
+        }
+
+        return match ($voiceProvider) {
+            'elevenlabs', 'eleven_labs', '11labs' => '11labs',
+            default => $voiceProvider,
+        };
     }
 
     private function supportsRealtimeVoice(string $provider, string $voiceId): bool
@@ -1736,6 +1769,36 @@ PROMPT);
         return in_array(AssistantPreset::normalizeKey($presetKey), ['steady_operator', 'confident_closer'], true)
             ? 'cedar'
             : 'marin';
+    }
+
+    private function defaultElevenLabsVoiceForPreset(?string $presetKey): string
+    {
+        $presetKey = AssistantPreset::normalizeKey($presetKey);
+        $voices = collect(RegionalPilotStackCatalog::voiceCatalog())
+            ->filter(fn (array $voice) => ($voice['provider'] ?? null) === '11labs');
+
+        $preferredRole = match ($presetKey) {
+            'steady_operator', 'confident_closer' => 'operator',
+            'premium_concierge' => 'premium',
+            default => 'default',
+        };
+
+        return (string) (
+            data_get($voices->firstWhere('role', $preferredRole), 'voiceId')
+            ?? data_get($voices->firstWhere('recommended', true), 'voiceId')
+            ?? data_get($voices->first(), 'voiceId')
+            ?? 'EXAVITQu4vr4xnSDxMaL'
+        );
+    }
+
+    private function catalogVoiceModel(string $provider, string $voiceId): ?string
+    {
+        $voice = collect(RegionalPilotStackCatalog::voiceCatalog())->first(function (array $voice) use ($provider, $voiceId) {
+            return ($voice['provider'] ?? null) === $provider
+                && strcasecmp((string) ($voice['voiceId'] ?? ''), $voiceId) === 0;
+        });
+
+        return is_array($voice) ? ($voice['model'] ?? null) : null;
     }
 
     private function normalizeDeepgramVoiceId(?string $voiceId): ?string

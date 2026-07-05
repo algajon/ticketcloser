@@ -259,6 +259,8 @@ class RegionalPilotStackCatalog
             }
         }
 
+        $voices = array_merge($voices, ElevenLabsVoiceCatalog::voices());
+
         return collect($voices)
             ->unique(fn (array $voice) => implode('|', [
                 $voice['provider'] ?? '',

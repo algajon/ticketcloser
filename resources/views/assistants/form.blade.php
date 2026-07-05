@@ -164,11 +164,13 @@
                     'openai' => 'TTS: $15/1M chars',
                     'azure' => '~$0.01/min voice',
                     'deepgram' => 'Aura-2: $0.030/1k chars',
+                    '11labs' => 'Flash: $0.05/1k chars',
                     default => 'Voice cost varies',
                 },
                 'priceDetail' => $v['priceDetail'] ?? match ($provider) {
                     'openai' => 'OpenAI TTS is billed per generated character. Marin and Cedar are the best-quality picks.',
                     'deepgram' => 'Deepgram Aura-2 is billed per generated character. These are the most natural English options in our catalog.',
+                    '11labs' => 'ElevenLabs uses your connected account quota. Flash/Turbo is the lowest-cost ElevenLabs path for calls.',
                     'azure' => 'Azure neural voices are shown as an estimated per-minute voice cost.',
                     'vapi' => 'Vapi curated voices are shown as an estimated per-minute voice cost.',
                     default => 'Provider pricing varies by account and usage.',
@@ -791,18 +793,21 @@
                 openai: 'OpenAI voice',
                 azure: 'Azure neural',
                 deepgram: 'Deepgram Aura-2',
+                '11labs': 'ElevenLabs',
             };
             const providerHelp = {
                 vapi: 'Curated Vapi voices. Fast setup, simple pricing.',
                 openai: 'OpenAI TTS voices. Marin and Cedar are the best-quality picks.',
                 azure: 'Azure multilingual neural voices for localized language coverage.',
                 deepgram: 'Aura-2 voices. Strong naturalness for English support and intake calls.',
+                '11labs': 'High-quality ElevenLabs voices from the connected account.',
             };
             const providerPriceMetrics = {
                 vapi: '~$0.01/min voice',
                 openai: 'TTS: $15/1M chars',
                 azure: '~$0.01/min voice',
                 deepgram: 'Aura-2: $0.030/1k chars',
+                '11labs': 'Flash: $0.05/1k chars',
             };
             const realtimeCompatibleVoiceIds = ['alloy', 'echo', 'shimmer', 'marin', 'cedar'];
             const freeWorkspace = @js($workspaceIsFree);

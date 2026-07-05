@@ -362,6 +362,61 @@ class AssistantVoiceQualityTest extends TestCase
         $this->assertSame('apollo', $assistant->voice_id);
     }
 
+    public function test_elevenlabs_voice_selection_uses_vapi_11labs_payload(): void
+    {
+        config(['services.elevenlabs.key' => null]);
+
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Concierge Desk',
+            'preset_key' => 'premium_concierge',
+            'language_code' => 'en-US',
+            'voice_provider' => 'elevenlabs',
+            'voice_id' => 'EXAVITQu4vr4xnSDxMaL',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $this->assertSame('11labs', $payload['voice']['provider']);
+                $this->assertSame('EXAVITQu4vr4xnSDxMaL', $payload['voice']['voiceId']);
+                $this->assertSame('eleven_flash_v2_5', $payload['voice']['model']);
+                $this->assertSame(0.5, $payload['voice']['stability']);
+                $this->assertSame(0.75, $payload['voice']['similarityBoost']);
+                $this->assertSame(0.0, $payload['voice']['style']);
+                $this->assertTrue($payload['voice']['useSpeakerBoost']);
+                $this->assertSame(3, $payload['voice']['optimizeStreamingLatency']);
+                $this->assertArrayNotHasKey('speed', $payload['voice']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-11labs-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($assistant, $workspace, [
+            'name' => 'Concierge Desk',
+            'language_code' => 'en-US',
+            'voice_provider' => 'elevenlabs',
+            'voice_id' => 'EXAVITQu4vr4xnSDxMaL',
+            'preset_key' => 'premium_concierge',
+        ]);
+
+        $assistant->refresh();
+        $this->assertSame('11labs', $assistant->voice_provider);
+        $this->assertSame('EXAVITQu4vr4xnSDxMaL', $assistant->voice_id);
+    }
+
     public function test_custom_first_message_is_used_for_standard_models_too(): void
     {
         $workspace = Workspace::factory()->create([
