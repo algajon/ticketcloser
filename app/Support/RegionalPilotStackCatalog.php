@@ -166,6 +166,10 @@ class RegionalPilotStackCatalog
             'model' => $transcriber['model'] ?? null,
             'language' => $transcriber['language'],
             'label' => $transcriber['label'],
+            'language_behaviour' => $transcriber['language_behaviour'] ?? null,
+            'audio_enhancer' => $transcriber['audio_enhancer'] ?? null,
+            'receive_partial_transcripts' => $transcriber['receive_partial_transcripts'] ?? null,
+            'region' => $transcriber['region'] ?? null,
             'fallback' => $transcriber['fallback'] ?? (isset($transcriber['fallback_language'])
                 ? [
                     'provider' => 'azure',
@@ -737,10 +741,18 @@ class RegionalPilotStackCatalog
                 'label' => 'Albanian',
                 'aliases' => ['sq', 'albanian', 'albanian albania', 'shqip', 'shqiperi', 'shqiperia'],
                 'transcriber' => [
-                    'provider' => 'azure',
-                    'language' => 'sq-AL',
-                    'label' => 'Azure Speech (Albanian)',
-                    'fallback' => null,
+                    'provider' => 'gladia',
+                    'model' => 'solaria-1',
+                    'language' => 'sq',
+                    'label' => 'Gladia Solaria-1 (Albanian, noise enhanced)',
+                    'language_behaviour' => 'manual',
+                    'audio_enhancer' => true,
+                    'receive_partial_transcripts' => true,
+                    'region' => 'eu-west',
+                    'fallback' => [
+                        'provider' => 'azure',
+                        'language' => 'sq-AL',
+                    ],
                 ],
                 'standard_voices' => [
                     'default' => ['provider' => 'azure', 'voiceId' => 'sq-AL-AnilaNeural', 'name' => 'Anila Neural', 'speed' => 1.0, 'style' => 'Warm Albanian front-desk voice'],

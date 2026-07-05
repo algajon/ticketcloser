@@ -67,7 +67,7 @@ class AssistantVoiceQualityTest extends TestCase
         $service->provisionAssistantAndToolForConfig($assistant, $workspace, ['name' => 'Front Desk']);
     }
 
-    public function test_albanian_assistants_use_azure_voice_and_transcription(): void
+    public function test_albanian_assistants_use_azure_voice_and_gladia_transcription(): void
     {
         $workspace = Workspace::factory()->create([
             'integration_token' => 'token-123',
@@ -93,11 +93,18 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('azure', $payload['voice']['provider']);
                 $this->assertSame('sq-AL-AnilaNeural', $payload['voice']['voiceId']);
                 $this->assertArrayNotHasKey('speed', $payload['voice']);
-                $this->assertSame('azure', $payload['transcriber']['provider']);
-                $this->assertSame('sq-AL', $payload['transcriber']['language']);
-                $this->assertArrayNotHasKey('model', $payload['transcriber']);
+                $this->assertSame('gladia', $payload['transcriber']['provider']);
+                $this->assertSame('solaria-1', $payload['transcriber']['model']);
+                $this->assertSame('sq', $payload['transcriber']['language']);
+                $this->assertSame('manual', $payload['transcriber']['languageBehaviour']);
+                $this->assertTrue($payload['transcriber']['audioEnhancer']);
+                $this->assertTrue($payload['transcriber']['receivePartialTranscripts']);
+                $this->assertSame('eu-west', $payload['transcriber']['region']);
+                $this->assertTrue($payload['transcriber']['customVocabularyEnabled']);
+                $this->assertSame(['Northline Support', 'Ticket', 'Albanian Desk'], $payload['transcriber']['customVocabularyConfig']['vocabulary']);
                 $this->assertArrayNotHasKey('keyterm', $payload['transcriber']);
-                $this->assertArrayNotHasKey('fallbackPlan', $payload['transcriber']);
+                $this->assertSame('azure', $payload['transcriber']['fallbackPlan']['transcribers'][0]['provider']);
+                $this->assertSame('sq-AL', $payload['transcriber']['fallbackPlan']['transcribers'][0]['language']);
                 $this->assertStringStartsWith('Përshëndetje, faleminderit që telefonuat mbështetjen.', $payload['firstMessage']);
 
                 return true;

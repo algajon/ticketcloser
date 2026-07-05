@@ -1337,6 +1337,23 @@ PROMPT);
             $payload['smartFormat'] = true;
             $payload['numerals'] = true;
             $payload['keyterm'] = $keyterms;
+        } elseif (($transcriber['provider'] ?? null) === 'gladia') {
+            $payload['model'] = $transcriber['model'] ?? 'solaria-1';
+            $payload['languageBehaviour'] = $transcriber['language_behaviour'] ?? 'manual';
+            $payload['audioEnhancer'] = (bool) ($transcriber['audio_enhancer'] ?? true);
+            $payload['receivePartialTranscripts'] = (bool) ($transcriber['receive_partial_transcripts'] ?? true);
+
+            if (! empty($transcriber['region'])) {
+                $payload['region'] = $transcriber['region'];
+            }
+
+            if ($keyterms !== []) {
+                $payload['transcriptionHint'] = 'Prioritize these business terms and names when heard clearly: ' . implode(', ', $keyterms) . '.';
+                $payload['customVocabularyEnabled'] = true;
+                $payload['customVocabularyConfig'] = [
+                    'vocabulary' => $keyterms,
+                ];
+            }
         } elseif (! empty($transcriber['model'])) {
             $payload['model'] = $transcriber['model'];
         }
