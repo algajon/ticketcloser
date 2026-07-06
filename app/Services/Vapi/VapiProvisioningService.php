@@ -15,17 +15,17 @@ use Illuminate\Support\Str;
 
 class VapiProvisioningService
 {
-    private const HUMANE_DEFAULT_WAIT_SECONDS = 0.6;
-    private const HUMANE_MIN_WAIT_SECONDS = 0.5;
+    private const HUMANE_DEFAULT_WAIT_SECONDS = 0.4;
+    private const HUMANE_MIN_WAIT_SECONDS = 0.3;
     private const HUMANE_MAX_WAIT_SECONDS = 1.5;
     private const HUMANE_DEFAULT_INTERRUPT_WORDS = 2;
     private const HUMANE_MIN_INTERRUPT_WORDS = 1;
     private const HUMANE_MAX_INTERRUPT_WORDS = 8;
-    private const HUMANE_DEFAULT_VOICE_SECONDS = 0.22;
+    private const HUMANE_DEFAULT_VOICE_SECONDS = 0.2;
     private const HUMANE_MIN_VOICE_SECONDS = 0.15;
     private const HUMANE_MAX_VOICE_SECONDS = 0.5;
-    private const HUMANE_DEFAULT_BACKOFF_SECONDS = 1.1;
-    private const HUMANE_MIN_BACKOFF_SECONDS = 1.0;
+    private const HUMANE_DEFAULT_BACKOFF_SECONDS = 0.85;
+    private const HUMANE_MIN_BACKOFF_SECONDS = 0.5;
     private const HUMANE_MAX_BACKOFF_SECONDS = 2.5;
     public function __construct(
         private readonly VapiClient $vapi,
@@ -76,7 +76,8 @@ class VapiProvisioningService
             'model_name' => $resolvedModelName,
             'preset_key' => $resolvedPresetKey,
             'override_params' => $this->normalizeHumaneTimingOverrides(
-                $input['override_params'] ?? $config->override_params ?? []
+                $input['override_params'] ?? $config->override_params ?? [],
+                $resolvedPresetKey
             ),
             'intake_params' => $input['intake_params'] ?? $config->intake_params,
             'is_active' => $input['is_active'] ?? true,
@@ -996,7 +997,7 @@ class VapiProvisioningService
         );
         $stopSpeakingPlan = $this->applyStopSpeakingDefaults($presetData['stopSpeakingPlan'] ?? [], $config);
 
-        $overrides = $config->override_params ?? [];
+        $overrides = $this->normalizeHumaneTimingOverrides($config->override_params ?? [], $presetKey);
         if (isset($overrides['waitSeconds'])) {
             $startSpeakingPlan['waitSeconds'] = (float) $overrides['waitSeconds'];
         }
@@ -1554,16 +1555,18 @@ PROMPT);
 
         $languageCode = strtolower((string) ($config->language_code ?: 'en-US'));
         $isEnglish = str_starts_with($languageCode, 'en');
-        $endpointingProvider = strtolower((string) data_get($startSpeakingPlan, 'smartEndpointingPlan.provider'));
 
-        if (! $isEnglish && ($endpointingProvider === '' || $endpointingProvider === 'livekit')) {
-            $startSpeakingPlan['smartEndpointingPlan'] = [
-                'provider' => 'vapi',
+        if (! $isEnglish) {
+            unset($startSpeakingPlan['smartEndpointingPlan']);
+            $startSpeakingPlan['transcriptionEndpointingPlan'] = [
+                'onPunctuationSeconds' => 0.1,
+                'onNoPunctuationSeconds' => 1.0,
+                'onNumberSeconds' => 0.4,
             ];
         } elseif (! isset($startSpeakingPlan['smartEndpointingPlan'])) {
             $startSpeakingPlan['smartEndpointingPlan'] = [
                 'provider' => 'livekit',
-                'waitFunction' => '280 + 3200 * x',
+                'waitFunction' => '2000 / (1 + exp(-10 * (x - 0.5)))',
             ];
         }
 
@@ -1581,12 +1584,13 @@ PROMPT);
         return $stopSpeakingPlan;
     }
 
-    private function normalizeHumaneTimingOverrides(?array $overrides): array
+    private function normalizeHumaneTimingOverrides(?array $overrides, ?string $presetKey = null): array
     {
         $overrides = is_array($overrides) ? $overrides : [];
+        $normalized = [];
 
         if (array_key_exists('waitSeconds', $overrides) && filled($overrides['waitSeconds'])) {
-            $overrides['waitSeconds'] = $this->clampFloat(
+            $normalized['waitSeconds'] = $this->clampFloat(
                 (float) $overrides['waitSeconds'],
                 self::HUMANE_MIN_WAIT_SECONDS,
                 self::HUMANE_MAX_WAIT_SECONDS,
@@ -1594,7 +1598,7 @@ PROMPT);
         }
 
         if (array_key_exists('numWords', $overrides) && filled($overrides['numWords'])) {
-            $overrides['numWords'] = $this->clampInt(
+            $normalized['numWords'] = $this->clampInt(
                 (int) $overrides['numWords'],
                 self::HUMANE_MIN_INTERRUPT_WORDS,
                 self::HUMANE_MAX_INTERRUPT_WORDS,
@@ -1602,14 +1606,25 @@ PROMPT);
         }
 
         if (array_key_exists('backoffSeconds', $overrides) && filled($overrides['backoffSeconds'])) {
-            $overrides['backoffSeconds'] = $this->clampFloat(
+            $normalized['backoffSeconds'] = $this->clampFloat(
                 (float) $overrides['backoffSeconds'],
                 self::HUMANE_MIN_BACKOFF_SECONDS,
                 self::HUMANE_MAX_BACKOFF_SECONDS,
             );
         }
 
-        return $overrides;
+        if ($this->looksLikeLegacyAutomaticTiming($normalized)) {
+            return [];
+        }
+
+        $defaults = $this->timingDefaultsForPreset($presetKey);
+        foreach ($defaults as $key => $value) {
+            if (array_key_exists($key, $normalized) && (string) $normalized[$key] === (string) $value) {
+                unset($normalized[$key]);
+            }
+        }
+
+        return $normalized;
     }
 
     private function enforceHumaneStartSpeakingPlan(array $startSpeakingPlan): array
@@ -1652,6 +1667,47 @@ PROMPT);
     private function clampInt(int $value, int $min, int $max): int
     {
         return min(max($value, $min), $max);
+    }
+
+    private function timingDefaultsForPreset(?string $presetKey): array
+    {
+        $preset = AssistantPreset::ensureDefaults()->firstWhere(
+            'key',
+            AssistantPreset::normalizeKey($presetKey ?: 'bright_guide')
+        );
+        $payload = $preset?->vapi_payload_json ?? [];
+
+        return [
+            'waitSeconds' => $this->clampFloat(
+                (float) data_get($payload, 'startSpeakingPlan.waitSeconds', self::HUMANE_DEFAULT_WAIT_SECONDS),
+                self::HUMANE_MIN_WAIT_SECONDS,
+                self::HUMANE_MAX_WAIT_SECONDS,
+            ),
+            'numWords' => $this->clampInt(
+                (int) data_get($payload, 'stopSpeakingPlan.numWords', self::HUMANE_DEFAULT_INTERRUPT_WORDS),
+                self::HUMANE_MIN_INTERRUPT_WORDS,
+                self::HUMANE_MAX_INTERRUPT_WORDS,
+            ),
+            'backoffSeconds' => $this->clampFloat(
+                (float) data_get($payload, 'stopSpeakingPlan.backoffSeconds', self::HUMANE_DEFAULT_BACKOFF_SECONDS),
+                self::HUMANE_MIN_BACKOFF_SECONDS,
+                self::HUMANE_MAX_BACKOFF_SECONDS,
+            ),
+        ];
+    }
+
+    private function looksLikeLegacyAutomaticTiming(array $overrides): bool
+    {
+        $keys = array_keys($overrides);
+        sort($keys);
+
+        if ($keys !== ['backoffSeconds', 'numWords', 'waitSeconds']) {
+            return false;
+        }
+
+        return in_array((float) $overrides['waitSeconds'], [0.55, 0.6, 0.65, 0.7], true)
+            && in_array((int) $overrides['numWords'], [2, 3], true)
+            && in_array((float) $overrides['backoffSeconds'], [1.0, 1.05, 1.1, 1.15], true);
     }
 
     private function defaultVoiceProfile(AssistantConfig $config, Workspace $workspace): array
