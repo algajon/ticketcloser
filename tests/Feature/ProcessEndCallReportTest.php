@@ -567,6 +567,60 @@ class ProcessEndCallReportTest extends TestCase
     }
 
     /** @test */
+    public function it_repairs_garbled_non_english_assistant_opening_lines_from_the_configured_first_message(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'default_language_code' => 'sq-AL',
+        ]);
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Sales Assistant',
+            'vapi_assistant_id' => 'ast_sq_1',
+            'language_code' => 'sq-AL',
+            'first_message' => 'Pershendetje',
+        ]);
+
+        $case = SupportCase::create([
+            'workspace_id' => $workspace->id,
+            'assistant_config_id' => $assistant->id,
+            'case_number' => 'TC-ENDCALL-SQ',
+            'title' => 'New ticket',
+            'description' => 'New case, no description',
+            'status' => SupportCase::STATUS_NEW,
+            'priority' => SupportCase::PRIORITY_NORMAL,
+            'source' => SupportCase::SOURCE_VOICE,
+            'external_call_id' => 'call_sq_opening',
+        ]);
+
+        $payload = [
+            'message' => [
+                'type' => 'end-of-call-report',
+                'call' => [
+                    'id' => 'call_sq_opening',
+                    'assistantId' => 'ast_sq_1',
+                    'customer' => [
+                        'number' => '+355691234567',
+                    ],
+                ],
+                'artifact' => [
+                    'transcript' => "Sales Assistant: Prashanth Deitya\nCaller: Allo.",
+                ],
+            ],
+        ];
+
+        (new ProcessEndCallReport($workspace, $payload))->handle(app(\App\Services\Vapi\VapiCallSyncService::class));
+
+        $callEvent = CallEvent::query()->where('vapi_call_id', 'call_sq_opening')->firstOrFail();
+        $case->refresh();
+
+        $this->assertStringContainsString('Sales Assistant: Përshëndetje.', (string) $callEvent->transcript);
+        $this->assertStringContainsString('Caller: Allo.', (string) $callEvent->transcript);
+        $this->assertStringNotContainsString('Prashanth Deitya', (string) $callEvent->transcript);
+        $this->assertSame($callEvent->transcript, $case->transcript);
+    }
+
+    /** @test */
     public function it_deactivates_free_workspace_phone_numbers_once_the_usage_cap_is_reached(): void
     {
         $workspace = Workspace::factory()->create([

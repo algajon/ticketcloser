@@ -91,18 +91,21 @@ class VapiCallSyncService
         $occurredAt = $this->extractOccurredAt($context);
         $fromNumber = $this->extractFromNumber($context);
         $toNumber = $this->extractToNumber($context);
-        $transcript = $this->extractTranscript($context);
-        $transcriptWasExplicitlyProvided = $this->contextHasTranscriptArtifact($context);
-        $recordingUrl = $this->extractRecordingUrl($context);
-        $contactName = $this->extractContactName($context, $transcript);
-        $contactEmail = $this->extractContactEmail($context);
-
         $case = SupportCase::query()
             ->where('workspace_id', $workspace->id)
             ->where('external_call_id', $callId)
             ->first();
         $assistantConfig = $this->resolveAssistantConfig($workspace, $context, $case);
         $voiceMetadata = $this->extractVoiceMetadata($workspace, $context, $assistantConfig);
+        $transcript = $this->repairAssistantOpeningTranscript(
+            $this->extractTranscript($context),
+            $assistantConfig,
+            $workspace,
+        );
+        $transcriptWasExplicitlyProvided = $this->contextHasTranscriptArtifact($context);
+        $recordingUrl = $this->extractRecordingUrl($context);
+        $contactName = $this->extractContactName($context, $transcript);
+        $contactEmail = $this->extractContactEmail($context);
 
         $callEvent = $existingCallEvent
             ?? CallEvent::query()->where('vapi_call_id', $callId)->first()
@@ -809,6 +812,67 @@ class VapiCallSyncService
             ->all();
 
         return count($lines) > 0 ? implode("\n", $lines) : null;
+    }
+
+    private function repairAssistantOpeningTranscript(?string $transcript, ?AssistantConfig $assistantConfig, Workspace $workspace): ?string
+    {
+        if (! is_string($transcript) || trim($transcript) === '' || ! $assistantConfig) {
+            return $transcript;
+        }
+
+        $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode(
+            $assistantConfig->language_code,
+            $workspace->preferredLanguageCode()
+        );
+
+        if (! $languageCode || str_starts_with($languageCode, 'en')) {
+            return $transcript;
+        }
+
+        $opening = $this->configuredAssistantOpening($assistantConfig, $languageCode);
+        if ($opening === '') {
+            return $transcript;
+        }
+
+        $lines = preg_split('/\r\n|\r|\n/', $transcript) ?: [];
+        foreach ($lines as $index => $line) {
+            if (preg_match('/^\s*(Caller|User|Customer)\s*:/i', $line) === 1) {
+                break;
+            }
+
+            if (preg_match('/^\s*((?:[\pL\pN\' -]+\s)?Assistant|Bot)\s*:\s*(.*)$/iu', $line, $matches) !== 1) {
+                continue;
+            }
+
+            $speaker = trim((string) ($matches[1] ?? 'Assistant'));
+            $lines[$index] = "{$speaker}: {$opening}";
+
+            return implode("\n", $lines);
+        }
+
+        return $transcript;
+    }
+
+    private function configuredAssistantOpening(AssistantConfig $assistantConfig, string $languageCode): string
+    {
+        $opening = trim((string) $assistantConfig->first_message);
+
+        if ($opening === '') {
+            $opening = RegionalPilotStackCatalog::defaultFirstMessage($languageCode);
+        }
+
+        $opening = preg_replace('/\{\{.*?\}\}/', '', $opening) ?? $opening;
+        $opening = preg_replace('/\s+/', ' ', $opening) ?? $opening;
+        $opening = trim($opening);
+
+        if (
+            $languageCode === 'sq-AL'
+            && preg_match('/^p[eë]rsh[eë]ndetje[.!?]?$/iu', $opening) === 1
+        ) {
+            return 'Përshëndetje.';
+        }
+
+        return $opening;
     }
 
     private function looksLikeSystemPromptMessage(string $message): bool
