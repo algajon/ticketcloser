@@ -272,6 +272,48 @@ class AssistantVoiceQualityTest extends TestCase
         $this->assertSame('Emma', $assistant->voice_id);
     }
 
+    public function test_blank_voice_id_uses_default_for_saved_provider(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Maintenance Desk',
+            'preset_key' => 'steady_operator',
+            'language_code' => 'en-US',
+            'model_name' => 'gpt-4o-mini',
+            'voice_provider' => 'vapi',
+            'voice_id' => null,
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $this->assertSame('vapi', $payload['voice']['provider']);
+                $this->assertSame('Savannah', $payload['voice']['voiceId']);
+                $this->assertSame(2, $payload['voice']['version']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($assistant, $workspace, [
+            'name' => 'Maintenance Desk',
+            'voice_provider' => 'vapi',
+            'voice_id' => null,
+        ]);
+    }
+
     public function test_standard_models_can_use_openai_tts_voices_without_realtime_model(): void
     {
         $workspace = Workspace::factory()->create([

@@ -1276,12 +1276,23 @@ PROMPT);
     {
         $defaultVoice = $this->defaultVoiceProfile($config, $workspace);
         $voiceProvider = $config->voice_provider ?: $defaultVoice['provider'];
-        $voiceId = $config->voice_id ?: $defaultVoice['voiceId'];
+        $voiceId = $config->voice_id ?: $this->defaultVoiceIdForProvider($voiceProvider, $config, $workspace);
         $isRealtimeModel = AssistantConfig::isRealtimeModelName($config->model_name);
 
-        if ($voiceId === 'Hana') {
+        if (! $voiceId) {
             $voiceProvider = $defaultVoice['provider'];
             $voiceId = $defaultVoice['voiceId'];
+        }
+
+        if ($voiceId === 'Hana' || ! $this->voiceIdMatchesProvider($voiceProvider, $voiceId, $config, $workspace)) {
+            $providerDefaultVoiceId = $this->defaultVoiceIdForProvider($voiceProvider, $config, $workspace);
+
+            if ($providerDefaultVoiceId) {
+                $voiceId = $providerDefaultVoiceId;
+            } else {
+                $voiceProvider = $defaultVoice['provider'];
+                $voiceId = $defaultVoice['voiceId'];
+            }
         }
 
         if ($isRealtimeModel && ! $this->supportsRealtimeVoice($voiceProvider, $voiceId)) {
@@ -1766,6 +1777,47 @@ PROMPT);
             'confident_closer' => ['provider' => 'vapi', 'voiceId' => 'Elliot', 'speed' => 1.0],
             'premium_concierge' => ['provider' => 'vapi', 'voiceId' => 'Clara', 'speed' => 0.98],
             default => ['provider' => 'vapi', 'voiceId' => 'Emma', 'speed' => 1.0],
+        };
+    }
+
+    private function defaultVoiceIdForProvider(string $provider, AssistantConfig $config, Workspace $workspace): ?string
+    {
+        $presetKey = AssistantPreset::normalizeKey($config->preset_key);
+        $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode(
+            $config->language_code,
+            $workspace->preferredLanguageCode()
+        ) ?: 'en-US';
+
+        return match ($provider) {
+            'vapi' => match ($presetKey) {
+                'steady_operator' => 'Savannah',
+                'confident_closer' => 'Elliot',
+                'premium_concierge' => 'Clara',
+                default => 'Emma',
+            },
+            'deepgram' => $this->defaultDeepgramVoiceForPreset($presetKey, $languageCode),
+            'openai' => $this->defaultOpenAiVoiceForPreset($presetKey),
+            '11labs' => str_starts_with($languageCode, 'en-')
+                ? $this->defaultElevenLabsVoiceForPreset($presetKey)
+                : null,
+            default => null,
+        };
+    }
+
+    private function voiceIdMatchesProvider(string $provider, string $voiceId, AssistantConfig $config, Workspace $workspace): bool
+    {
+        $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode(
+            $config->language_code,
+            $workspace->preferredLanguageCode()
+        ) ?: 'en-US';
+
+        return match ($provider) {
+            'vapi' => in_array($voiceId, ['Clara', 'Godfrey', 'Elliot', 'Savannah', 'Nico', 'Kai', 'Emma', 'Sagar'], true),
+            'openai' => $this->supportsOpenAiVoice($voiceId),
+            'deepgram' => $this->supportsCatalogVoice('deepgram', $this->normalizeDeepgramVoiceId($voiceId), $languageCode),
+            '11labs' => str_starts_with($languageCode, 'en-') || $this->supportsCatalogVoice('11labs', $voiceId, $languageCode),
+            'azure' => $this->supportsCatalogVoice('azure', $voiceId, $languageCode),
+            default => true,
         };
     }
 
