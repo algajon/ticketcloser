@@ -1348,7 +1348,7 @@ PROMPT);
             }
 
             if (! empty($transcriber['endpointing'])) {
-                $payload['endpointing'] = (int) $transcriber['endpointing'];
+                $payload['endpointing'] = (float) $transcriber['endpointing'];
             }
 
             if ($keyterms !== []) {

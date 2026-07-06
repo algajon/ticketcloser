@@ -749,7 +749,7 @@ class RegionalPilotStackCatalog
                     'language_behaviour' => 'manual',
                     'audio_enhancer' => true,
                     'receive_partial_transcripts' => true,
-                    'endpointing' => 450,
+                    'endpointing' => 0.45,
                     'region' => 'eu-west',
                     'fallback' => [
                         'provider' => 'azure',

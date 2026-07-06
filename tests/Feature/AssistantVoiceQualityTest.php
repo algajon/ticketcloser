@@ -99,7 +99,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('manual', $payload['transcriber']['languageBehaviour']);
                 $this->assertTrue($payload['transcriber']['audioEnhancer']);
                 $this->assertTrue($payload['transcriber']['receivePartialTranscripts']);
-                $this->assertSame(450, $payload['transcriber']['endpointing']);
+                $this->assertSame(0.45, $payload['transcriber']['endpointing']);
                 $this->assertSame('eu-west', $payload['transcriber']['region']);
                 $this->assertTrue($payload['transcriber']['customVocabularyEnabled']);
                 $this->assertSame(['Northline Support', 'Ticket', 'Albanian Desk'], $payload['transcriber']['customVocabularyConfig']['vocabulary']);
