@@ -711,7 +711,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('nova-3', $payload['transcriber']['model']);
                 $this->assertSame('hi', $payload['transcriber']['language']);
                 $this->assertSame('hi-IN', $payload['transcriber']['fallbackPlan']['transcribers'][0]['language']);
-                $this->assertStringContainsString('Keep caller-facing replies in hi-IN', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Keep every caller-facing reply in hi-IN', $payload['model']['messages'][0]['content']);
 
                 return true;
             }))
@@ -753,7 +753,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('nova-3', $payload['transcriber']['model']);
                 $this->assertSame('de', $payload['transcriber']['language']);
                 $this->assertSame('de-DE', $payload['transcriber']['fallbackPlan']['transcribers'][0]['language']);
-                $this->assertStringContainsString('Keep caller-facing replies in de-DE', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Keep every caller-facing reply in de-DE', $payload['model']['messages'][0]['content']);
 
                 return true;
             }))
@@ -796,7 +796,7 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('de-DE-KlausNeural', $payload['voice']['voiceId']);
                 $this->assertArrayNotHasKey('speed', $payload['voice']);
                 $this->assertSame('de', $payload['transcriber']['language']);
-                $this->assertStringContainsString('Keep caller-facing replies in de-DE', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Keep every caller-facing reply in de-DE', $payload['model']['messages'][0]['content']);
 
                 return true;
             }))
@@ -864,6 +864,114 @@ class AssistantVoiceQualityTest extends TestCase
         $this->assertSame('hi-IN', $assistant->language_code);
         $this->assertSame('azure', $assistant->voice_provider);
         $this->assertSame('hi-IN-SwaraNeural', $assistant->voice_id);
+    }
+
+    public function test_non_english_elevenlabs_selection_falls_back_to_curated_language_voice(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Albanian Sales',
+            'preset_key' => 'bright_guide',
+            'language_code' => 'sq-AL',
+            'voice_provider' => '11labs',
+            'voice_id' => 'bIHbv24MWmeRgasZH58o',
+            'first_message' => 'Hello. Thank you for calling. How can I help today?',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $this->assertSame('azure', $payload['voice']['provider']);
+                $this->assertSame('sq-AL-AnilaNeural', $payload['voice']['voiceId']);
+                $this->assertSame('gladia', $payload['transcriber']['provider']);
+                $this->assertStringContainsString('Keep every caller-facing reply in sq-AL', $payload['model']['messages'][0]['content']);
+                $this->assertStringContainsString('Do not switch languages just because the caller says a short greeting', $payload['model']['messages'][0]['content']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-sq-11labs-fallback-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($assistant, $workspace, [
+            'name' => 'Albanian Sales',
+            'language_code' => 'sq-AL',
+            'voice_provider' => '11labs',
+            'voice_id' => 'bIHbv24MWmeRgasZH58o',
+            'preset_key' => 'bright_guide',
+            'first_message' => 'Hello. Thank you for calling. How can I help today?',
+        ]);
+
+        $assistant->refresh();
+        $this->assertSame('sq-AL', $assistant->language_code);
+        $this->assertSame('azure', $assistant->voice_provider);
+        $this->assertSame('sq-AL-AnilaNeural', $assistant->voice_id);
+        $this->assertSame('Përshëndetje, faleminderit që telefonuat mbështetjen. Si mund t’ju ndihmoj sot?', $assistant->first_message);
+    }
+
+    public function test_english_elevenlabs_gets_provider_fallback_and_clears_stale_albanian_opening(): void
+    {
+        $workspace = Workspace::factory()->create([
+            'integration_token' => 'token-123',
+            'name' => 'Northline Support',
+            'plan_key' => 'pro',
+        ]);
+        AssistantPreset::ensureDefaults();
+
+        $assistant = AssistantConfig::create([
+            'workspace_id' => $workspace->id,
+            'name' => 'Sales Assistant',
+            'preset_key' => 'bright_guide',
+            'language_code' => 'en-US',
+            'voice_provider' => '11labs',
+            'voice_id' => 'bIHbv24MWmeRgasZH58o',
+            'first_message' => 'Pershendetje',
+        ]);
+
+        $client = $this->createMock(VapiClient::class);
+        $client->expects($this->exactly(4))
+            ->method('createTool')
+            ->willReturnOnConsecutiveCalls(['id' => 'tool-1'], ['id' => 'tool-2'], ['id' => 'tool-3'], ['id' => 'tool-4']);
+        $client->expects($this->once())
+            ->method('createAssistant')
+            ->with($this->callback(function (array $payload): bool {
+                $this->assertSame('11labs', $payload['voice']['provider']);
+                $this->assertSame('bIHbv24MWmeRgasZH58o', $payload['voice']['voiceId']);
+                $this->assertSame('eleven_flash_v2_5', $payload['voice']['model']);
+                $this->assertSame('deepgram', $payload['voice']['fallbackPlan']['voices'][0]['provider']);
+                $this->assertSame('andromeda', $payload['voice']['fallbackPlan']['voices'][0]['voiceId']);
+                $this->assertSame('aura-2', $payload['voice']['fallbackPlan']['voices'][0]['model']);
+                $this->assertStringStartsWith('Hi, thanks for calling support. How can I help today?', $payload['firstMessage']);
+                $this->assertStringContainsString('Keep caller-facing replies in en-US', $payload['model']['messages'][0]['content']);
+
+                return true;
+            }))
+            ->willReturn(['id' => 'assistant-en-11labs-fallback-1']);
+
+        $service = new VapiProvisioningService($client);
+        $service->provisionAssistantAndToolForConfig($assistant, $workspace, [
+            'name' => 'Sales Assistant',
+            'language_code' => 'en-US',
+            'voice_provider' => '11labs',
+            'voice_id' => 'bIHbv24MWmeRgasZH58o',
+            'preset_key' => 'bright_guide',
+            'first_message' => 'Pershendetje',
+        ]);
+
+        $assistant->refresh();
+        $this->assertSame('en-US', $assistant->language_code);
+        $this->assertSame('11labs', $assistant->voice_provider);
+        $this->assertSame('Hi, thanks for calling support. How can I help today?', $assistant->first_message);
     }
 
     public function test_non_english_standard_models_can_use_openai_multilingual_tts_voices(): void

@@ -608,9 +608,15 @@ class VapiWebhookController extends Controller
     {
         $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode($languageCode);
 
-        return $languageCode
-            ? "\n\n[SYSTEM NOTE: Keep caller-facing replies in {$languageCode} unless the caller clearly switches language and the business supports that change.]"
-            : '';
+        if (! $languageCode) {
+            return '';
+        }
+
+        if (str_starts_with($languageCode, 'en-')) {
+            return "\n\n[SYSTEM NOTE: Keep caller-facing replies in {$languageCode}. If the caller explicitly asks to continue in another supported language, switch only after confirming the language.]";
+        }
+
+        return "\n\n[SYSTEM NOTE: Keep every caller-facing reply in {$languageCode}. Do not switch languages just because the caller says a short greeting such as hello, hi, ok, yes, or thanks. Switch only if the caller explicitly asks to continue in another supported language, or speaks a full request in that language and confirms the switch. If uncertain, continue in {$languageCode}.]";
     }
 
     private function silentHandoffGuardrailsPrompt(): string

@@ -321,7 +321,7 @@ class VapiWebhookTest extends TestCase
         $this->assertNotNull($smsTool);
         $this->assertSame('+18005550199', $smsTool['metadata']['from']);
         $this->assertStringContainsString(
-            'Keep caller-facing replies in fr-FR',
+            'Keep every caller-facing reply in fr-FR',
             $response->json('assistantOverrides.model.messages.0.content')
         );
         $this->assertStringContainsString(
@@ -555,7 +555,7 @@ class VapiWebhookTest extends TestCase
             ' आपसे फिर बात करके खुशी हुई, Aarav.'
         );
         $this->assertStringContainsString(
-            'Keep caller-facing replies in hi-IN',
+            'Keep every caller-facing reply in hi-IN',
             $response->json('assistantOverrides.model.messages.0.content')
         );
     }

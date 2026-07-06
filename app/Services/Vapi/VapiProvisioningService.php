@@ -11,6 +11,7 @@ use App\Models\WorkspacePhoneNumber;
 use App\Services\Assistants\AssistantScriptLocalizer;
 use App\Support\RegionalPilotStackCatalog;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class VapiProvisioningService
 {
@@ -64,7 +65,10 @@ class VapiProvisioningService
 
         $config->fill([
             'name' => $input['name'] ?? $config->name,
-            'first_message' => $input['first_message'] ?? $config->first_message,
+            'first_message' => $this->normalizeFirstMessageForLanguage(
+                $input['first_message'] ?? $config->first_message,
+                $resolvedLanguageCode
+            ),
             'system_prompt' => $input['system_prompt'] ?? $config->system_prompt,
             'voice_provider' => $resolvedVoiceProvider,
             'voice_id' => $resolvedVoiceId,
@@ -877,7 +881,7 @@ class VapiProvisioningService
         $systemPrompt .= "\n\n" . $this->smsConfirmationGuardrailsPrompt($workspace);
 
         if (! empty($config->language_code)) {
-            $systemPrompt .= "\n\n[SYSTEM NOTE: Keep caller-facing replies in {$config->language_code} unless the caller clearly switches language and the business supports that change.]";
+            $systemPrompt .= "\n\n".$this->languageGuardrailPrompt($config->language_code);
         }
 
         $operatorPrompt = $this->operatorRoutingPrompt($config, $workspace);
@@ -1304,6 +1308,13 @@ PROMPT);
             $voice['style'] = 0.0;
             $voice['useSpeakerBoost'] = true;
             $voice['optimizeStreamingLatency'] = 3;
+
+            $fallbackVoice = $this->fallbackVoiceForPrimary($config, $workspace, $voiceProvider, $voiceId);
+            if ($fallbackVoice) {
+                $voice['fallbackPlan'] = [
+                    'voices' => [$fallbackVoice],
+                ];
+            }
         }
 
         return $voice;
@@ -1756,9 +1767,21 @@ PROMPT);
                 return ['11labs', $voiceId];
             }
 
-            $voiceId = $this->defaultElevenLabsVoiceForPreset($presetKey);
+            if (str_starts_with($languageCode, 'en-')) {
+                return ['11labs', $voiceId ?: $this->defaultElevenLabsVoiceForPreset($presetKey)];
+            }
 
-            return ['11labs', $voiceId];
+            $standardVoice = RegionalPilotStackCatalog::standardVoiceProfile(
+                $languageCode,
+                $presetKey,
+                $workspace->primaryMarket(),
+            );
+
+            if (is_array($standardVoice)) {
+                return [$standardVoice['provider'] ?? null, $standardVoice['voiceId'] ?? null];
+            }
+
+            return ['openai', $this->defaultOpenAiVoiceForPreset($presetKey)];
         }
 
         return [$voiceProvider, $voiceId];
@@ -1918,6 +1941,116 @@ PROMPT);
         });
     }
 
+    private function normalizeFirstMessageForLanguage(?string $firstMessage, string $languageCode): ?string
+    {
+        $firstMessage = trim((string) $firstMessage);
+
+        if ($firstMessage === '') {
+            return null;
+        }
+
+        if (! $this->firstMessageLooksStaleForLanguage($firstMessage, $languageCode)) {
+            return $firstMessage;
+        }
+
+        return RegionalPilotStackCatalog::defaultFirstMessage($languageCode, 'support');
+    }
+
+    private function firstMessageLooksStaleForLanguage(string $firstMessage, string $languageCode): bool
+    {
+        $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode($languageCode, 'en-US') ?: 'en-US';
+        $normalized = $this->normalizeOpeningForComparison($firstMessage);
+
+        if ($normalized === '') {
+            return false;
+        }
+
+        $knownGreetings = [
+            'sq-AL' => ['pershendetje', 'përshëndetje'],
+            'en-US' => ['hi thanks for calling how can i help today', 'hello thank you for calling how can i help today', 'thanks for calling how can i help today'],
+        ];
+
+        foreach ($knownGreetings as $messageLanguage => $messages) {
+            if ($messageLanguage === $languageCode) {
+                continue;
+            }
+
+            foreach ($messages as $message) {
+                if ($normalized === $this->normalizeOpeningForComparison($message)) {
+                    return true;
+                }
+            }
+        }
+
+        foreach (RegionalPilotStackCatalog::supportedLanguageCodes() as $messageLanguage) {
+            if ($messageLanguage === $languageCode) {
+                continue;
+            }
+
+            $defaultMessage = RegionalPilotStackCatalog::defaultFirstMessage($messageLanguage, 'support');
+            if ($normalized === $this->normalizeOpeningForComparison($defaultMessage)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private function normalizeOpeningForComparison(string $message): string
+    {
+        $message = preg_replace('/\{\{.*?\}\}/', '', $message) ?? $message;
+        $message = Str::ascii(Str::lower($message));
+        $message = preg_replace('/[^a-z0-9]+/', ' ', $message) ?? $message;
+
+        return trim((string) preg_replace('/\s+/', ' ', $message));
+    }
+
+    private function languageGuardrailPrompt(string $languageCode): string
+    {
+        $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode($languageCode, 'en-US') ?: 'en-US';
+
+        if (str_starts_with($languageCode, 'en-')) {
+            return "[SYSTEM NOTE: Keep caller-facing replies in {$languageCode}. If the caller explicitly asks to continue in another supported language, switch only after confirming the language.]";
+        }
+
+        return "[SYSTEM NOTE: Keep every caller-facing reply in {$languageCode}. Do not switch languages just because the caller says a short greeting such as hello, hi, ok, yes, or thanks. Switch only if the caller explicitly asks to continue in another supported language, or speaks a full request in that language and confirms the switch. If uncertain, continue in {$languageCode}.]";
+    }
+
+    private function fallbackVoiceForPrimary(AssistantConfig $config, Workspace $workspace, string $primaryProvider, string $primaryVoiceId): ?array
+    {
+        $fallback = $this->defaultVoiceProfile($config, $workspace);
+        $provider = $fallback['provider'] ?? null;
+        $voiceId = $fallback['voiceId'] ?? null;
+
+        if (! $provider || ! $voiceId) {
+            return null;
+        }
+
+        if ($provider === $primaryProvider && strcasecmp((string) $voiceId, $primaryVoiceId) === 0) {
+            $voiceId = $this->defaultDeepgramVoiceForPreset($config->preset_key, $config->language_code);
+            $provider = $voiceId ? 'deepgram' : null;
+        }
+
+        if (! $provider || ! $voiceId || $provider === $primaryProvider) {
+            return null;
+        }
+
+        $voice = [
+            'provider' => $provider,
+            'voiceId' => $voiceId,
+        ];
+
+        if ($provider === 'vapi') {
+            $voice['version'] = 2;
+        }
+
+        if ($provider === 'deepgram') {
+            $voice['model'] = 'aura-2';
+        }
+
+        return $voice;
+    }
+
     private function buildFirstMessage(AssistantConfig $config, Workspace $workspace): string
     {
         $base = trim((string) $config->first_message);
@@ -1942,14 +2075,14 @@ PROMPT);
     private function normalizeLanguageCode(?string $languageCode, ?string $voiceId, Workspace $workspace): string
     {
         $languageCode = RegionalPilotStackCatalog::normalizeLanguageCode($languageCode);
-        $voiceLanguageCode = RegionalPilotStackCatalog::languageCodeForVoiceId($voiceId);
-
-        if ($voiceLanguageCode && $voiceLanguageCode !== 'multi') {
-            return $voiceLanguageCode;
-        }
 
         if ($languageCode) {
             return $languageCode;
+        }
+
+        $voiceLanguageCode = RegionalPilotStackCatalog::languageCodeForVoiceId($voiceId);
+        if ($voiceLanguageCode && $voiceLanguageCode !== 'multi') {
+            return $voiceLanguageCode;
         }
 
         return $workspace->preferredLanguageCode();
