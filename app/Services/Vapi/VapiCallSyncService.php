@@ -547,7 +547,7 @@ class VapiCallSyncService
                 $ended = Carbon::parse($endedAt);
 
                 if ($ended->greaterThan($started)) {
-                    return $started->diffInSeconds($ended);
+                    return (int) round($started->diffInSeconds($ended));
                 }
             } catch (\Throwable) {
                 // Ignore malformed timestamps.
