@@ -24,9 +24,9 @@
         $defaultPresetKey = \App\Models\AssistantPreset::normalizeKey(data_get($defaultAssistantDraft, 'preset_key', 'bright_guide'));
         $selectedPresetKey = old('preset_key', \App\Models\AssistantPreset::normalizeKey($config->preset_key ?? $defaultPresetKey));
         $presetMeta = collect($presets)->map(function ($preset) {
-            $waitSeconds = (float) data_get($preset->vapi_payload_json, 'startSpeakingPlan.waitSeconds', 0.7);
+            $waitSeconds = (float) data_get($preset->vapi_payload_json, 'startSpeakingPlan.waitSeconds', 0.6);
             $interruptWords = (int) data_get($preset->vapi_payload_json, 'stopSpeakingPlan.numWords', 2);
-            $backoffSeconds = (float) data_get($preset->vapi_payload_json, 'stopSpeakingPlan.backoffSeconds', 1.2);
+            $backoffSeconds = (float) data_get($preset->vapi_payload_json, 'stopSpeakingPlan.backoffSeconds', 1.1);
             $voiceSpeed = (float) data_get($preset->vapi_payload_json, 'voiceSpeed', 1.0);
             $simpleNotes = match ($preset->key) {
                 'bright_guide' => 'Friendly and upbeat, with enough pause space for real callers.',
@@ -58,9 +58,9 @@
             ];
         })->values();
         $selectedPresetMeta = $presetMeta->firstWhere('key', $selectedPresetKey) ?? $presetMeta->first();
-        $defaultWaitSeconds = (string) min(max((float) ($overrides['waitSeconds'] ?? ($selectedPresetMeta['waitSeconds'] ?? 0.7)), 0.5), 1.5);
+        $defaultWaitSeconds = (string) min(max((float) ($overrides['waitSeconds'] ?? ($selectedPresetMeta['waitSeconds'] ?? 0.6)), 0.5), 1.5);
         $defaultNumWords = (string) min(max((int) ($overrides['numWords'] ?? ($selectedPresetMeta['numWords'] ?? 2)), 1), 8);
-        $defaultBackoffSeconds = (string) min(max((float) ($overrides['backoffSeconds'] ?? ($selectedPresetMeta['backoffSeconds'] ?? 1.2)), 1.0), 2.5);
+        $defaultBackoffSeconds = (string) min(max((float) ($overrides['backoffSeconds'] ?? ($selectedPresetMeta['backoffSeconds'] ?? 1.1)), 1.0), 2.5);
         $aiWriterAvailable = filled(config('services.openai.api_key'));
         $modelOptions = collect(\App\Models\AssistantConfig::modelOptions())
             ->map(function (array $option) use ($workspaceIsFree) {
@@ -895,17 +895,17 @@
                         voiceProfileLabel: 'Clear',
                         responseStyleLabel: 'General',
                         recommendedFor: 'Businesses that want a smooth, natural phone agent with strong follow-through.',
-                        waitSeconds: 0.7,
+                        waitSeconds: 0.6,
                         numWords: 2,
-                        backoffSeconds: 1.2,
+                        backoffSeconds: 1.1,
                         voiceSpeed: 1.0,
                         assistantType: 'bright_guide',
                     };
                 },
                 get hasCustomTiming() {
-                    return Number(this.waitSecondsOverride) !== Number(this.selectedPreset.waitSeconds ?? 0.7)
+                    return Number(this.waitSecondsOverride) !== Number(this.selectedPreset.waitSeconds ?? 0.6)
                         || Number(this.interruptionWordsOverride) !== Number(this.selectedPreset.numWords ?? 2)
-                        || Number(this.backoffSecondsOverride) !== Number(this.selectedPreset.backoffSeconds ?? 1.2);
+                        || Number(this.backoffSecondsOverride) !== Number(this.selectedPreset.backoffSeconds ?? 1.1);
                 },
                 providerLabel(provider) {
                     return providerLabels[provider] || provider;
@@ -1143,9 +1143,9 @@
                     }
                 },
                 applyPresetTiming(openPanel = false) {
-                    this.waitSecondsOverride = String(this.selectedPreset.waitSeconds ?? 0.7);
+                    this.waitSecondsOverride = String(this.selectedPreset.waitSeconds ?? 0.6);
                     this.interruptionWordsOverride = String(this.selectedPreset.numWords ?? 2);
-                    this.backoffSecondsOverride = String(this.selectedPreset.backoffSeconds ?? 1.2);
+                    this.backoffSecondsOverride = String(this.selectedPreset.backoffSeconds ?? 1.1);
                     if (openPanel) {
                         this.showAdvancedTiming = true;
                     }

@@ -55,9 +55,9 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('deepgram', $payload['transcriber']['provider']);
                 $this->assertSame('nova-3-general', $payload['transcriber']['model']);
                 $this->assertTrue($payload['transcriber']['numerals']);
-                $this->assertSame(0.75, $payload['startSpeakingPlan']['waitSeconds']);
-                $this->assertSame(3, $payload['stopSpeakingPlan']['numWords']);
-                $this->assertSame(1.45, $payload['stopSpeakingPlan']['backoffSeconds']);
+                $this->assertSame(0.65, $payload['startSpeakingPlan']['waitSeconds']);
+                $this->assertSame(2, $payload['stopSpeakingPlan']['numWords']);
+                $this->assertSame(1.15, $payload['stopSpeakingPlan']['backoffSeconds']);
 
                 return true;
             }))
@@ -99,12 +99,15 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame('manual', $payload['transcriber']['languageBehaviour']);
                 $this->assertTrue($payload['transcriber']['audioEnhancer']);
                 $this->assertTrue($payload['transcriber']['receivePartialTranscripts']);
+                $this->assertSame(450, $payload['transcriber']['endpointing']);
                 $this->assertSame('eu-west', $payload['transcriber']['region']);
                 $this->assertTrue($payload['transcriber']['customVocabularyEnabled']);
                 $this->assertSame(['Northline Support', 'Ticket', 'Albanian Desk'], $payload['transcriber']['customVocabularyConfig']['vocabulary']);
                 $this->assertArrayNotHasKey('keyterm', $payload['transcriber']);
+                $this->assertSame('vapi', $payload['startSpeakingPlan']['smartEndpointingPlan']['provider']);
                 $this->assertSame('azure', $payload['transcriber']['fallbackPlan']['transcribers'][0]['provider']);
                 $this->assertSame('sq-AL', $payload['transcriber']['fallbackPlan']['transcribers'][0]['language']);
+                $this->assertTrue($payload['transcriber']['fallbackPlan']['autoFallback']['enabled']);
                 $this->assertStringStartsWith('Përshëndetje, faleminderit që telefonuat mbështetjen.', $payload['firstMessage']);
 
                 return true;
@@ -198,10 +201,10 @@ class AssistantVoiceQualityTest extends TestCase
                 $this->assertSame(0.6, $payload['model']['temperature']);
                 $this->assertSame(380, $payload['model']['maxTokens']);
                 $this->assertSame('Thanks for calling Northline Support. How can I help today?{{ knownCallerSuffix | default: "" }}', $payload['firstMessage']);
-                $this->assertSame(0.75, $payload['startSpeakingPlan']['waitSeconds']);
-                $this->assertSame(3, $payload['stopSpeakingPlan']['numWords']);
-                $this->assertSame(0.3, $payload['stopSpeakingPlan']['voiceSeconds']);
-                $this->assertSame(1.45, $payload['stopSpeakingPlan']['backoffSeconds']);
+                $this->assertSame(0.65, $payload['startSpeakingPlan']['waitSeconds']);
+                $this->assertSame(2, $payload['stopSpeakingPlan']['numWords']);
+                $this->assertSame(0.25, $payload['stopSpeakingPlan']['voiceSeconds']);
+                $this->assertSame(1.15, $payload['stopSpeakingPlan']['backoffSeconds']);
 
                 return true;
             }))

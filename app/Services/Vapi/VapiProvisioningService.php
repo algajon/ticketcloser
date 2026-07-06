@@ -14,16 +14,16 @@ use Illuminate\Support\Facades\DB;
 
 class VapiProvisioningService
 {
-    private const HUMANE_DEFAULT_WAIT_SECONDS = 0.7;
+    private const HUMANE_DEFAULT_WAIT_SECONDS = 0.6;
     private const HUMANE_MIN_WAIT_SECONDS = 0.5;
     private const HUMANE_MAX_WAIT_SECONDS = 1.5;
     private const HUMANE_DEFAULT_INTERRUPT_WORDS = 2;
     private const HUMANE_MIN_INTERRUPT_WORDS = 1;
     private const HUMANE_MAX_INTERRUPT_WORDS = 8;
-    private const HUMANE_DEFAULT_VOICE_SECONDS = 0.25;
+    private const HUMANE_DEFAULT_VOICE_SECONDS = 0.22;
     private const HUMANE_MIN_VOICE_SECONDS = 0.15;
     private const HUMANE_MAX_VOICE_SECONDS = 0.5;
-    private const HUMANE_DEFAULT_BACKOFF_SECONDS = 1.2;
+    private const HUMANE_DEFAULT_BACKOFF_SECONDS = 1.1;
     private const HUMANE_MIN_BACKOFF_SECONDS = 1.0;
     private const HUMANE_MAX_BACKOFF_SECONDS = 2.5;
     public function __construct(
@@ -1347,6 +1347,10 @@ PROMPT);
                 $payload['region'] = $transcriber['region'];
             }
 
+            if (! empty($transcriber['endpointing'])) {
+                $payload['endpointing'] = (int) $transcriber['endpointing'];
+            }
+
             if ($keyterms !== []) {
                 $payload['transcriptionHint'] = 'Prioritize these business terms and names when heard clearly: ' . implode(', ', $keyterms) . '.';
                 $payload['customVocabularyEnabled'] = true;
@@ -1364,6 +1368,9 @@ PROMPT);
                     'provider' => $transcriber['fallback']['provider'],
                     'language' => $transcriber['fallback']['language'],
                 ]],
+                'autoFallback' => [
+                    'enabled' => true,
+                ],
             ];
         }
 
@@ -1534,16 +1541,19 @@ PROMPT);
     {
         $startSpeakingPlan['waitSeconds'] = (float) ($startSpeakingPlan['waitSeconds'] ?? self::HUMANE_DEFAULT_WAIT_SECONDS);
 
-        if (! isset($startSpeakingPlan['smartEndpointingPlan'])) {
-            $languageCode = strtolower((string) ($config->language_code ?: 'en-US'));
-            $startSpeakingPlan['smartEndpointingPlan'] = str_starts_with($languageCode, 'en')
-                ? [
-                    'provider' => 'livekit',
-                    'waitFunction' => '340 + 3600 * x',
-                ]
-                : [
-                    'provider' => 'vapi',
-                ];
+        $languageCode = strtolower((string) ($config->language_code ?: 'en-US'));
+        $isEnglish = str_starts_with($languageCode, 'en');
+        $endpointingProvider = strtolower((string) data_get($startSpeakingPlan, 'smartEndpointingPlan.provider'));
+
+        if (! $isEnglish && ($endpointingProvider === '' || $endpointingProvider === 'livekit')) {
+            $startSpeakingPlan['smartEndpointingPlan'] = [
+                'provider' => 'vapi',
+            ];
+        } elseif (! isset($startSpeakingPlan['smartEndpointingPlan'])) {
+            $startSpeakingPlan['smartEndpointingPlan'] = [
+                'provider' => 'livekit',
+                'waitFunction' => '280 + 3200 * x',
+            ];
         }
 
         return $startSpeakingPlan;

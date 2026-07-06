@@ -169,6 +169,7 @@ class RegionalPilotStackCatalog
             'language_behaviour' => $transcriber['language_behaviour'] ?? null,
             'audio_enhancer' => $transcriber['audio_enhancer'] ?? null,
             'receive_partial_transcripts' => $transcriber['receive_partial_transcripts'] ?? null,
+            'endpointing' => $transcriber['endpointing'] ?? null,
             'region' => $transcriber['region'] ?? null,
             'fallback' => $transcriber['fallback'] ?? (isset($transcriber['fallback_language'])
                 ? [
@@ -748,6 +749,7 @@ class RegionalPilotStackCatalog
                     'language_behaviour' => 'manual',
                     'audio_enhancer' => true,
                     'receive_partial_transcripts' => true,
+                    'endpointing' => 450,
                     'region' => 'eu-west',
                     'fallback' => [
                         'provider' => 'azure',

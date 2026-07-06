@@ -68,16 +68,16 @@ class AssistantPreset extends Model
                     'responseStyleLabel' => 'Warm and concise',
                     'recommendedFor' => 'Front desks and support teams that want energy, rapport, and caller-friendly pacing.',
                     'startSpeakingPlan' => [
-                        'waitSeconds' => 0.65,
+                        'waitSeconds' => 0.6,
                         'smartEndpointingPlan' => [
                             'provider' => 'livekit',
-                            'waitFunction' => '300 + 3400 * x',
+                            'waitFunction' => '260 + 2800 * x',
                         ],
                     ],
                     'stopSpeakingPlan' => [
                         'numWords' => 2,
-                        'voiceSeconds' => 0.24,
-                        'backoffSeconds' => 1.1,
+                        'voiceSeconds' => 0.22,
+                        'backoffSeconds' => 1.0,
                         'acknowledgementPhrases' => ['okay', 'got it', 'absolutely', 'right', 'yeah', 'mm-hmm', 'uh-huh', 'perfect'],
                         'interruptionPhrases' => ['stop', 'hold on', 'wait', 'actually', 'sorry', 'excuse me', 'one second', 'pause'],
                     ],
@@ -99,16 +99,16 @@ class AssistantPreset extends Model
                     'responseStyleLabel' => 'Structured',
                     'recommendedFor' => 'Maintenance, property, and service teams that need fewer interruptions and cleaner intake.',
                     'startSpeakingPlan' => [
-                        'waitSeconds' => 0.8,
+                        'waitSeconds' => 0.7,
                         'smartEndpointingPlan' => [
                             'provider' => 'livekit',
-                            'waitFunction' => '380 + 4200 * x',
+                            'waitFunction' => '320 + 3600 * x',
                         ],
                     ],
                     'stopSpeakingPlan' => [
                         'numWords' => 3,
-                        'voiceSeconds' => 0.28,
-                        'backoffSeconds' => 1.35,
+                        'voiceSeconds' => 0.25,
+                        'backoffSeconds' => 1.15,
                         'acknowledgementPhrases' => ['understood', 'okay', 'got it', 'all right', 'right', 'yeah', 'mm-hmm', 'uh-huh', 'I see'],
                         'interruptionPhrases' => ['stop', 'hold on', 'wait', 'actually', 'sorry', 'excuse me', 'one moment'],
                     ],
@@ -130,14 +130,14 @@ class AssistantPreset extends Model
                     'responseStyleLabel' => 'Action-led',
                     'recommendedFor' => 'Dispatch, triage, and teams that want decisive follow-through without caller friction.',
                     'startSpeakingPlan' => [
-                        'waitSeconds' => 0.6,
+                        'waitSeconds' => 0.55,
                         'smartEndpointingPlan' => [
                             'provider' => 'livekit',
-                            'waitFunction' => '280 + 3200 * x',
+                            'waitFunction' => '240 + 2600 * x',
                         ],
                     ],
                     'stopSpeakingPlan' => [
-                        'numWords' => 1,
+                        'numWords' => 2,
                         'voiceSeconds' => 0.2,
                         'backoffSeconds' => 1.0,
                         'acknowledgementPhrases' => ['understood', 'okay', 'right', 'yeah', 'got it', 'mm-hmm', 'uh-huh'],
@@ -161,16 +161,16 @@ class AssistantPreset extends Model
                     'responseStyleLabel' => 'High-touch',
                     'recommendedFor' => 'High-trust brands that want premium calls, better rapport, and calm guidance.',
                     'startSpeakingPlan' => [
-                        'waitSeconds' => 0.75,
+                        'waitSeconds' => 0.65,
                         'smartEndpointingPlan' => [
                             'provider' => 'livekit',
-                            'waitFunction' => '360 + 4000 * x',
+                            'waitFunction' => '300 + 3400 * x',
                         ],
                     ],
                     'stopSpeakingPlan' => [
-                        'numWords' => 3,
-                        'voiceSeconds' => 0.3,
-                        'backoffSeconds' => 1.45,
+                        'numWords' => 2,
+                        'voiceSeconds' => 0.25,
+                        'backoffSeconds' => 1.15,
                         'acknowledgementPhrases' => ['absolutely', 'of course', 'certainly', 'understood', 'right', 'yeah', 'mm-hmm', 'uh-huh'],
                         'interruptionPhrases' => ['hold on', 'wait', 'actually', 'sorry', 'excuse me', 'one second', 'pause'],
                     ],
@@ -192,16 +192,16 @@ class AssistantPreset extends Model
                     'responseStyleLabel' => 'Bring your own',
                     'recommendedFor' => 'Teams that know exactly what they want to say but still want a safer speech and interruption baseline.',
                     'startSpeakingPlan' => [
-                        'waitSeconds' => 0.7,
+                        'waitSeconds' => 0.6,
                         'smartEndpointingPlan' => [
                             'provider' => 'livekit',
-                            'waitFunction' => '340 + 3600 * x',
+                            'waitFunction' => '280 + 3200 * x',
                         ],
                     ],
                     'stopSpeakingPlan' => [
                         'numWords' => 2,
-                        'voiceSeconds' => 0.25,
-                        'backoffSeconds' => 1.2,
+                        'voiceSeconds' => 0.22,
+                        'backoffSeconds' => 1.05,
                         'acknowledgementPhrases' => ['okay', 'got it', 'understood', 'right', 'yeah', 'mm-hmm', 'uh-huh'],
                         'interruptionPhrases' => ['stop', 'hold on', 'wait', 'actually', 'sorry', 'excuse me', 'one second'],
                     ],
