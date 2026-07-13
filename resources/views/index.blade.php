@@ -2,8 +2,8 @@
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="scroll-smooth">
 
 @php
-    $promoCode = 'CALLS20';
-    $promoEmail = 'sales@ticketcloser.online';
+    $promoCode = 'TICKIT2026';
+    $promoEmail = 'jon@ticketcloser.online';
     $promoParams = [
         'promo' => 'july_operator_offer',
         'discount_code' => $promoCode,
@@ -61,7 +61,7 @@
                             <input type="hidden" name="{{ $key }}" value="{{ $value }}">
                         @endif
                     @endforeach
-                    <label for="promo_email" class="sr-only">Work email</label>
+                    <label for="promo_email" class="sr-only">Email address</label>
                     <input
                         id="promo_email"
                         name="email"
@@ -69,7 +69,7 @@
                         inputmode="email"
                         autocomplete="email"
                         class="tc-landing-promo-input"
-                        placeholder="work email">
+                        placeholder="email address">
                     <label for="promo_discount_code" class="sr-only">Discount code</label>
                     <input
                         id="promo_discount_code"
