@@ -81,11 +81,6 @@
             <p class="tc-error text-red-300">{{ $errors->first('terms') }}</p>
         @endif
 
-        <div class="rounded-[1.25rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-6 text-slate-300">
-            <span class="font-semibold text-white">Next:</span>
-            verify your email, choose what calls you handle, then open the dashboard.
-        </div>
-
         <button type="submit" class="tc-btn-glow mt-3 w-full justify-center !py-3 text-base">
             Create account
         </button>
