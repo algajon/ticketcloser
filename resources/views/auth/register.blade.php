@@ -8,13 +8,19 @@
     <div>
         <div class="text-sm font-medium text-slate-400">Create account</div>
         <h1 class="mt-4 text-3xl font-semibold tracking-tight text-white">Create your account</h1>
-        <p class="mt-3 text-sm leading-6 text-slate-300">Use your name, email, and password to continue.</p>
+        <p class="mt-3 text-sm leading-6 text-slate-300">First we verify your email. Then we help you set up the call line in a few simple choices.</p>
     </div>
 
     <form method="POST" action="{{ route('register') }}" class="mt-8 space-y-4">
         @csrf
 
         <div class="grid gap-4 sm:grid-cols-2">
+            @if(request('discount_code'))
+                <div class="sm:col-span-2 rounded-[1.25rem] border border-orange-300/20 bg-orange-400/10 px-4 py-3 text-sm leading-6 text-orange-100">
+                    Promo code <span class="font-semibold tracking-[0.12em]">{{ strtoupper((string) request('discount_code')) }}</span> is attached to this signup.
+                </div>
+            @endif
+
             <div class="tc-field sm:col-span-2">
                 <label for="name" class="tc-field-label text-slate-200">Full name</label>
                 <input id="name" type="text" name="name" value="{{ old('name') }}" required autofocus autocomplete="name"
@@ -26,7 +32,7 @@
 
             <div class="tc-field sm:col-span-2">
                 <label for="email" class="tc-field-label text-slate-200">Email address</label>
-                <input id="email" type="email" name="email" value="{{ old('email') }}" required autocomplete="username"
+                <input id="email" type="email" name="email" value="{{ old('email', request('email')) }}" required autocomplete="username"
                     class="tc-input-dark" placeholder="name@company.com" />
                 @if($errors->first('email'))
                     <p class="tc-error text-red-300">{{ $errors->first('email') }}</p>
@@ -37,6 +43,7 @@
                 <label for="password" class="tc-field-label text-slate-200">Password</label>
                 <input id="password" type="password" name="password" required autocomplete="new-password"
                     class="tc-input-dark" placeholder="Choose a password" />
+                <p class="tc-help text-slate-400">Use at least 8 characters.</p>
                 @if($errors->first('password'))
                     <p class="tc-error text-red-300">{{ $errors->first('password') }}</p>
                 @endif
@@ -73,6 +80,11 @@
         @if($errors->first('terms'))
             <p class="tc-error text-red-300">{{ $errors->first('terms') }}</p>
         @endif
+
+        <div class="rounded-[1.25rem] border border-white/10 bg-white/[0.04] px-4 py-3 text-sm leading-6 text-slate-300">
+            <span class="font-semibold text-white">Next:</span>
+            verify your email, choose what calls you handle, then open the dashboard.
+        </div>
 
         <button type="submit" class="tc-btn-glow mt-3 w-full justify-center !py-3 text-base">
             Create account

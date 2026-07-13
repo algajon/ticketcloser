@@ -1,6 +1,22 @@
 <!DOCTYPE html>
 <html lang="{{ str_replace('_', '-', app()->getLocale()) }}" class="scroll-smooth">
 
+@php
+    $promoCode = 'CALLS20';
+    $promoEmail = 'sales@ticketcloser.online';
+    $promoParams = [
+        'promo' => 'july_operator_offer',
+        'discount_code' => $promoCode,
+        'utm_source' => 'landing_banner',
+        'utm_medium' => 'promo_strip',
+        'utm_campaign' => 'july_2026_operator_offer',
+    ];
+    $promoMailto = 'mailto:' . $promoEmail . '?' . http_build_query([
+        'subject' => 'Claim ' . $promoCode . ' for tickIt',
+        'body' => 'Hi tickIt team, I want to claim the ' . $promoCode . ' launch offer for my call workflow.',
+    ]);
+@endphp
+
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -23,6 +39,51 @@
         style="position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none"></canvas>
 
     <div class="tc-landing-shell">
+        <section class="tc-landing-promo relative z-[60] overflow-hidden px-4 py-3 sm:px-6" aria-label="Launch promotion">
+            <div class="tc-landing-promo-smoke" aria-hidden="true"></div>
+            <div class="relative mx-auto flex max-w-7xl flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <span class="tc-landing-promo-kicker">July operator offer</span>
+                        <p class="text-sm font-medium leading-6 text-white">
+                            20% off your first 3 months, plus a free setup review for the first 25 teams.
+                        </p>
+                    </div>
+                    <p class="mt-1 text-xs leading-5 text-slate-400">
+                        Use code <span class="font-semibold text-orange-200">{{ $promoCode }}</span> before July 31, 2026 or email
+                        <a href="{{ $promoMailto }}" class="font-semibold text-orange-200 transition hover:text-white">{{ $promoEmail }}</a>.
+                    </p>
+                </div>
+
+                <form action="{{ route('register') }}" method="GET" class="tc-landing-promo-form" aria-label="Claim launch promotion">
+                    @foreach($promoParams as $key => $value)
+                        @if(! in_array($key, ['discount_code'], true))
+                            <input type="hidden" name="{{ $key }}" value="{{ $value }}">
+                        @endif
+                    @endforeach
+                    <label for="promo_email" class="sr-only">Work email</label>
+                    <input
+                        id="promo_email"
+                        name="email"
+                        type="email"
+                        inputmode="email"
+                        autocomplete="email"
+                        class="tc-landing-promo-input"
+                        placeholder="work email">
+                    <label for="promo_discount_code" class="sr-only">Discount code</label>
+                    <input
+                        id="promo_discount_code"
+                        name="discount_code"
+                        type="text"
+                        class="tc-landing-promo-code"
+                        value="{{ $promoCode }}"
+                        readonly
+                        aria-label="Discount code {{ $promoCode }}">
+                    <button type="submit" class="tc-landing-promo-button">Claim offer</button>
+                </form>
+            </div>
+        </section>
+
         <nav class="tc-landing-nav relative z-50 w-full border-b border-slate-200 bg-white px-6 py-5">
             <div class="relative mx-auto flex max-w-7xl items-center justify-between gap-6">
                 <a href="{{ route('home') }}" class="flex items-center gap-2">
@@ -33,7 +94,7 @@
                     <a href="#platform"
                         class="text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900">Platform</a>
                     <a href="#workflow"
-                        class="text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900">Workflow</a>
+                        class="text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900">How it works</a>
                     <a href="{{ route('docs') }}"
                         class="text-[13px] font-medium text-slate-600 transition-colors hover:text-slate-900">Docs</a>
                     <a href="#operations"
@@ -69,7 +130,7 @@
 
                     <p class="tc-landing-motion-stage tc-landing-hero-copy mt-5 max-w-2xl text-[15px] leading-7 text-[#cbd5e1] md:text-[17px]"
                         style="--tc-delay: 180ms;">
-                        <span class="tc-landing-readable-copy-subtle">tickIt answers the call, captures the issue and urgency, saves the transcript, and keeps follow-up moving without manual note-taking.</span>
+                        <span class="tc-landing-readable-copy-subtle">tickIt answers inbound calls, captures caller intent and urgency, saves the transcript, creates the ticket, and keeps showings, maintenance, support, or sales follow-up moving.</span>
                     </p>
 
                     <div class="tc-landing-motion-stage tc-landing-hero-actions mt-10 flex flex-col items-center justify-center gap-3 sm:flex-row"
@@ -92,16 +153,16 @@
                         <div class="tc-landing-panel tc-landing-card tc-landing-motion-stage p-8" style="--tc-delay: 60ms;">
                             <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
                                 What you get</div>
-                            <h2 class="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Stop losing details between the phone call and the work queue.</h2>
+                            <h2 class="mt-5 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Stop losing details between the phone call and the ticket.</h2>
                             <p class="mt-5 max-w-2xl text-base leading-7 text-slate-300">
-                                tickIt is built for teams that still run on inbound calls. It captures the caller, the issue, the urgency, and the next step so your team can act from a complete ticket instead of a voicemail and a sticky note.
+                                tickIt is built for teams that still run on inbound calls. It captures the caller, the intent, the urgency, and the next step so your team can act from a complete ticket instead of a voicemail and a sticky note.
                             </p>
                         </div>
 
                         <div class="grid gap-5 sm:grid-cols-2">
                             <div class="tc-landing-panel tc-landing-card tc-landing-motion-stage p-6" style="--tc-delay: 120ms;">
                                 <div class="text-[0.68rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
-                                    Call intake</div>
+                                    Call answering</div>
                                 <h3 class="mt-4 text-xl font-semibold text-white">Answer the call</h3>
                                 <p class="mt-3 text-sm leading-6 text-slate-300">Greet callers and collect the details your team needs before anyone has to call back.</p>
                             </div>
@@ -134,7 +195,7 @@
                         <div class="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
                             <div class="max-w-2xl">
                                 <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-slate-400">
-                                    Workflow</div>
+                                    How it works</div>
                                 <h2 class="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Simple from first ring to follow-up.</h2>
                             </div>
                             <p class="max-w-2xl text-sm leading-7 text-slate-300">
@@ -159,7 +220,7 @@
                                 <div class="text-[0.68rem] font-semibold uppercase tracking-[0.22em] text-orange-300">
                                     Step 03</div>
                                 <h3 class="mt-4 text-xl font-semibold text-white">Your team resolves or books the next step</h3>
-                                <p class="mt-3 text-sm leading-6 text-slate-300">Support, maintenance, front-desk, and service teams start from a cleaner case instead of calling back blind.</p>
+                                <p class="mt-3 text-sm leading-6 text-slate-300">Real estate, support, maintenance, front-desk, and service teams start from a cleaner case instead of calling back blind.</p>
                             </div>
                         </div>
 
@@ -181,19 +242,23 @@
                         <ul class="mt-8 space-y-4 text-sm leading-6 text-slate-300">
                             <li class="flex items-start gap-3">
                                 <span class="mt-2 h-2 w-2 rounded-full bg-orange-400"></span>
+                                Real estate teams capturing showing requests, buyer and seller calls, leasing questions, and after-hours property issues.
+                            </li>
+                            <li class="flex items-start gap-3">
+                                <span class="mt-2 h-2 w-2 rounded-full bg-orange-400"></span>
                                 Property teams handling maintenance and resident support.
                             </li>
                             <li class="flex items-start gap-3">
                                 <span class="mt-2 h-2 w-2 rounded-full bg-orange-400"></span>
-                                Service teams that need clean phone intake without manual note-taking.
+                                Service teams that need clean call notes without manual note-taking.
                             </li>
                             <li class="flex items-start gap-3">
                                 <span class="mt-2 h-2 w-2 rounded-full bg-orange-400"></span>
-                                Multi-location teams that need separate assistants, numbers, and workspaces.
+                                Multi-location teams that need separate assistants, numbers, and client accounts.
                             </li>
                             <li class="flex items-start gap-3">
                                 <span class="mt-2 h-2 w-2 rounded-full bg-orange-400"></span>
-                                Support teams that want a better call workflow than a basic help desk.
+                                Support teams that want better call handling than a basic help desk.
                             </li>
                         </ul>
                     </div>
@@ -249,7 +314,7 @@
                             <div class="max-w-3xl">
                                 <div class="text-[0.72rem] font-semibold uppercase tracking-[0.24em] text-orange-300/80">
                                     Start here</div>
-                                <h2 class="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Set up your workspace and run one real test call.</h2>
+                                <h2 class="mt-4 text-3xl font-semibold tracking-tight text-white sm:text-4xl">Set up your account and run one real test call.</h2>
                                 <p class="mt-4 text-base leading-7 text-slate-300">
                                     Create the assistant, connect the number, make the call, and watch the ticket appear.
                                 </p>
